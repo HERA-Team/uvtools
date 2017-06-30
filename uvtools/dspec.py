@@ -42,7 +42,7 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., tol=1e-4,
     return d_mdl, d_res, info
 
 def delay_filter_aa(aa, data, wgts, i, j, sdf, phs2lst=False, jds=None, 
-        skip_wgt=0.5, lst_res=binning.LST_RES, standoff=0., horizon=1., 
+        skip_wgt=0.5, lst_res=binning.DEFAULT_LST_RES, standoff=0., horizon=1., 
         tol=1e-4, window='none', maxiter=100):
     '''Use information from AntennaArray object to delay filter data, with the
     option to phase data to an lst bin first.  Arguments are the same as for

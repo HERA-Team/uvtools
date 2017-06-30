@@ -1,17 +1,38 @@
 import numpy as np, aipy
 
-LST_RES = 2*np.pi/24
-UV_RES = 1.5
+def gen_lst_res(nbins=None, secs=None, dlst=None):
+    '''Generate the resolution of an LST bin from (one of) the desired number 
+    of bins (nbins), time interval in seconds (secs), or LST interval in
+    radians (dlst).  The resulting interval may be slightly different than
+    specified by secs or dlst to ensure no partial bins at the 2*pi -> 0 wrap.'''
+    if secs is not None:
+        assert(dlst is None) # only one of nbins, secs, dlst can be specified
+        dlst = 2*np.pi / aipy.const.sidereal_day * secs
+    if dlst is not None:
+        assert(nbins is None) # only one of nbins, secs, dlst can be specified
+        nbins = np.around(2*np.pi / dlst).astype(np.int)
+    return 2*np.pi / nbins
 
-def uv2bin(u,v,lst,uv_res=UV_RES, lst_res=LST_RES):
-    return (int(np.around(u / uv_res) + 4096) * 8192 + int(np.around(v / uv_res) + 4096)) * 8192 + int(np.around(lst/lst_res))
+DEFAULT_LST_RES = gen_lst_res(secs=30.) # default 30s
+DEFAULT_UV_RES = 1.5 # wavelengths
+    
+def get_lstbins(lst_res=DEFAULT_LST_RES, min_lst=0., max_lst=2*np.pi):
+    bins = np.arange(lst_res/2, 2*np.pi, lst_res)
+    valid = np.where(np.logical_and(bins >= min_lst, bins < max_lst))
+    return bins[valid]
 
-def bin2uv(bin, uv_res=UV_RES, lst_res=LST_RES):
-    bin = int(bin)
-    v = ((bin/8192) % 8192 - 4096) * float(uv_res)
-    u = (bin / 8192**2 - 4096) * float(uv_res)
-    lst = (bin % 8192) * float(lst_res)
-    return u,v, lst
+def lstbin(lst, lst_res=DEFAULT_LST_RES):
+    '''Chooses an lst bin for a given lst resolution (from gen_lst_res). Takes care of
+    tricky wrap cases at 2*pi -> 0.'''
+    nbins = np.around(2*np.pi / lst_res).astype(np.int)
+    tbin = np.floor((lst % (2*np.pi)) / lst_res).astype(np.int) + .5
+    return tbin * lst_res
+
+def uv2bin(u,v,lst,uv_res=DEFAULT_UV_RES, lst_res=DEFAULT_LST_RES):
+    '''Round u,v,lst coordinates to nearest (u',v',lst') bin.'''
+    ubin, vbin = np.around(u / uv_res).astype(np.int), np.around(v / uv_res).astype(np.int)
+    lstb = lstbin(lst, lst_res=lst_res)
+    return (ubin*uv_res, vbin*uv_res, lstb)
 
 def rebin_log(x, y, bin=10):
     '''For y=f(x), bin x into log_e bins, and average y over
@@ -22,19 +43,14 @@ def rebin_log(x, y, bin=10):
     logx = .5 * (bins[1:] + bins[:-1])
     return np.e**logx, hist1 / np.where(hist2 == 0, 1., hist2)
 
-def lstbin(lst, lst_res=40.):
-    '''Chooses an lst bin for a given lst.  lst_res in seconds'''
-    lst_res = lst_res / aipy.const.sidereal_day * (2*np.pi)
-    return bin2uv(uv2bin(0,0,lst,lst_res=lst_res),lst_res=lst_res)[-1]
-
-def jd2lstbin(jds, aa, lst_res=40.):
+def jd2lstbin(jds, aa, lst_res=DEFAULT_LST_RES):
     bins = []
     for jd in jds:
         aa.set_jultime(jd)
         bins.append(lstbin(aa.sidereal_time(), lst_res=lst_res))
     return bins
 
-def gen_lstbinphs(aa, i, j, lst_res=40.):
+def gen_lstbinphs(aa, i, j, lst_res=DEFAULT_LST_RES):
     '''Return the Delta phase required to shift phase center from lst to lstbin.'''
     lst = aa.sidereal_time()
     lstb = lstbin(lst, lst_res=lst_res)
@@ -43,7 +59,7 @@ def gen_lstbinphs(aa, i, j, lst_res=40.):
     zen.compute(aa); zenb.compute(aa)
     return aa.gen_phs(zenb, i, j) * aa.gen_phs(zen, i, j).conj()
 
-def phs2lstbin(data, aa, i, j, jds=None, lst_res=40.):
+def phs2lstbin(data, aa, i, j, jds=None, lst_res=DEFAULT_LST_RES):
     '''Phase data to the closest lst bin, which is the point that transits zenith
     at the sidereal time corresponding to the center of an lst bin.'''
     if data.ndim == 1:
@@ -58,7 +74,7 @@ def phs2lstbin(data, aa, i, j, jds=None, lst_res=40.):
         return d
     else: raise ValueError('data must be a 1D or 2D array')
 
-def gen_phs2lstbin_mfunc(aa, lst_res=40.):
+def gen_phs2lstbin_mfunc(aa, lst_res=DEFAULT_LST_RES):
     def mfunc(uv, p, d, f):
         _, jd, (i,j) = p
         aa.set_jultime(jd)
