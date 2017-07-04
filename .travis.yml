@@ -29,5 +29,5 @@ install:
 
 script: nosetests uvtools --with-coverage --cover-package=uvtools
 
-#after_success:
-#  - coveralls
+after_success:
+  - coveralls
