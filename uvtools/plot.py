@@ -51,6 +51,30 @@ def plot_hmap_ortho(h, cmap='jet', mode='log', mx=None, drng=None,
     #step = (mx - mn) / 10
     #levels = np.arange(mn-step, mx+step, step)
     #map.contourf(cx,cy,data,levels,linewidth=0,cmap=cmap)
+
+def plot_antpos(aa, ants=None, ex_ants=None, aspect_equal=True, 
+        ant_numbers=True, elevation=False, grid=True):
+    if ants is None: ants = range(len(aa.ants))
+    if ex_ants is not None: ants = [i for i in ants if i not in ex_ants]
+    antpos = [aa.get_baseline(0,i,src='z') for i in ants]
+    antpos = np.array(antpos) * aipy.const.len_ns / 100.
+    x,y,z = antpos[:,0], antpos[:,1], antpos[:,2]
+    x -= np.average(x)
+    y -= np.average(y)
+    plt.plot(x,y, 'k.')
+    for (ant,xa,ya,za) in zip(ants,x,y,z):
+        if elevation:
+            hx,hy = r*za*np.cos(th)+xa, r*za*np.sin(th)+ya
+            if za > 0: fmt = '#eeeeee'
+            else: fmt = '#a0a0a0'
+            plt.fill(hx,hy, fmt)
+        if ant_numbers: plt.text(xa,ya, str(ant))
+    if grid: plt.grid()
+    plt.xlabel("East-West Antenna Position (m)")
+    plt.ylabel("North-South Antenna Position (m)")
+    ax = plt.gca()
+    if aspect_equal: ax.set_aspect('equal')
+    return ax
     
 def plot_phase_ratios(data):
     '''Plots ratios of baselines given in data. 
@@ -61,7 +85,7 @@ def plot_phase_ratios(data):
     pol = data[bls[0]].keys()[0]
 
     nratios = (nbls * (nbls-1))/2
-    r = int(divmod(nratios,3)[0] + n.ceil(divmod(nratios,3)[1]/3.))
+    r = int(divmod(nratios,3)[0] + np.ceil(divmod(nratios,3)[1]/3.))
     c = 3
     ncross = []
     for k in range(nbls): 
@@ -73,7 +97,7 @@ def plot_phase_ratios(data):
         ax = plt.subplot(r,c,i+1)
         plt.title(str(k),color='magenta')
         g = 1.0
-        waterfall(data[k[0]][pol]*n.conj(data[k[-1]][pol])*g, mode='phs', cmap='jet', mx=n.pi, drng=2*n.pi)
+        waterfall(data[k[0]][pol]*np.conj(data[k[-1]][pol])*g, mode='phs', cmap='jet', mx=np.pi, drng=2*np.pi)
         plt.grid(0)
         if divmod(i,c)[-1] != 0:  ax.yaxis.set_visible(False) 
         if divmod(i,c)[0] != r-1: ax.xaxis.set_visible(False)
