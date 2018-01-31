@@ -28,6 +28,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-4, wind
     If 2D iterates over 0th dimension and FT's over the 1st dimension.
     Greater than 2D not supported.
 
+    filter_size (float)
      Data are weighted again by wgts,
     windowed, Fourier transformed, and deconvolved allowing clean components
     between lthresh and uthresh.  The mdl, residual, and info are returned in
@@ -67,27 +68,13 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., tol=1e-4,
     windowed, Fourier transformed, and deconvolved allowing clean components
     between lthresh and uthresh.  The mdl, residual, and info are returned in
     frequency domain.'''
-    nchan = data.shape[-1]
-    window = aipy.dsp.gen_window(nchan, window=window)
-    _d = np.fft.ifft(data * wgts * window, axis=-1)
-    _w = np.fft.ifft(wgts * wgts * window, axis=-1)
-    uthresh,lthresh = wedge_width(bl_len, sdf, nchan, standoff=standoff, horizon=horizon)
-    area = np.ones(nchan, dtype=np.int); area[uthresh:lthresh] = 0
-    if data.ndim == 1:
-        _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter)
-        d_mdl = np.fft.fft(_d_cl)# + info['res'])
-    elif data.ndim == 2:
-        d_mdl = np.empty_like(data)
-        for i in xrange(data.shape[0]):
-            if _w[i,0] < skip_wgt: d_mdl[i] = 0 # skip highly flagged (slow) integrations
-            else:
-                _d_cl, info = aipy.deconv.clean(_d[i], _w[i], area=area, tol=tol, 
-                        stop_if_div=False, maxiter=maxiter)
-                d_mdl[i] = np.fft.fft(_d_cl)# + info['res'])
-                # XXX info overwritten every i
-    else: raise ValueError('data must be a 1D or 2D array')
-    d_res = data - d_mdl * wgts
-    return d_mdl, d_res, info
+    
+    bl_dly = horizon * bl_len + standoff
+    return high_pass_fourier_filter(data, wgts, bl_dly, sdf, tol=tol,
+                                                             window=window,
+                                                             skip_wgt=skip_wgt,
+                                                             maxiter=maxiter)
+
 
 def delay_filter_aa(aa, data, wgts, i, j, sdf, phs2lst=False, jds=None, 
         skip_wgt=0.5, lst_res=binning.DEFAULT_LST_RES, standoff=0., horizon=1., 
@@ -102,6 +89,7 @@ def delay_filter_aa(aa, data, wgts, i, j, sdf, phs2lst=False, jds=None,
     return delay_filter(data, wgts, np.linalg.norm(bl), sdf, 
             standoff=standoff, horizon=horizon, tol=tol, window=window, 
             skip_wgt=skip_wgt, maxiter=maxiter)
+
 
 # XXX is this a used function?
 def delayfiltercov(C,horizon_bins=5,eig_cut_dnr=2):
