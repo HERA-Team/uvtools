@@ -1,6 +1,5 @@
 import aipy, numpy as np, pylab as plt
 import sys, scipy
-from mpl_toolkits.basemap import Basemap
 
 def data_mode(data, mode='abs'):
     if mode.startswith('phs'): data = np.angle(data)
@@ -25,6 +24,7 @@ def waterfall(d, mode='log', mx=None, drng=None, recenter=False, **kwargs):
     return plt.imshow(d, vmax=mx, vmin=mn, aspect='auto', interpolation='nearest', **kwargs)
 
 def plot_hmap_ortho(h, cmap='jet', mode='log', mx=None, drng=None, 
+    from mpl_toolkits.basemap import Basemap
         res=0.25, verbose=False, normalize=False):
     m = Basemap(projection='ortho',lat_0=90,lon_0=180,rsphere=1.)
     if verbose:
@@ -61,7 +61,7 @@ def plot_phase_ratios(data):
     pol = data[bls[0]].keys()[0]
 
     nratios = (nbls * (nbls-1))/2
-    r = int(divmod(nratios,3)[0] + n.ceil(divmod(nratios,3)[1]/3.))
+    r = int(divmod(nratios,3)[0] + np.ceil(divmod(nratios,3)[1]/3.))
     c = 3
     ncross = []
     for k in range(nbls): 
@@ -73,14 +73,14 @@ def plot_phase_ratios(data):
         ax = plt.subplot(r,c,i+1)
         plt.title(str(k),color='magenta')
         g = 1.0
-        waterfall(data[k[0]][pol]*n.conj(data[k[-1]][pol])*g, mode='phs', cmap='jet', mx=n.pi, drng=2*n.pi)
+        waterfall(data[k[0]][pol]*np.conj(data[k[-1]][pol])*g, mode='phs', cmap='jet', mx=np.pi, drng=2*np.pi)
         plt.grid(0)
         if divmod(i,c)[-1] != 0:  ax.yaxis.set_visible(False) 
         if divmod(i,c)[0] != r-1: ax.xaxis.set_visible(False)
     cax = fig.add_axes([0.2, 0.06, 0.6, 0.01])
     plt.colorbar(cax=cax, orientation='horizontal')
 
-def omni_view(reds,vis,pol,int=10,chan=500,norm=False,cursor=True,save=None,colors=None,symbols=None, ex_ants=[]):
+def omni_view(reds,vis,pol,integration=10,chan=500,norm=False,cursor=True,save=None,colors=None,symbols=None, ex_ants=[], title=''):
     if not colors:
         colors = ["#006BA4", "#FF7F0E", "#2CA02C", "#D61D28", "#9467BD", "#8C564B", "#E377C2", "#7F7F7F", "#BCBD22", "#17BECF"]
     if not symbols: 
@@ -99,17 +99,17 @@ def omni_view(reds,vis,pol,int=10,chan=500,norm=False,cursor=True,save=None,colo
         for r in gp:
             if np.any([ant in r for ant in ex_ants]): continue
             try:
-                points.append(vis[r][pol][int,chan])
+                points.append(vis[r][pol][integration,chan])
                 bl.append(r)
             except(KeyError):
-                points.append(np.conj(vis[r[::-1]][pol][int,chan]))
+                points.append(np.conj(vis[r[::-1]][pol][integration,chan]))
                 bl.append(r[::-1])
             sym.append(s)
             col.append(c)
     points = np.array(points)
     max_x=0
     max_y=0
-    ax = plt.subplots(111)
+    fig, ax = plt.subplots(nrows=1, ncols=1)
     for i,pt in enumerate(points):
         if norm:
             ax.scatter(pt.real/np.abs(pt), pt.imag/np.abs(pt), c=col[i], marker=sym[i], s=50, label='{}'.format(bl[i]))
@@ -117,7 +117,8 @@ def omni_view(reds,vis,pol,int=10,chan=500,norm=False,cursor=True,save=None,colo
             ax.scatter(pt.real, pt.imag, c=col[i], marker=sym[i], s=50, label='{}'.format(bl[i]))
             if np.abs(pt.real) > max_x: max_x = np.abs(pt.real)
             if np.abs(pt.imag) > max_y: max_y = np.abs(pt.imag)
-            
+    plt.suptitle(title)
+
     if norm:         
         plt.xlim(-1,1)
         plt.ylim(-1,1)
@@ -139,4 +140,4 @@ def omni_view_gif(filenames, name='omni_movie.gif'):
     images = []
     for filename in filenames:
         images.append(imageio.imread(filename))
-        imageio.mimsave(name, images)
+    imageio.mimsave(name, images)
