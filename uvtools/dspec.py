@@ -35,7 +35,7 @@ def calc_width(filter_size, real_delta, nsamples):
     w = int(round(filter_size / bin_width))
     uthresh, lthresh = w + 1, -w
     if lthresh == 0: 
-        lthresh = nchan
+        lthresh = nsamples
     return (uthresh, lthresh)
 
 
