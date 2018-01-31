@@ -77,19 +77,19 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., tol=1e-4,
                                                              maxiter=maxiter)
 
 
-def delay_filter_aa(aa, data, wgts, i, j, sdf, phs2lst=False, jds=None, 
-        skip_wgt=0.5, lst_res=binning.DEFAULT_LST_RES, standoff=0., horizon=1., 
-        tol=1e-4, window='none', maxiter=100):
-    '''Use information from AntennaArray object to delay filter data, with the
-    option to phase data to an lst bin first.  Arguments are the same as for
-    delay_filter and binning.phs2lstbin.  Returns mdl, residual, and info
-    in the frequency domain.'''
-    if phs2lst:
-        data = binning.phs2lstbin(data, aa, i, j, jds=jds, lst_res=lst_res)
-    bl = aa.get_baseline(i,j)
-    return delay_filter(data, wgts, np.linalg.norm(bl), sdf, 
-            standoff=standoff, horizon=horizon, tol=tol, window=window, 
-            skip_wgt=skip_wgt, maxiter=maxiter)
+# def delay_filter_aa(aa, data, wgts, i, j, sdf, phs2lst=False, jds=None, 
+#         skip_wgt=0.5, lst_res=binning.DEFAULT_LST_RES, standoff=0., horizon=1., 
+#         tol=1e-4, window='none', maxiter=100):
+#     '''Use information from AntennaArray object to delay filter data, with the
+#     option to phase data to an lst bin first.  Arguments are the same as for
+#     delay_filter and binning.phs2lstbin.  Returns mdl, residual, and info
+#     in the frequency domain.'''
+#     if phs2lst:
+#         data = binning.phs2lstbin(data, aa, i, j, jds=jds, lst_res=lst_res)
+#     bl = aa.get_baseline(i,j)
+#     return delay_filter(data, wgts, np.linalg.norm(bl), sdf, 
+#             standoff=standoff, horizon=horizon, tol=tol, window=window, 
+#             skip_wgt=skip_wgt, maxiter=maxiter)
 
 
 # XXX is this a used function?
