@@ -65,7 +65,6 @@ class TestMethods(unittest.TestCase):
         dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=1e-9)
         np.testing.assert_allclose(np.average(data,axis=1), np.average(dmdl,axis=1), atol=1e-3)
         np.testing.assert_allclose(np.average(dres,axis=1), 0, atol=1e-3)
-# XXX test_delay_filter_aa
         
 
 if __name__ == '__main__':
