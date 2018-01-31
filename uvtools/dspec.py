@@ -13,7 +13,9 @@ def wedge_width(bl_len, sdf, nchan, standoff=0., horizon=1.):
         horizon: proportionality constant for bl_len where 1 is the horizon (full light travel time)
 
     Returns:
-        uthresh, lthresh: bin indices for upper and lower edges of the fourier filter
+        uthresh, lthresh: bin indices for filtered bins started at uthresh (which is filtered)
+            and ending at lthresh (which is a negative integer and also not filtered)
+            Designed for area = np.ones(nchan, dtype=np.int); area[uthresh:lthresh] = 0
     '''
     bl_dly = horizon * bl_len + standoff
     return calc_width(bl_dly, sdf, nchan)    
@@ -29,7 +31,9 @@ def calc_width(filter_size, real_delta, nsamples):
         nsamples: the number of samples in the array to be filtered
 
     Returns:
-        uthresh, lthresh: bin indices for upper and lower edges of the fourier filter    
+        uthresh, lthresh: bin indices for filtered bins started at uthresh (which is filtered)
+            and ending at lthresh (which is a negative integer and also not filtered).
+            Designed for area = np.ones(nsamples, dtype=np.int); area[uthresh:lthresh] = 0
     '''
     bin_width = 1. / (real_delta * nsamples)
     w = int(round(filter_size / bin_width))
@@ -51,9 +55,9 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, wind
         tol: CLEAN algorithm convergence tolerance (see aipy.deconv.clean)
         window: window function for filtering applied to the filtered axis. 
             See aipy.dsp.gen_window for options.
-        skip_wgt: skips filtering highly flagged rows (unflagged fraction ~< skip_wgt) 
+        skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt) 
             Only works properly when all weights are all between 0 and 1.
-        maxiter: Maxinum number of iterations for aipy.deconv.clean to converge.
+        maxiter: Maximum number of iterations for aipy.deconv.clean to converge.
 
     Returns:
         d_mdl: best fit low-pass filter components (CLEAN model) in real space
@@ -65,7 +69,10 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, wind
     _d = np.fft.ifft(data * wgts * window, axis=-1)
     _w = np.fft.ifft(wgts * wgts * window, axis=-1)
     uthresh,lthresh = calc_width(filter_size, real_delta, nchan)
-    area = np.ones(nchan, dtype=np.int); area[uthresh:lthresh] = 0
+    area = np.ones(nchan, dtype=np.int) 
+    area[uthresh:lthresh] = 0
+    print uthresh, lthresh
+    print area
     if data.ndim == 1:
         _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter)
         d_mdl = np.fft.fft(_d_cl)
@@ -104,9 +111,9 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., tol=1e-4,
         tol: CLEAN algorithm convergence tolerance (see aipy.deconv.clean)
         window: window function for filtering applied to the filtered axis. 
             See aipy.dsp.gen_window for options.        
-        skip_wgt: skips filtering highly flagged rows (unflagged fraction ~< skip_wgt) 
+        skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt) 
             Only works properly when all weights are all between 0 and 1.
-        maxiter: Maxinum number of iterations for aipy.deconv.clean to converge.
+        maxiter: Maximum number of iterations for aipy.deconv.clean to converge.
 
     Returns:
         d_mdl: best fit low-pass filter components (CLEAN model) in the frequency domain
