@@ -71,8 +71,6 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, wind
     uthresh,lthresh = calc_width(filter_size, real_delta, nchan)
     area = np.ones(nchan, dtype=np.int) 
     area[uthresh:lthresh] = 0
-    print uthresh, lthresh
-    print area
     if data.ndim == 1:
         _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter)
         d_mdl = np.fft.fft(_d_cl)
