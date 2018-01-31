@@ -16,9 +16,10 @@ def calc_width(filter_size, real_delta, nsamples):
     XXX
     """
     bin_width = 1. / (real_delta * nsamples)
-    w = int(round(filter_size / bin_width)
+    w = int(round(filter_size / bin_width))
     uthresh, lthresh = w + 1, -w
-    if lthresh == 0: lthresh = nchan
+    if lthresh == 0: 
+        lthresh = nchan
     return (uthresh, lthresh)
 
 
@@ -92,23 +93,23 @@ def delay_filter_aa(aa, data, wgts, i, j, sdf, phs2lst=False, jds=None,
 
 
 # XXX is this a used function?
-def delayfiltercov(C,horizon_bins=5,eig_cut_dnr=2):
+#def delayfiltercov(C,horizon_bins=5,eig_cut_dnr=2):
     #delay filter a spectral covariance matrix
     #horizon_bins = distance delay=0 to be retained, ie the size of the wedge in bins
     # eig_cut_dnr = retain eigenvalues with a dynamic range of  median(dnr)*eig_cut_dnr 
     # where dnr is max(dspec eigenvector)/mean(abs(dpsec eigenvector outside horizon))    
     #
     # returns filtered_covariance,matching_projection matrix
-    S,V = np.linalg.eig(C)
-    dV = np.fft.ifft(V,axis=0)
+    #S,V = np.linalg.eig(C)
+    #dV = np.fft.ifft(V,axis=0)
     #calculate eigenvalue cut, selecting only those eigenvectors with strong delay spectrum signals
-    dnr = np.max(np.abs(dV),axis=0)/np.mean(np.abs(dV)[horizon_bins:-horizon_bins,:],axis=0)
-    median_dnr = np.median(dnr)
-    eig_cut_dnr *= median_dnr
-    S[dnr<eig_cut_dnr] = 0 #apply eigenvalue cut
+    #dnr = np.max(np.abs(dV),axis=0)/np.mean(np.abs(dV)[horizon_bins:-horizon_bins,:],axis=0)
+    #median_dnr = np.median(dnr)
+    #eig_cut_dnr *= median_dnr
+    #S[dnr<eig_cut_dnr] = 0 #apply eigenvalue cut
     #mask outside wedge
-    dV[horizon_bins:-horizon_bins,:] = 0 # mask out stuff outside the horizon
-    V_filtered = np.fft.fft(dV,axis=0)
+    #dV[horizon_bins:-horizon_bins,:] = 0 # mask out stuff outside the horizon
+    #V_filtered = np.fft.fft(dV,axis=0)
     #return filtered covariance and its matching projection matrix
-    return np.einsum('ij,j,jk',V_filtered,S,V_filtered.T),np.einsum('ij,j,jk',V_filtered,S!=0,V_filtered.T)
+    #return np.einsum('ij,j,jk',V_filtered,S,V_filtered.T),np.einsum('ij,j,jk',V_filtered,S!=0,V_filtered.T)
 
