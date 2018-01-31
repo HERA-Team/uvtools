@@ -24,8 +24,8 @@ def waterfall(d, mode='log', mx=None, drng=None, recenter=False, **kwargs):
     return plt.imshow(d, vmax=mx, vmin=mn, aspect='auto', interpolation='nearest', **kwargs)
 
 def plot_hmap_ortho(h, cmap='jet', mode='log', mx=None, drng=None, 
-    from mpl_toolkits.basemap import Basemap
         res=0.25, verbose=False, normalize=False):
+    from mpl_toolkits.basemap import Basemap
     m = Basemap(projection='ortho',lat_0=90,lon_0=180,rsphere=1.)
     if verbose:
         print 'SCHEME:', h.scheme()
