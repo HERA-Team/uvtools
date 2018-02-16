@@ -60,7 +60,7 @@ class TestMethods(unittest.TestCase):
         dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
         np.testing.assert_allclose(data, dmdl*wgts, atol=NCHAN*TOL)
         np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
-        data = np.random.normal(size=(NTIMES,NCHAN))
+        data = np.array(np.random.normal(size=(NTIMES,NCHAN)),dtype=complex)
         wgts = np.ones_like(data)
         dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=1e-9)
         np.testing.assert_allclose(np.average(data,axis=1), np.average(dmdl,axis=1), atol=1e-3)

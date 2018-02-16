@@ -49,6 +49,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, wind
     Arguments:
         data: 1D or 2D (real or complex) numpy array to be filtered along the last dimension.
         wgts: real numpy array of multiplicative weights with the same shape as the data. 
+            Data will be weighted by wgts**2 and then later renormalized.
         filter_size: the half-width (i.e. the width of the positive part) of the region in fourier 
             space, symmetric about 0, that is filtered out. In units of 1/[real_delta].
         real_delta: the bin width in real space of the dimension to be filtered
@@ -66,7 +67,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, wind
     '''
     nchan = data.shape[-1]
     window = aipy.dsp.gen_window(nchan, window=window)
-    _d = np.fft.ifft(data * wgts * window, axis=-1)
+    _d = np.fft.ifft(data * wgts**2 * window, axis=-1)
     _w = np.fft.ifft(wgts * wgts * window, axis=-1)
     uthresh,lthresh = calc_width(filter_size, real_delta, nchan)
     area = np.ones(nchan, dtype=np.int) 
@@ -101,6 +102,7 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., tol=1e-4,
 
     Arguments:
         data: 1D or 2D (real or complex) numpy array to where last dimension is frequency.
+            Data will be weighted by wgts**2 and then later renormalized.
         wgts: real numpy array of multiplicative weights with the same shape as the data. 
         bl_len: length of baseline (in 1/[sdf], typically ns)
         sdf: frequency channel width (typically in GHz)
