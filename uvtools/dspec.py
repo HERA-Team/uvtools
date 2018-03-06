@@ -89,7 +89,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, wind
                 info.append(info_here)
     else: 
         raise ValueError('data must be a 1D or 2D array')
-    d_res = data - d_mdl * wgts
+    d_res = data - d_mdl
 
     return d_mdl, d_res, info
 
@@ -102,8 +102,8 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., tol=1e-4,
 
     Arguments:
         data: 1D or 2D (real or complex) numpy array to where last dimension is frequency.
-            Data will be weighted by wgts**2 and then later renormalized.
         wgts: real numpy array of multiplicative weights with the same shape as the data. 
+            Data will be weighted by wgts**2 and then later renormalized.
         bl_len: length of baseline (in 1/[sdf], typically ns)
         sdf: frequency channel width (typically in GHz)
         standoff: fixed additional delay beyond the horizon (same units as bl_len)
