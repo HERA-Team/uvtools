@@ -34,13 +34,13 @@ class TestMethods(unittest.TestCase):
         NCHAN = 128
         TOL = 1e-6
         data = np.ones(NCHAN, dtype=np.complex)
-        wgts = np.ones(NCHAN, dtype=np.complex)
+        wgts = .5*np.ones(NCHAN, dtype=np.complex)
         dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
         np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
         np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
-        wgts[::16] = 0; data *= wgts
+        wgts[::16] = 0
         dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
-        np.testing.assert_allclose(data, dmdl*wgts, atol=NCHAN*TOL)
+        np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
         np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
         data = np.random.normal(size=NCHAN)
         wgts = np.ones_like(data)
@@ -56,9 +56,10 @@ class TestMethods(unittest.TestCase):
         dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
         np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
         np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
-        wgts[:,::16] = 0; data *= wgts
+        wgts[:,::16] = 0;
+        wgts*=.9 #tests to make sure wgts**2 normalization works
         dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
-        np.testing.assert_allclose(data, dmdl*wgts, atol=NCHAN*TOL)
+        np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
         np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
         data = np.array(np.random.normal(size=(NTIMES,NCHAN)),dtype=complex)
         wgts = np.ones_like(data)
