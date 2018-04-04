@@ -57,8 +57,9 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, wind
         tol: CLEAN algorithm convergence tolerance (see aipy.deconv.clean)
         window: window function for filtering applied to the filtered axis. 
             See aipy.dsp.gen_window for options.
-        skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt) 
-            Only works properly when all weights are all between 0 and 1.
+        skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
+            Model is left as 0s, residual is left as data, and info is {'skipped': True} for that 
+            time. Only works properly when all weights are all between 0 and 1.
         maxiter: Maximum number of iterations for aipy.deconv.clean to converge.
 
     Returns:
@@ -83,6 +84,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, wind
         for i in xrange(data.shape[0]):
             if _w[i,0] < skip_wgt: 
                 d_mdl[i] = 0 # skip highly flagged (slow) integrations
+                info.append({'skipped': True})
             else:
                 _d_cl, info_here = aipy.deconv.clean(_d[i], _w[i], area=area, tol=tol, stop_if_div=False, maxiter=maxiter)
                 d_mdl[i] = np.fft.fft(_d_cl)
@@ -113,8 +115,9 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., tol=1e-4,
         tol: CLEAN algorithm convergence tolerance (see aipy.deconv.clean)
         window: window function for filtering applied to the filtered axis. 
             See aipy.dsp.gen_window for options.        
-        skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt) 
-            Only works properly when all weights are all between 0 and 1.
+        skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
+            Model is left as 0s, residual is left as data, and info is {'skipped': True} for that 
+            time. Only works properly when all weights are all between 0 and 1.
         maxiter: Maximum number of iterations for aipy.deconv.clean to converge.
 
     Returns:

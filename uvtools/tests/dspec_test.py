@@ -5,6 +5,7 @@ import numpy as np, random
 random.seed(0)
 
 class TestMethods(unittest.TestCase):
+
     def test_wedge_width(self):
         # Test boundaries of delay bins
         self.assertEqual(dspec.wedge_width(0, .01, 10), (1,10))
@@ -28,8 +29,10 @@ class TestMethods(unittest.TestCase):
         self.assertEqual(dspec.wedge_width(100., .001, 100, horizon=.5), (6,-5))
         self.assertEqual(dspec.wedge_width(100., .001, 100, horizon=1.5), (16,-15))
         self.assertEqual(dspec.wedge_width(100., .001, 100, horizon=2.), (21,-20))
+
     def test_delay_filter_dims(self):
         self.assertRaises(ValueError, dspec.delay_filter, np.zeros((1,2,3)), np.zeros((1,2,3)), 0, .001)
+
     def test_delay_filter_1D(self):
         NCHAN = 128
         TOL = 1e-6
@@ -47,6 +50,7 @@ class TestMethods(unittest.TestCase):
         dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=1e-9)
         self.assertAlmostEqual(np.average(data), np.average(dmdl), 3)
         self.assertAlmostEqual(np.average(dres), 0, 3)
+
     def test_delay_filter_2D(self):
         NCHAN = 128
         NTIMES = 10
@@ -66,7 +70,22 @@ class TestMethods(unittest.TestCase):
         dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=1e-9)
         np.testing.assert_allclose(np.average(data,axis=1), np.average(dmdl,axis=1), atol=1e-3)
         np.testing.assert_allclose(np.average(dres,axis=1), 0, atol=1e-3)
-        
+    
+    def test_skip_wgt(self):
+        NCHAN = 128
+        NTIMES = 10
+        TOL = 1e-6
+        data = np.ones((NTIMES, NCHAN), dtype=np.complex)
+        wgts = np.ones((NTIMES, NCHAN), dtype=np.complex)
+        wgts[0, 0:-4] = 0
+        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL, skip_wgt=.1)
+        np.testing.assert_allclose(data[1:,:], dmdl[1:,:], atol=NCHAN*TOL)
+        np.testing.assert_allclose(dres[1:,:], np.zeros_like(dres)[1:,:], atol=NCHAN*TOL)
+        np.testing.assert_allclose(dmdl[0,:], np.zeros_like(dmdl[0,:]), atol=NCHAN*TOL)
+        np.testing.assert_allclose(dres[0,:], data[0,:], atol=NCHAN*TOL)
+        self.assertEqual(len(info), NTIMES)
+        self.assertTrue(info[0]['skipped'])
+
 
 if __name__ == '__main__':
     unittest.main()
