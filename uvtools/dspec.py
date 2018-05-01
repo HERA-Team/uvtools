@@ -43,7 +43,7 @@ def calc_width(filter_size, real_delta, nsamples):
     return (uthresh, lthresh)
 
 
-def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, window='none', skip_wgt=0.1, maxiter=100):
+def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, window='none', skip_wgt=0.1, maxiter=100, **win_kwargs):
     '''Apply a highpass fourier filter to data. Uses aipy.deconv.clean. 
 
     Arguments:
@@ -61,6 +61,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, wind
             Model is left as 0s, residual is left as data, and info is {'skipped': True} for that 
             time. Only works properly when all weights are all between 0 and 1.
         maxiter: Maximum number of iterations for aipy.deconv.clean to converge.
+        win_kwargs : keyword arguments for window function selection (see aipy.dsp.gen_window)
 
     Returns:
         d_mdl: best fit low-pass filter components (CLEAN model) in real space
@@ -68,7 +69,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, wind
         info: dictionary (1D case) or list of dictionaries (2D case) with CLEAN metadata
     '''
     nchan = data.shape[-1]
-    window = aipy.dsp.gen_window(nchan, window=window)
+    window = aipy.dsp.gen_window(nchan, window=window, **win_kwargs)
     _d = np.fft.ifft(data * wgts * window, axis=-1)
     _w = np.fft.ifft(wgts * window, axis=-1)
     uthresh,lthresh = calc_width(filter_size, real_delta, nchan)
@@ -99,7 +100,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, wind
 
     
 def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., tol=1e-4, 
-        window='none', skip_wgt=0.5, maxiter=100):
+        window='none', skip_wgt=0.5, maxiter=100, **win_kwargs):
     '''Apply a wideband delay filter to data. Variable names preserved for 
         backward compatability with capo/PAPER analysis.
 
@@ -119,6 +120,7 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., tol=1e-4,
             Model is left as 0s, residual is left as data, and info is {'skipped': True} for that 
             time. Only works properly when all weights are all between 0 and 1.
         maxiter: Maximum number of iterations for aipy.deconv.clean to converge.
+        win_kwargs : keyword arguments for window function selection (see aipy.dsp.gen_window)
 
     Returns:
         d_mdl: best fit low-pass filter components (CLEAN model) in the frequency domain
@@ -126,8 +128,8 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., tol=1e-4,
         info: dictionary (1D case) or list of dictionaries (2D case) with CLEAN metadata
     '''    
     bl_dly = horizon * bl_len + standoff
-    return high_pass_fourier_filter(data, wgts, bl_dly, sdf, tol=tol,window=window,
-                                    skip_wgt=skip_wgt, maxiter=maxiter)
+    return high_pass_fourier_filter(data, wgts, bl_dly, sdf, tol=tol, window=window,
+                                    skip_wgt=skip_wgt, maxiter=maxiter, **win_kwargs)
 
 
 
