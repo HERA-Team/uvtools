@@ -100,10 +100,9 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, wind
 
     return d_mdl, d_res, info
 
-
     
-def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., tol=1e-4, 
-        window='none', skip_wgt=0.5, maxiter=100, gain=0.1, **win_kwargs):
+def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, tol=1e-4,
+                 window='none', skip_wgt=0.5, maxiter=100, gain=0.1, **win_kwargs):
     '''Apply a wideband delay filter to data. Variable names preserved for 
         backward compatability with capo/PAPER analysis.
 
@@ -116,6 +115,7 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., tol=1e-4,
         sdf: frequency channel width (typically in GHz)
         standoff: fixed additional delay beyond the horizon (same units as bl_len)
         horizon: proportionality constant for bl_len where 1 is the horizon (full light travel time)
+        min_dly: a minimum delay used for cleaning: if bl_dly < min_dly, use min_dly. same units as bl_len
         tol: CLEAN algorithm convergence tolerance (see aipy.deconv.clean)
         window: window function for filtering applied to the filtered axis. 
             See aipy.dsp.gen_window for options.        
@@ -131,8 +131,14 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., tol=1e-4,
         d_mdl: best fit low-pass filter components (CLEAN model) in the frequency domain
         d_res: best fit high-pass filter components (CLEAN residual) in the frequency domain
         info: dictionary (1D case) or list of dictionaries (2D case) with CLEAN metadata
-    '''    
+    '''
+    # construct baseline delay
     bl_dly = horizon * bl_len + standoff
+
+    # check minimum delay
+    bl_dly = np.max([bl_dly, min_dly])
+
+    # run fourier filter
     return high_pass_fourier_filter(data, wgts, bl_dly, sdf, tol=tol, window=window,
                                     skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, **win_kwargs)
 
