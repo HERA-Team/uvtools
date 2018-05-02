@@ -90,7 +90,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, wind
                 d_mdl[i] = 0 # skip highly flagged (slow) integrations
                 info.append({'skipped': True})
             else:
-                _d_cl, info_here = aipy.deconv.clean(_d[i], _w[i], area=area, tol=tol, stop_if_div=False, maxiter=maxiter)
+                _d_cl, info_here = aipy.deconv.clean(_d[i], _w[i], area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
                 d_mdl[i] = np.fft.fft(_d_cl)
                 del info_here['res']
                 info.append(info_here)
@@ -103,7 +103,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, wind
 
     
 def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., tol=1e-4, 
-        window='none', skip_wgt=0.5, maxiter=100, **win_kwargs):
+        window='none', skip_wgt=0.5, maxiter=100, gain=0.1, **win_kwargs):
     '''Apply a wideband delay filter to data. Variable names preserved for 
         backward compatability with capo/PAPER analysis.
 
@@ -123,6 +123,8 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., tol=1e-4,
             Model is left as 0s, residual is left as data, and info is {'skipped': True} for that 
             time. Only works properly when all weights are all between 0 and 1.
         maxiter: Maximum number of iterations for aipy.deconv.clean to converge.
+        gain: The fraction of a residual used in each iteration. If this is too low, clean takes
+            unnecessarily long. If it is too high, clean does a poor job of deconvolving.
         win_kwargs : keyword arguments for window function selection (see aipy.dsp.gen_window)
 
     Returns:
@@ -132,7 +134,7 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., tol=1e-4,
     '''    
     bl_dly = horizon * bl_len + standoff
     return high_pass_fourier_filter(data, wgts, bl_dly, sdf, tol=tol, window=window,
-                                    skip_wgt=skip_wgt, maxiter=maxiter, **win_kwargs)
+                                    skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, **win_kwargs)
 
 
 
