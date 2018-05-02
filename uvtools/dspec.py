@@ -43,7 +43,8 @@ def calc_width(filter_size, real_delta, nsamples):
     return (uthresh, lthresh)
 
 
-def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, window='none', skip_wgt=0.1, maxiter=100, **win_kwargs):
+def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, window='none', 
+                             skip_wgt=0.1, maxiter=100, gain=0.1, **win_kwargs):
     '''Apply a highpass fourier filter to data. Uses aipy.deconv.clean. 
 
     Arguments:
@@ -61,6 +62,8 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, wind
             Model is left as 0s, residual is left as data, and info is {'skipped': True} for that 
             time. Only works properly when all weights are all between 0 and 1.
         maxiter: Maximum number of iterations for aipy.deconv.clean to converge.
+        gain: The fraction of a residual used in each iteration. If this is too low, clean takes
+            unnecessarily long. If it is too high, clean does a poor job of deconvolving.
         win_kwargs : keyword arguments for window function selection (see aipy.dsp.gen_window)
 
     Returns:
@@ -76,7 +79,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, wind
     area = np.ones(nchan, dtype=np.int) 
     area[uthresh:lthresh] = 0
     if data.ndim == 1:
-        _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter)
+        _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
         d_mdl = np.fft.fft(_d_cl)
         del info['res']
     elif data.ndim == 2:
