@@ -64,7 +64,8 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, wind
         maxiter: Maximum number of iterations for aipy.deconv.clean to converge.
         gain: The fraction of a residual used in each iteration. If this is too low, clean takes
             unnecessarily long. If it is too high, clean does a poor job of deconvolving.
-        win_kwargs : keyword arguments for window function selection (see aipy.dsp.gen_window)
+        win_kwargs : any keyword arguments for the window function selection in aipy.dsp.gen_window.
+            Currently, the only window that takes a kwarg is the tukey window with a alpha=0.5 default.
 
     Returns:
         d_mdl: best fit low-pass filter components (CLEAN model) in real space
@@ -125,7 +126,8 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
         maxiter: Maximum number of iterations for aipy.deconv.clean to converge.
         gain: The fraction of a residual used in each iteration. If this is too low, clean takes
             unnecessarily long. If it is too high, clean does a poor job of deconvolving.
-        win_kwargs : keyword arguments for window function selection (see aipy.dsp.gen_window)
+        win_kwargs : any keyword arguments for the window function selection in aipy.dsp.gen_window.
+            Currently, the only window that takes a kwarg is the tukey window with a alpha=0.5 default.
 
     Returns:
         d_mdl: best fit low-pass filter components (CLEAN model) in the frequency domain
