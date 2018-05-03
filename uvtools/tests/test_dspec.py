@@ -1,6 +1,7 @@
 import unittest
 import uvtools.dspec as dspec
 import numpy as np, random
+import nose.tools as nt
 
 random.seed(0)
 
@@ -85,6 +86,12 @@ class TestMethods(unittest.TestCase):
         np.testing.assert_allclose(dres[0,:], data[0,:], atol=NCHAN*TOL)
         self.assertEqual(len(info), NTIMES)
         self.assertTrue(info[0]['skipped'])
+
+
+def test_vis_filter():
+
+
+    
 
 
 if __name__ == '__main__':
