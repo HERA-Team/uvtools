@@ -19,6 +19,7 @@ def package_files(package_dir, subdirectory):
             path = path.replace(package_dir + '/', '')
             paths.append(os.path.join(path, filename))
     return paths
+    
 data_files = package_files('uvtools', 'data')
 
 setup_args = {
@@ -29,7 +30,9 @@ setup_args = {
     'description': 'Tools useful for the handling, visualization, and analysis of interferometric data.',
     'package_dir': {'uvtools': 'uvtools'},
     'packages': ['uvtools'],
-    'version': version.version
+    'package_data': {'uvtools': data_files},
+    'version': version.version,
+    'include_package_data': True
 }
 
 
