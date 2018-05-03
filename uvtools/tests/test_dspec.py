@@ -2,6 +2,9 @@ import unittest
 import uvtools.dspec as dspec
 import numpy as np, random
 import nose.tools as nt
+from pyuvdata import UVData
+from uvtools.data import DATA_PATH
+import os
 
 random.seed(0)
 
@@ -89,9 +92,19 @@ class TestMethods(unittest.TestCase):
 
 
 def test_vis_filter():
-
-
-    
+    # load file
+    uvd = UVData()
+    uvd.read_miriad(os.path.join(DATA_PATH, "zen.all.xx.LST.1.06964.uvA"))
+    # get data, wgts
+    d = uvd.get_data(24, 25)
+    w = (~uvd.get_flags(24, 25)).astype(np.float)
+    bl_len = 14.6 / 2.99e8
+    sdf = np.median(np.diff(uvd.freq_array.squeeze()))
+    # basic execution
+    mdl, res, info = dspec.delay_filter(d, w, bl_len, sdf, standoff=50.0, horizon=1.0, min_dly=0.0,
+                                        tol=1e-4, window='blackman-harris', skip_wgt=0.1, gain=0.1)
+    nt.assert_equal(mdl.shape, (6, 1024))
+    nt.assert_equal(res.shape, (6, 1024))
 
 
 if __name__ == '__main__':
