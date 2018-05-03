@@ -1,8 +1,25 @@
 from setuptools import setup
 import glob
-import os.path as path
+import os
+import sys
+from uvtools import version
+import json
 
-__version__ = '0.0.0'
+data = [version.git_origin, version.git_hash, version.git_description, version.git_branch]
+with open(os.path.join('uvtools', 'GIT_INFO'), 'w') as outfile:
+    json.dump(data, outfile)
+
+def package_files(package_dir, subdirectory):
+    # walk the input package_dir/subdirectory
+    # return a package_data list
+    paths = []
+    directory = os.path.join(package_dir, subdirectory)
+    for (path, directories, filenames) in os.walk(directory):
+        for filename in filenames:
+            path = path.replace(package_dir + '/', '')
+            paths.append(os.path.join(path, filename))
+    return paths
+data_files = package_files('uvtools', 'data')
 
 setup_args = {
     'name': 'uvtools',
@@ -12,7 +29,7 @@ setup_args = {
     'description': 'Tools useful for the handling, visualization, and analysis of interferometric data.',
     'package_dir': {'uvtools': 'uvtools'},
     'packages': ['uvtools'],
-    'version': __version__,
+    'version': version.version
 }
 
 
