@@ -25,6 +25,15 @@ install:
   - conda install -c conda-forge aipy
   - pip install coveralls
   - pip install git+https://github.com/HERA-Team/pyuvdata.git
+  - pip install git+https://github.com/HERA-Team/omnical.git
+  - pip install git+https://github.com/HERA-Team/linsolve.git
+  - pip install git+https://github.com/HERA-Team/hera_qm.git
+  - pip install git+https://github.com/HERA-Team/uvtools.git
+  - pip install git+https://github.com/HERA-Team/hera_cal.git
+  - pip install healpy
+  - pip install scikit-learn
+  - pip install h5py
+  - pip install pyyaml
   - python setup.py install
 
 script: nosetests uvtools/tests/test_dspec.py --with-coverage --cover-package=uvtools
