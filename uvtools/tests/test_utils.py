@@ -39,6 +39,11 @@ def test_search_data():
     nt.assert_equal(len(datafiles[0]), len(datafiles[1]), 2)
     nt.assert_true(np.all(['.bar.' in df for df in datafiles[0]]))
 
+    # flatten
+    datafiles = uvt.utils.search_data(files, pols, flatten=True)
+    nt.assert_equal(len(datafiles), 4)
+    nt.assert_true(isinstance(datafiles[0], (str, np.str)))
+
     for f in allfiles:
         if os.path.exists(f):
             os.remove(f)
