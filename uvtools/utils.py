@@ -3,7 +3,7 @@ import os
 import glob
 
 
-def search_data(templates, pols, matched_pols=False, reverse_nesting=False):
+def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flatten=False):
     """
     Glob-parse data templates to search for data files.
 
@@ -21,8 +21,11 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False):
         If True, only use datafiles that are present for all polarizations.
 
     reverse_nesting : boolean
-        If True, flip the nesting of datafiles to be polarization-datafile.
+        If True, flip the nesting of datafiles to be datafile-polarization.
         By default, the output is polarization-datafile.
+
+    flatten : boolean
+        If True, flatten the nested output datafiles to a single hierarchy.
 
     Returns
     -------
@@ -78,5 +81,8 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False):
                 if df in allfiles:
                     dfs.append(df)
             datafiles.append(dfs)
+    # flatten
+    if flatten:
+        datafiles = [item for sublist in datafiles for item in sublist]
 
     return datafiles
