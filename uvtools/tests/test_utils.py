@@ -19,30 +19,34 @@ def test_search_data():
             with open(df, "w"):
                 pass
 
+    templates = sorted(files + ["zen.inp.{pol}.uv"])
+
     # search data
-    datafiles = uvt.utils.search_data(files, pols)
-    nt.assert_equal(len(datafiles), 2)
-    nt.assert_equal(len(datafiles[0]), len(datafiles[1]), 2)
-    nt.assert_true(np.all(['.xx.' in df for df in datafiles[0]]))
+    dfs, dps = uvt.utils.search_data(templates, pols)
+    nt.assert_equal(len(dfs), 2)
+    nt.assert_equal(len(dfs[0]), len(dfs[1]), 2)
+    nt.assert_true(np.all(['.xx.' in df for df in dfs[0]]))
+    nt.assert_equal(len(dps), 2)
+    nt.assert_equal(dps[0], ['xx', 'xx'])
 
     # matched pols
-    datafiles = uvt.utils.search_data(files, pols, matched_pols=True)
-    nt.assert_equal(len(datafiles), 2)
-    nt.assert_equal(len(datafiles[0]), len(datafiles[1]), 2)
-    nt.assert_true(np.all(['.xx.' in df for df in datafiles[0]]))
-    datafiles = uvt.utils.search_data(files, pols + ['pI'], matched_pols=True)
-    nt.assert_equal(len(datafiles), 0)
+    dfs, dps = uvt.utils.search_data(templates, pols, matched_pols=True)
+    nt.assert_equal(len(dfs), 2)
+    nt.assert_equal(len(dfs[0]), len(dfs[1]), 2)
+    nt.assert_true(np.all(['.xx.' in df for df in dfs[0]]))
+    dfs, dps = uvt.utils.search_data(files, pols + ['pI'], matched_pols=True)
+    nt.assert_equal(len(dfs), 0)
 
     # reverse nesting
-    datafiles = uvt.utils.search_data(files, pols, reverse_nesting=True)
-    nt.assert_equal(len(datafiles), 2)
-    nt.assert_equal(len(datafiles[0]), len(datafiles[1]), 2)
-    nt.assert_true(np.all(['.bar.' in df for df in datafiles[0]]))
+    dfs, dps = uvt.utils.search_data(templates, pols, reverse_nesting=True)
+    nt.assert_equal(len(dfs), 2)
+    nt.assert_equal(len(dfs[0]), len(dfs[1]), 2)
+    nt.assert_true(np.all(['.bar.' in df for df in dfs[0]]))
 
     # flatten
-    datafiles = uvt.utils.search_data(files, pols, flatten=True)
-    nt.assert_equal(len(datafiles), 4)
-    nt.assert_true(isinstance(datafiles[0], (str, np.str)))
+    dfs, dps = uvt.utils.search_data(templates, pols, flatten=True)
+    nt.assert_equal(len(dfs), 4)
+    nt.assert_true(isinstance(dfs[0], (str, np.str)))
 
     for f in allfiles:
         if os.path.exists(f):
