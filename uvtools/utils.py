@@ -45,7 +45,6 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
     # search for datafiles
     datafiles = []
     datapols = []
-    unique_files = []
     for i, p in enumerate(pols):
         dps = []
         dfs = []
@@ -54,14 +53,18 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
             if len(df) > 0:
                 dfs.extend(df)
                 dps.append(p)
-                if t not in unique_files:
-                    unique_files.append(t)
         if len(dfs) > 0:
             datafiles.append(sorted(dfs))
             datapols.append(dps)
-    # get all files
+    # get unique files
     allfiles = [item for sublist in datafiles for item in sublist]
     allpols = [item for sublist in datapols for item in sublist]
+    unique_files = set()
+    for f in allfiles:
+        for p in pols:
+            if ".{pol}.".format(pol=p) in f:
+                unique_files.update(set([f.replace(".{pol}.".format(pol=p), ".{pol}.")]))
+                continue
     unique_files = sorted(unique_files)
     # check for unique files with all pols
     if matched_pols:
