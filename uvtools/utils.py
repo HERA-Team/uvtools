@@ -33,30 +33,35 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
         A nested list of paths to datafiles. By default, the structure is
         polarization-datafile nesting. If reverse_nesting, then the structure
         is flipped to datafile-polarization structure.
+
+    datapols : list
+        List of polarizations for each file in datafile
     """
     # type check
     if isinstance(templates, (str, np.str)):
         templates = [templates]
-    if isinstance(pols, (str, np.str)):
+    if isinstance(pols, (str, np.str, np.integer, int)):
         pols = [pols]
     # search for datafiles
     datafiles = []
-    for p in pols:
+    datapols = []
+    unique_files = []
+    for i, p in enumerate(pols):
+        dps = []
         dfs = []
-        for t in templates:
+        for j, t in enumerate(templates):
             df = glob.glob(t.format(pol=p))
             if len(df) > 0:
                 dfs.extend(df)
+                dps.append(p)
+                if t not in unique_files:
+                    unique_files.append(t)
         if len(dfs) > 0:
             datafiles.append(sorted(dfs))
-    # get unique files
+            datapols.append(dps)
+    # get all files
     allfiles = [item for sublist in datafiles for item in sublist]
-    unique_files = set()
-    for f in allfiles:
-        for p in pols:
-            if ".{pol}.".format(pol=p) in f:
-                unique_files.update(set([f.replace(".{pol}.".format(pol=p), ".{pol}.")]))
-                continue
+    allpols = [item for sublist in datapols for item in sublist]
     unique_files = sorted(unique_files)
     # check for unique files with all pols
     if matched_pols:
@@ -70,19 +75,24 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
             if goodfile:
                 _templates.append(f)
 
-        datafiles = search_data(_templates, pols, matched_pols=False, reverse_nesting=False)
+        datafiles, datapols = search_data(_templates, pols, matched_pols=False, reverse_nesting=False)
     # reverse nesting if desired
     if reverse_nesting:
         datafiles = []
+        datapols = []
         for f in unique_files:
             dfs = []
+            dps = []
             for p in pols:
                 df = f.format(pol=p)
                 if df in allfiles:
                     dfs.append(df)
+                    dps.append(p)
             datafiles.append(dfs)
+            datapols.append(dps)
     # flatten
     if flatten:
         datafiles = [item for sublist in datafiles for item in sublist]
+        datapols = [item for sublist in datapols for item in sublist]
 
-    return datafiles
+    return datafiles, datapols
