@@ -63,7 +63,7 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
         for pol in pols:
             if ".{pol}.".format(pol=pol) in _file:
                 unique_files.update(set([_file.replace(".{pol}.".format(pol=pol), ".{pol}.")]))
-                continue
+                break
     unique_files = sorted(unique_files)
     # check for unique files with all pols
     if matched_pols:
