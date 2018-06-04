@@ -1,5 +1,4 @@
 import numpy as np
-import os
 import glob
 
 
@@ -45,14 +44,14 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
     # search for datafiles
     datafiles = []
     datapols = []
-    for i, p in enumerate(pols):
+    for pol in pols:
         dps = []
         dfs = []
-        for j, t in enumerate(templates):
-            df = glob.glob(t.format(pol=p))
+        for template in templates:
+            df = glob.glob(template.format(pol=pol))
             if len(df) > 0:
                 dfs.extend(df)
-                dps.append(p)
+                dps.append(pol)
         if len(dfs) > 0:
             datafiles.append(sorted(dfs))
             datapols.append(dps)
@@ -60,37 +59,38 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
     allfiles = [item for sublist in datafiles for item in sublist]
     allpols = [item for sublist in datapols for item in sublist]
     unique_files = set()
-    for f in allfiles:
-        for p in pols:
-            if ".{pol}.".format(pol=p) in f:
-                unique_files.update(set([f.replace(".{pol}.".format(pol=p), ".{pol}.")]))
+    for _file in allfiles:
+        for pol in pols:
+            if ".{pol}.".format(pol=pol) in _file:
+                unique_files.update(set([_file.replace(".{pol}.".format(pol=pol), ".{pol}.")]))
                 continue
     unique_files = sorted(unique_files)
     # check for unique files with all pols
     if matched_pols:
         Npols = len(pols)
         _templates = []
-        for f in unique_files:
+        for _file in unique_files:
             goodfile = True
-            for p in pols:
-                if f.format(pol=p) not in allfiles:
+            for pol in pols:
+                if _file.format(pol=pol) not in allfiles:
                     goodfile = False
             if goodfile:
-                _templates.append(f)
+                _templates.append(_file)
 
+        # achieve goal by calling search_data with new _templates that are polarization matched
         datafiles, datapols = search_data(_templates, pols, matched_pols=False, reverse_nesting=False)
     # reverse nesting if desired
     if reverse_nesting:
         datafiles = []
         datapols = []
-        for f in unique_files:
+        for _file in unique_files:
             dfs = []
             dps = []
-            for p in pols:
-                df = f.format(pol=p)
+            for pol in pols:
+                df = _file.format(pol=pol)
                 if df in allfiles:
                     dfs.append(df)
-                    dps.append(p)
+                    dps.append(pol)
             datafiles.append(dfs)
             datapols.append(dps)
     # flatten
