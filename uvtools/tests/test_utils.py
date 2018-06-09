@@ -25,9 +25,10 @@ def test_search_data():
     dfs, dps = uvt.utils.search_data(templates, pols)
     nt.assert_equal(len(dfs), 2)
     nt.assert_equal(len(dfs[0]), len(dfs[1]), 2)
-    nt.assert_true(np.all(['.xx.' in df for df in dfs[0]]))
     nt.assert_equal(len(dps), 2)
+    nt.assert_equal(len(dps[0]), len(dps[1]), 2)
     nt.assert_equal(dps[0], ['xx', 'xx'])
+    nt.assert_true(np.all(['.xx.' in df for df in dfs[0]]))
 
     # matched pols
     dfs, dps = uvt.utils.search_data(templates, pols, matched_pols=True)
