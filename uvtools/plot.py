@@ -22,7 +22,8 @@ def waterfall(d, mode='log', mx=None, drng=None, recenter=False, **kwargs):
     if mx is None: mx = d.max()
     if drng is None: drng = mx - d.min()
     mn = mx - drng
-    return plt.imshow(d, vmax=mx, vmin=mn, aspect='auto', interpolation='nearest', **kwargs)
+    if not kwargs.has_key('aspect'): kwargs['aspect'] = 'auto'
+    return plt.imshow(d, vmax=mx, vmin=mn, interpolation='nearest', **kwargs)
 
 def plot_hmap_ortho(h, cmap='jet', mode='log', mx=None, drng=None, 
         res=0.25, verbose=False, normalize=False):
@@ -30,7 +31,7 @@ def plot_hmap_ortho(h, cmap='jet', mode='log', mx=None, drng=None,
     if verbose:
         print 'SCHEME:', h.scheme()
         print 'NSIDE:', h.nside()
-    lons,lats,x,y = m.makegrid(360/res,180/res, returnxy=True)
+    lons,lats,x,y = m.makegrid(int(360/res),int(180/res), returnxy=True)
     lons = 360 - lons
     lats *= aipy.img.deg2rad; lons *= aipy.img.deg2rad
     y,x,z = aipy.coord.radec2eq(np.array([lons.flatten(), lats.flatten()]))
