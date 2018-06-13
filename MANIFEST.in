@@ -1,0 +1,5 @@
+include *.md
+include LICENSE
+include uvtools/VERSION
+include uvtools/GIT_INFO
+

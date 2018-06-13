@@ -15,19 +15,19 @@ install:
   - export PATH="$HOME/miniconda/bin:$PATH"
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
-  - conda update -q conda
+  - conda install -q conda=4.3.25
   # Useful for debugging any issues with conda
   - conda info -a
 
   # create environment and install dependencies
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy=1.11.2 basemap scipy nose pip matplotlib coverage
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy astropy nose pip matplotlib coverage basemap
   - source activate test-environment
-  - conda install -c pkgw-forge aipy
+  - conda install -c conda-forge aipy
   - pip install coveralls
   - pip install git+https://github.com/HERA-Team/pyuvdata.git
   - python setup.py install
 
-script: nosetests uvtools --with-coverage --cover-package=uvtools
+script: nosetests uvtools/tests/test_dspec.py uvtools/tests/test_utils.py --with-coverage --cover-package=uvtools
 
 after_success:
   - coveralls
