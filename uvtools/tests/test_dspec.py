@@ -105,6 +105,17 @@ class TestMethods(unittest.TestCase):
         np.testing.assert_allclose(data, bf_model, atol=NCHAN*TOL)
         np.testing.assert_allclose(data, data_out, atol=NCHAN*TOL)
         
+        # Test 1D code directly
+        bf_model, cn_out, data_out = dspec.delay_filter_leastsq_1d(
+                                                    data[0], flags[0], sigma, 
+                                                    nmax=3, add_noise=False)
+        np.testing.assert_allclose(data[0], bf_model, atol=NCHAN*TOL)
+        
+        # Test that noise injection can be switched on
+        bf_model, cn_out, data_out = dspec.delay_filter_leastsq_1d(
+                                                    data[0], flags[0], sigma, 
+                                                    nmax=3, add_noise=True)
+        
     
     def test_skip_wgt(self):
         NCHAN = 128
