@@ -75,6 +75,37 @@ class TestMethods(unittest.TestCase):
         np.testing.assert_allclose(np.average(data,axis=1), np.average(dmdl,axis=1), atol=1e-3)
         np.testing.assert_allclose(np.average(dres,axis=1), 0, atol=1e-3)
     
+    def test_delay_filter_leastsq(self):
+        NCHAN = 128
+        NTIMES = 10
+        TOL = 1e-7
+        data = np.ones((NTIMES, NCHAN), dtype=np.complex)
+        flags = np.zeros((NTIMES, NCHAN), dtype=np.bool)
+        sigma = 0.1 # Noise level (not important here)
+        
+        # Fourier coeffs for input data, ordered from (-nmax, nmax)
+        cn = np.array([-0.1-0.1j, -0.1+0.1j, -0.3-0.01j, 
+                        0.5+0.01j, 
+                       -0.3-0.01j, -0.1+0.1j, 0.1-0.1j])
+        data *= np.atleast_2d( dspec.fourier_model(cn, NCHAN) )
+        
+        # Estimate smooth Fourier model on unflagged data
+        bf_model, cn_out, data_out = dspec.delay_filter_leastsq(data, flags, 
+                                                                sigma, nmax=3, 
+                                                                add_noise=False)
+        np.testing.assert_allclose(data.real, bf_model.real, atol=NCHAN*TOL)
+        
+        
+        # Estimate smooth Fourier model on data with some flags
+        flags[:,10] = True
+        flags[:,65:70] = True
+        bf_model, cn_out, data_out = dspec.delay_filter_leastsq(data, flags, 
+                                                                sigma, nmax=3, 
+                                                                add_noise=False)
+        np.testing.assert_allclose(data, bf_model, atol=NCHAN*TOL)
+        np.testing.assert_allclose(data, data_out, atol=NCHAN*TOL)
+        
+    
     def test_skip_wgt(self):
         NCHAN = 128
         NTIMES = 10
