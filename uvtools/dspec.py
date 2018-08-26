@@ -86,7 +86,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, tol=1e-9, wind
     elif data.ndim == 2:
         info = []
         d_mdl = np.empty_like(data)
-        for i in xrange(data.shape[0]):
+        for i in range(data.shape[0]):
             if _w[i,0] < skip_wgt: 
                 d_mdl[i] = 0 # skip highly flagged (slow) integrations
                 info.append({'skipped': True})
