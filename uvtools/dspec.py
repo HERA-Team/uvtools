@@ -35,8 +35,8 @@ def calc_width(filter_size, real_delta, nsamples):
             and ending at lthresh (which is a negative integer and also not filtered).
             Designed for area = np.ones(nsamples, dtype=np.int); area[uthresh:lthresh] = 0
     '''
-    bin_width = 1. / (real_delta * nsamples)
-    w = int(round(filter_size / bin_width))
+    bin_width = 1.0 / (real_delta * nsamples)
+    w = int(np.around(filter_size / bin_width))
     uthresh, lthresh = w + 1, -w
     if lthresh == 0: 
         lthresh = nsamples
