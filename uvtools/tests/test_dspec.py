@@ -13,7 +13,7 @@ class TestMethods(unittest.TestCase):
     def test_wedge_width(self):
         # Test boundaries of delay bins
         self.assertEqual(dspec.wedge_width(0, .01, 10), (1,10))
-        self.assertEqual(dspec.wedge_width(5., .01, 10), (2,-1))
+        self.assertEqual(dspec.wedge_width(5., .01, 10), (1,10))
         self.assertEqual(dspec.wedge_width( 9., .01, 10), (2,-1))
         self.assertEqual(dspec.wedge_width(10., .01, 10), (2,-1))
         self.assertEqual(dspec.wedge_width(15., .01, 10), (3,-2))
@@ -25,7 +25,7 @@ class TestMethods(unittest.TestCase):
         self.assertEqual(dspec.wedge_width(10., .04, 10), (5,-4))
         # test standoff
         self.assertEqual(dspec.wedge_width(100., .001, 100, standoff=4.), (11,-10))
-        self.assertEqual(dspec.wedge_width(100., .001, 100, standoff=5.), (12,-11))
+        self.assertEqual(dspec.wedge_width(100., .001, 100, standoff=5.), (11,-10))
         self.assertEqual(dspec.wedge_width(100., .001, 100, standoff=10.), (12,-11))
         self.assertEqual(dspec.wedge_width(100., .001, 100, standoff=15.), (13,-12))
         # test horizon
