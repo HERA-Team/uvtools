@@ -24,7 +24,8 @@ install:
   # create environment and install dependencies
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy astropy nose pip matplotlib coverage basemap
   - source activate test-environment
-  - conda install -c conda-forge healpy aipy
+  - conda install -c conda-forge healpy
+  - pip install git+https://github.com/HERA-Team/aipy.git@v3.0.0rc1
   - pip install coveralls
   - pip install git+https://github.com/HERA-Team/pyuvdata.git
   - python setup.py install
