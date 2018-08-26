@@ -6,7 +6,6 @@ uvtools_dir = os.path.dirname(os.path.realpath(__file__))
 version_file = os.path.join(uvtools_dir, 'VERSION')
 version = open(version_file).read().strip()
 
-
 def construct_version_info():
     uvtools_dir = os.path.dirname(os.path.realpath(__file__))
     version_file = os.path.join(uvtools_dir, 'VERSION')
@@ -15,22 +14,22 @@ def construct_version_info():
     try:
         git_origin = subprocess.check_output(['git', '-C', uvtools_dir, 'config',
                                               '--get', 'remote.origin.url'],
-                                             stderr=subprocess.STDOUT).strip()
+                                             stderr=subprocess.STDOUT).strip().decode()
         git_hash = subprocess.check_output(['git', '-C', uvtools_dir, 'rev-parse', 'HEAD'],
-                                           stderr=subprocess.STDOUT).strip()
+                                           stderr=subprocess.STDOUT).strip().decode()
         git_description = subprocess.check_output(['git', '-C', uvtools_dir,
-                                                   'describe', '--dirty', '--tag', '--always']).strip()
+                                                   'describe', '--dirty', '--tag', '--always']).strip().decode()
         git_branch = subprocess.check_output(['git', '-C', uvtools_dir, 'rev-parse',
                                               '--abbrev-ref', 'HEAD'],
-                                             stderr=subprocess.STDOUT).strip()
+                                             stderr=subprocess.STDOUT).strip().decode()
         git_version = subprocess.check_output(['git', '-C', uvtools_dir, 'describe', '--always',
-                                               '--tags', '--abbrev=0']).strip()
+                                               '--tags', '--abbrev=0']).strip().decode()
     except:  # pragma: no cover  - can't figure out how to test exception.
         try:
             # Check if a GIT_INFO file was created when installing package
             git_file = os.path.join(uvtools_dir, 'GIT_INFO')
             with open(git_file) as data_file:
-                data = [x.encode('UTF8') for x in json.loads(data_file.read().strip())]
+                data = [x for x in json.loads(data_file.read().strip())]
                 git_origin = data[0]
                 git_hash = data[1]
                 git_description = data[2]

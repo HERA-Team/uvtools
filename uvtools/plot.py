@@ -28,8 +28,8 @@ def plot_hmap_ortho(h, cmap='jet', mode='log', mx=None, drng=None,
     from mpl_toolkits.basemap import Basemap
     m = Basemap(projection='ortho',lat_0=90,lon_0=180,rsphere=1.)
     if verbose:
-        print 'SCHEME:', h.scheme()
-        print 'NSIDE:', h.nside()
+        print('SCHEME:', h.scheme())
+        print('NSIDE:', h.nside())
     lons,lats,x,y = m.makegrid(360/res,180/res, returnxy=True)
     lons = 360 - lons
     lats *= aipy.img.deg2rad; lons *= aipy.img.deg2rad

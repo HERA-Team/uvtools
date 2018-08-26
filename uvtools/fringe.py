@@ -48,7 +48,7 @@ def fit_mdl(frp, bins, maxfr, mdl=gauss, maxfun=1000, ftol=1e-6, xtol=1e-6, star
     """
     bestargs, score = aipy.optimize.fmin(mdl_wrap, x0=startprms, args=(frp,bins,maxfr,mdl),
         full_output=1, disp=0, maxfun=maxfun, maxiter=np.Inf, ftol=ftol, xtol=xtol)[:2]
-    if verbose: print 'Final prms:', bestargs, 'Score:', score
+    if verbose: print('Final prms:', bestargs, 'Score:', score)
     return bestargs
 
 # XXX wgt and iwgt seem icky
@@ -67,7 +67,7 @@ def hmap_to_fr_profile(bm_hmap, bl, lat, bins=DEFAULT_FRBINS, wgt=DEFAULT_WGT, i
         fng = mk_fng(bl,eq)
     return fr_profile(bm, fng, bins=bins, wgt=wgt, iwgt=iwgt)
 
-def aa_to_fr_profile(aa, (i,j), ch, pol='I', bins=DEFAULT_FRBINS, wgt=DEFAULT_WGT, iwgt=DEFAULT_IWGT, nside=64, bl_scale=1,alietal=False, **kwargs):
+def aa_to_fr_profile(aa, i, j, ch, pol='I', bins=DEFAULT_FRBINS, wgt=DEFAULT_WGT, iwgt=DEFAULT_IWGT, nside=64, bl_scale=1, alietal=False, **kwargs):
     '''For an AntennaArray, for a baseline indexed by i,j, at frequency fq, return the fringe-rate profile.'''
     fq = aa.get_afreqs()[ch]
     h = aipy.healpix.HealpixMap(nside=nside)
@@ -157,7 +157,7 @@ def apply_frf(aa, data, wgts, i, j, pol='I', firs=None, alietal=False,
     if firs is None: firs = {}
     tbins = None
     if not firs.has_key((i,j,pol)):
-        frp,bins = aa_to_fr_profile(aa, (i,j), ch0, pol=pol, alietal=alietal,
+        frp,bins = aa_to_fr_profile(aa, i, j, ch0, pol=pol, alietal=alietal,
                                     **kwargs)
         del(kwargs['bins'])
         tbins, firs[(i,j,pol)] = frp_to_firs(frp, bins, freqs, fq0=fq0, **kwargs)
