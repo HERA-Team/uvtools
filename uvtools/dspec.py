@@ -1,5 +1,6 @@
 import aipy
 import numpy as np
+from six.moves import range
 
 def wedge_width(bl_len, sdf, nchan, standoff=0., horizon=1.):
     '''Return the (upper,lower) delay bins that geometrically correspond to the sky.
