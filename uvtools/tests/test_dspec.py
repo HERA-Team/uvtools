@@ -35,7 +35,7 @@ class TestMethods(unittest.TestCase):
         self.assertEqual(dspec.wedge_width(100., .001, 100, horizon=2.), (21,-20))
 
     def test_delay_filter_dims(self):
-        self.assertRaises(ValueError, dspec.delay_filter, np.zeros((1,2,3)), np.zeros((1,2,3)), 0, .001)
+        self.assertRaises(AssertionError, dspec.delay_filter, np.zeros((1,2,3)), np.zeros((1,2,3)), 0, .001)
 
     def test_delay_filter_1D(self):
         NCHAN = 128
@@ -94,17 +94,55 @@ class TestMethods(unittest.TestCase):
 def test_vis_filter():
     # load file
     uvd = UVData()
-    uvd.read_miriad(os.path.join(DATA_PATH, "zen.all.xx.LST.1.06964.uvA"))
+    uvd.read_miriad(os.path.join(DATA_PATH, "zen.2458042.17772.xx.HH.uvXA"))
+
     # get data, wgts
     d = uvd.get_data(24, 25)
     w = (~uvd.get_flags(24, 25)).astype(np.float)
     bl_len = 14.6 / 2.99e8
     sdf = np.median(np.diff(uvd.freq_array.squeeze()))
-    # basic execution
-    mdl, res, info = dspec.delay_filter(d, w, bl_len, sdf, standoff=50.0, horizon=1.0, min_dly=0.0,
-                                        tol=1e-4, window='blackman-harris', skip_wgt=0.1, gain=0.1)
-    nt.assert_equal(mdl.shape, (6, 1024))
-    nt.assert_equal(res.shape, (6, 1024))
+    dt = np.median(np.diff(np.unique(uvd.time_array))) * 24 * 3600
+    frs = np.fft.fftfreq(uvd.Ntimes, d=dt)
+
+    # missed some flags...
+    w[26:31, 16] = 0.0
+
+    # delay filter basic execution
+    mdl, res, info = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.0,
+                                        tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+    nt.assert_equal(mdl.shape, (60, 64))
+    nt.assert_equal(res.shape, (60, 64))
+
+    # test vis filter is the same
+    mdl2, res2, info2 = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, standoff=0, horizon=1.0, min_dly=0.0,
+                                           tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+    nt.assert_true(np.isclose(mdl - mdl2, 0.0).all())
+
+    # fringe filter basic execution 
+    mdl, res, info = dspec.fringe_filter(d, w, frs[10], dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+    nt.assert_equal(mdl.shape, (60, 64))
+    nt.assert_equal(res.shape, (60, 64))
+
+    # test vis filter is the same
+    mdl2, res2, info2 = dspec.vis_filter(d, w, max_frq=frs[10], dt=dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+    nt.assert_true(np.isclose(mdl - mdl2, 0.0).all())
+
+    # try non-symmetric filter
+    mdl, res, info = dspec.fringe_filter(d, w, (frs[-20], frs[10]), dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+    nt.assert_equal(mdl.shape, (60, 64))
+    nt.assert_equal(res.shape, (60, 64))
+
+    # 2d clean
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frq=frs[10], dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1)
+    nt.assert_equal(mdl.shape, (60, 64))
+    nt.assert_equal(res.shape, (60, 64))
+
+    # non-symmetric 2D clean
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frq=(frs[-20], frs[10]), dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1)
+    nt.assert_equal(mdl.shape, (60, 64))
+    nt.assert_equal(res.shape, (60, 64))
+
+    ### Need to add more substantive checks on filtered products
 
 
 if __name__ == '__main__':
