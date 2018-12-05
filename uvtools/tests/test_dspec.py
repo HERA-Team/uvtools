@@ -90,6 +90,20 @@ class TestMethods(unittest.TestCase):
         self.assertEqual(len(info), NTIMES)
         self.assertTrue(info[0]['skipped'])
 
+    def test_calc_width(self):
+        # test single filter_size
+        nchan = 100
+        dt = 10.
+        filter_size = 1e-2
+        u, l = dspec.calc_width(filter_size, dt, nchan)
+        frs = -np.fft.fftfreq(nchan, dt)  # negative b/c of ifft convention
+        nt.assert_true(np.all(np.abs(frs[u:l]) > filter_size))
+
+        # test multiple entries in filter_size
+        filter_size = (1e-2, 2e-2)
+        u, l = dspec.calc_width(filter_size, dt, nchan)
+        nt.assert_true(np.all((frs[u:l] < -1e-2) | (frs[u:l] > 2e-2)))
+
 
 def test_vis_filter():
     # load file

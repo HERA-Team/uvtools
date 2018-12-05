@@ -23,12 +23,14 @@ def wedge_width(bl_len, sdf, nchan, standoff=0., horizon=1.):
 
 
 def calc_width(filter_size, real_delta, nsamples):
-    '''Calculate the upper and lower bin indices of a fourier filter.
+    '''Calculate the upper and lower bin indices of a fourier filter,
+    assuming mode ordering convention of np.fft.ifft
 
     Arguments:
         filter_size: the half-width (i.e. the width of the positive part) of the region in fourier 
             space, symmetric about 0, that is filtered out. In units of 1/[real_delta].
-            Can also be fed as tuple specifying lower and upper bound of filter.
+            Alternatively, can be fed as len-2 tuple specifying the negative and positive bound
+            of the filter in fourier space respectively.
         real_delta: the bin width in real space
         nsamples: the number of samples in the array to be filtered
 
@@ -38,8 +40,8 @@ def calc_width(filter_size, real_delta, nsamples):
             Designed for area = np.ones(nsamples, dtype=np.int); area[uthresh:lthresh] = 0
     '''
     if isinstance(filter_size, (list, tuple)):
-        _, l = calc_width(np.abs(filter_size[0]), real_delta, nsamples)
-        u, _ = calc_width(np.abs(filter_size[1]), real_delta, nsamples)
+        _, l = calc_width(np.abs(filter_size[1]), real_delta, nsamples)
+        u, _ = calc_width(np.abs(filter_size[0]), real_delta, nsamples)
         return (u, l)        
     bin_width = 1.0 / (real_delta * nsamples)
     w = int(np.around(filter_size / bin_width))
