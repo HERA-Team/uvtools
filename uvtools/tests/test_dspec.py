@@ -75,6 +75,16 @@ class TestMethods(unittest.TestCase):
         np.testing.assert_allclose(np.average(data,axis=1), np.average(dmdl,axis=1), atol=1e-3)
         np.testing.assert_allclose(np.average(dres,axis=1), 0, atol=1e-3)
     
+    def test_fourier_model(self):
+        NMAX = 7
+        NFREQS = 100
+        nmodes = 2*NMAX + 1
+        cn = (np.arange(nmodes) + 1.j*np.arange(nmodes)) / float(nmodes)
+        model = dspec.fourier_model(cn, NFREQS)
+        
+        # Test shape of output model
+        self.assertEqual((NFREQS,), model.shape)
+    
     def test_delay_filter_leastsq(self):
         NCHAN = 128
         NTIMES = 10
@@ -84,8 +94,7 @@ class TestMethods(unittest.TestCase):
         sigma = 0.1 # Noise level (not important here)
         
         # Fourier coeffs for input data, ordered from (-nmax, nmax)
-        cn = np.array([-0.1-0.1j, -0.1+0.1j, -0.3-0.01j, 
-                        0.5+0.01j, 
+        cn = np.array([-0.1-0.1j, -0.1+0.1j, -0.3-0.01j, 0.5+0.01j, 
                        -0.3-0.01j, -0.1+0.1j, 0.1-0.1j])
         data *= np.atleast_2d( dspec.fourier_model(cn, NCHAN) )
         
@@ -93,8 +102,8 @@ class TestMethods(unittest.TestCase):
         bf_model, cn_out, data_out = dspec.delay_filter_leastsq(data, flags, 
                                                                 sigma, nmax=3, 
                                                                 add_noise=False)
-        np.testing.assert_allclose(data.real, bf_model.real, atol=NCHAN*TOL)
-        
+        np.testing.assert_allclose(data, bf_model, atol=NCHAN*TOL)
+        np.testing.assert_allclose(cn, cn_out[0], atol=1e-6)
         
         # Estimate smooth Fourier model on data with some flags
         flags[:,10] = True

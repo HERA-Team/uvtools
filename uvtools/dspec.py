@@ -260,8 +260,11 @@ def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False,
         Default: True.
     
     operator : array_like, optional
-        Fourier basis operator matrix. Must have shape (Nmodes, Nfreq), where 
-        Nmodes = 2*nmax + 1.
+        Fourier basis operator matrix. This is used to pass in a pre-computed 
+        matrix operator when calling from other functions, e.g. from 
+        delay_filter_leastsq. Operator must have shape (Nmodes, Nfreq), where 
+        Nmodes = 2*nmax + 1. A complex Fourier basis will be automatically 
+        calculated if no operator is specified.
     
     Returns
     -------
@@ -298,8 +301,8 @@ def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False,
     # Initial guess for Fourier coefficients (real + imaginary blocks)
     cn_in = np.zeros(2*nmodes)
     if cn_guess is not None:
-        assert cn_in.size == 2*cn_guess.size, "cn_guess must be of size %s" \
-            % (cn_in.size/2)
+        if cn_in.size != 2*cn_guess.size:
+            raise ValueError("cn_guess must be of size %s" % (cn_in.size/2))
         cn_in[:cn_guess.shape[0]] = cn_guess.real
         cn_in[cn_guess.shape[0]:] = cn_guess.imag
     
@@ -345,7 +348,7 @@ def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False,
 
 
 def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, 
-                         cn_guess=None, use_linear=True):
+                         cn_guess=None, use_linear=True, operator=None):
     """
     Fit a smooth model to each 1D slice of 2D complex-valued data with flags, 
     using a linear least-squares solver. The model is a Fourier series up to a 
@@ -395,6 +398,10 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False,
         coefficients, or a slower generalized least-squares solver. 
         Default: True.
     
+    operator : array_like, optional
+        Fourier basis operator matrix. Must have shape (Nmodes, Nfreq), where 
+        Nmodes = 2*nmax + 1. A complex Fourier basis will be used by default.
+    
     Returns
     -------
     model : array_like
@@ -408,7 +415,11 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False,
         In-painted data.
     """
     # Construct and cache Fourier basis operator (for speed)
-    F = fourier_operator(dsize=data.shape[1], nmax=nmax)
+    if operator is None:
+        F = fourier_operator(dsize=data.shape[1], nmax=nmax)
+    else:
+        # delay_filter_leastsq_1d will check for correct dimensions
+        F = operator
     nmodes = 2*nmax + 1
     
     # Array to store in-painted data
