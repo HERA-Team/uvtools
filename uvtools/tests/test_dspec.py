@@ -156,7 +156,15 @@ def test_vis_filter():
     nt.assert_equal(mdl.shape, (60, 64))
     nt.assert_equal(res.shape, (60, 64))
 
+    # try plus filtmode on 2d clean
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1, filt2d_mode='plus')
+    nt.assert_equal(mdl.shape, (60, 64))
+    nt.assert_equal(res.shape, (60, 64))
+
     ### Need to add more substantive checks on filtered products
+
+    # exceptions
+    nt.assert_raises(ValueError, dspec.vis_filter, d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, filt2d_mode='foo')
 
 
 if __name__ == '__main__':

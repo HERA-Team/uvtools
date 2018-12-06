@@ -52,7 +52,7 @@ def calc_width(filter_size, real_delta, nsamples):
 
 
 def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False, tol=1e-9, window='none', 
-                             skip_wgt=0.1, maxiter=100, gain=0.1, alpha=0.2):
+                             skip_wgt=0.1, maxiter=100, gain=0.1, alpha=0.2, filt2d_mode='rect'):
     '''Apply a highpass fourier filter to data. Uses aipy.deconv.clean. Default is a 1D clean
     on the last axis of data.
 
@@ -81,6 +81,10 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         gain: The fraction of a residual used in each iteration. If this is too low, clean takes
             unnecessarily long. If it is too high, clean does a poor job of deconvolving.
         alpha : float, if window is 'tukey', this is its alpha parameter.
+        filt2d_mode : str, only applies if clean2d == True. options = ['rect', 'plus']
+            If 'rect', a 2D rectangular filter is constructed in fourier space (default).
+            If 'plus', the 'rect' filter is first constructed, but only the plus-shaped
+            slice along 0 delay and fringe-rate is kept.
 
     Returns:
         d_mdl: best fit low-pass filter components (CLEAN model) in real space
@@ -178,6 +182,17 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         a2[uthresh:lthresh] = 0
         area = np.outer(a1, a2)
 
+        # check for filt2d_mode
+        if filt2d_mode == 'plus':
+            _area = np.zeros(data.shape, dtype=np.int)
+            _area[:, 0] = area[:, 0]
+            _area[0, :] = area[0, :]
+            area = _area
+        elif filt2d_mode == 'rect':
+            pass
+        else:
+            raise ValueError("Didn't recognize filt2d_mode {}".format(filt2d_mode))
+            
         # run clean
         _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
         d_mdl = np.fft.fft2(_d_cl, axes=(0, 1))
@@ -262,7 +277,7 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
 
 
 def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, standoff=0.0, horizon=1., min_dly=0., 
-               tol=1e-4, window='none', maxiter=100, gain=1e-1, skip_wgt=0.5, **win_kwargs):
+               tol=1e-4, window='none', maxiter=100, gain=1e-1, skip_wgt=0.5, filt2d_mode='rect', **win_kwargs):
     """
     A generalized interface to delay and/or fringe-rate 1D CLEAN functions, or a full 2D clean
     if both bl_len & sdf and max_frate & dt variables are specified.
@@ -286,6 +301,10 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
         maxiter: Maximum number of iterations for aipy.deconv.clean to converge.
         gain: The fraction of a residual used in each iteration. If this is too low, clean takes
             unnecessarily long. If it is too high, clean does a poor job of deconvolving.
+        filt2d_mode : str, only applies if clean2d == True. options = ['rect', 'plus']
+            If 'rect', a 2D rectangular filter is constructed in fourier space (default).
+            If 'plus', the 'rect' filter is first constructed, but only the plus-shaped
+            slice along 0 delay and fringe-rate is kept.
         win_kwargs : any keyword arguments for the window function selection in aipy.dsp.gen_window.
             Currently, the only window that takes a kwarg is the tukey window with a alpha=0.5 default.
 
@@ -326,7 +345,7 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
 
         # 2D clean
         mdl, res, info = high_pass_fourier_filter(data, wgts, (max_frate, bl_dly), (dt, sdf), tol=tol, window=window,
-                                                  maxiter=maxiter, gain=gain, clean2d=True, **win_kwargs)
+                                                  maxiter=maxiter, gain=gain, clean2d=True, filt2d_mode=filt2d_mode, **win_kwargs)
 
     return mdl, res, info
 
