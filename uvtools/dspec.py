@@ -1,6 +1,8 @@
 import aipy
 import numpy as np
 from six.moves import range
+from scipy.signal import windows
+
 
 def wedge_width(bl_len, sdf, nchan, standoff=0., horizon=1.):
     '''Return the (upper,lower) delay bins that geometrically correspond to the sky.
@@ -52,7 +54,8 @@ def calc_width(filter_size, real_delta, nsamples):
 
 
 def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False, tol=1e-9, window='none', 
-                             skip_wgt=0.1, maxiter=100, gain=0.1, alpha=0.2, filt2d_mode='rect'):
+                             skip_wgt=0.1, maxiter=100, gain=0.1, alpha=0.2, filt2d_mode='rect',
+                             edgecut=0):
     '''Apply a highpass fourier filter to data. Uses aipy.deconv.clean. Default is a 1D clean
     on the last axis of data.
 
@@ -85,6 +88,10 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             If 'rect', a 2D rectangular filter is constructed in fourier space (default).
             If 'plus', the 'rect' filter is first constructed, but only the plus-shaped
             slice along 0 delay and fringe-rate is kept.
+        edgecut : int, number of bins to null at both side of the FFT axis. This is not the
+            same as flagging the edge bins: this ensures that if a taper is applied, it
+            smoothly connects to the edge of the unflagged bins. In a sense, it uses the
+            edgebins as a zero-padding.
 
     Returns:
         d_mdl: best fit low-pass filter components (CLEAN model) in real space
@@ -102,6 +109,10 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             and isinstance(filter_size[1], (int, np.integer, float, np.float, list, tuple)), "elements of filter_size must be floats or lists"
         assert isinstance(real_delta, (tuple, list)), "real_delta must be list or tuple for 2D clean"
         assert len(real_delta) == 2, "len(real_delta) must equal 2 for 2D clean"
+        if isinstance(edgecut, (int, np.integer)):
+            edgecut = (edgecut, edgecut)
+        if isinstance(window, (str, np.str)):
+            window = (window, window)
     else:
         assert isinstance(real_delta, (int, np.integer, float, np.float)), "if not clean2d, real_delta must be a float"
         assert isinstance(window, (str, np.str)), "If not clean2d, window must be a string"
@@ -109,23 +120,19 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
     # 1D clean
     if not clean2d:
         # setup _d and _w arrays
-        if window == 'tukey':
-            win_kwargs = {'alpha': alpha}
+        if edgecut > 0:
+            _window = np.zeros(data.shape[-1], dtype=np.float)
+            _window[edgecut:-edgecut] = gen_taper(window, data.shape[-1] - edgecut * 2, alpha=alpha)
         else:
-            win_kwargs = {}
-        # this backwards way of constructing a window is done
-        # b/c aipy returns just 1 when window is none
-        nchan = data.shape[-1]
-        _window = np.empty(nchan)
-        _window[:] = aipy.dsp.gen_window(nchan, window=window, **win_kwargs)
+            _window = gen_taper(window, data.shape[-1], alpha=alpha)
         if dndim == 2:
             _window = _window[None, :]
         _d = np.fft.ifft(data * wgts * _window, axis=-1)
         _w = np.fft.ifft(wgts * _window, axis=-1)
 
         # calculate area array
-        area = np.ones(nchan, dtype=np.int)
-        uthresh, lthresh = calc_width(filter_size, real_delta, nchan)
+        area = np.ones(data.shape[-1], dtype=np.int)
+        uthresh, lthresh = calc_width(filter_size, real_delta, data.shape[-1])
         area[uthresh:lthresh] = 0
 
         # run clean
@@ -151,24 +158,16 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
     # 2D clean on 2D data
     else:
         # setup _d and _w arrays
-        if isinstance(window, (list, tuple)):
-            w1, w2 = window
+        if edgecut[0] > 0:
+            _w1 = np.zeros(data.shape[0], dtype=np.float)
+            _w1[edgecut[0]:-edgecut[0]] = gen_taper(window[0], data.shape[0] - edgecut[0] * 2, alpha=alpha)
         else:
-            w1, w2 = window, window
-        if w1 == 'tukey':
-            w1_kwargs = {'alpha': alpha}
+            _w1 = gen_taper(window[0], data.shape[0], alpha=alpha)
+        if edgecut[1] > 0:
+            _w2 = np.zeros(data.shape[1], dtype=np.float)
+            _w2[edgecut[1]:-edgecut[1]] = gen_taper(window[1], data.shape[1] - edgecut[1] * 2, alpha=alpha)
         else:
-            w1_kwargs = {}
-        if w2 == 'tukey':
-            w2_kwargs = {'alpha': alpha}
-        else:
-            w2_kwargs = {}
-
-        # this backwards way of constructing a window is done
-        # b/c aipy returns just 1 when window is none
-        _w1, _w2 = np.empty(data.shape[0], dtype=np.float), np.empty(data.shape[1], dtype=np.float)
-        _w1[:] = aipy.dsp.gen_window(data.shape[0], window=w1, **w1_kwargs)
-        _w2[:] = aipy.dsp.gen_window(data.shape[1], window=w2, **w2_kwargs)
+            _w2 = gen_taper(window[1], data.shape[1], alpha=alpha)
         _window = _w1[:, None] * _w2[None, :]
         _d = np.fft.ifft2(data * wgts * _window, axes=(0, 1))
         _w = np.fft.ifft2(wgts * _window, axes=(0, 1))
@@ -204,7 +203,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
 
 
 def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, tol=1e-4,
-                 window='none', skip_wgt=0.5, maxiter=100, gain=0.1, **win_kwargs):
+                 window='none', skip_wgt=0.5, maxiter=100, gain=0.1, edgecut=0, **win_kwargs):
     '''Apply a wideband delay filter to data. Variable names preserved for 
         backward compatability with capo/PAPER analysis.
 
@@ -227,6 +226,10 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
         maxiter: Maximum number of iterations for aipy.deconv.clean to converge.
         gain: The fraction of a residual used in each iteration. If this is too low, clean takes
             unnecessarily long. If it is too high, clean does a poor job of deconvolving.
+        edgecut : int, number of bins to null at both side of the FFT axis. This is not the
+            same as flagging the edge bins: this ensures that if a taper is applied, it
+            smoothly connects to the edge of the unflagged bins. In a sense, it uses the
+            edgebins as a zero-padding.
         win_kwargs : any keyword arguments for the window function selection in aipy.dsp.gen_window.
             Currently, the only window that takes a kwarg is the tukey window with a alpha=0.5 default.
 
@@ -239,12 +242,12 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
     bl_dly = _get_bl_dly(bl_len, horizon=horizon, standoff=standoff, min_dly=min_dly)
 
     # run fourier filter
-    return high_pass_fourier_filter(data, wgts, bl_dly, sdf, tol=tol, window=window,
+    return high_pass_fourier_filter(data, wgts, bl_dly, sdf, tol=tol, window=window, edgecut=edgecut,
                                     skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, **win_kwargs)
 
 
 def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100,
-                  gain=0.1, window='none', **win_kwargs):
+                  gain=0.1, window='none', edgecut=0, **win_kwargs):
     """
     Run a CLEAN deconvolution along the time axis.
 
@@ -262,6 +265,10 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
         maxiter: Maximum number of iterations for aipy.deconv.clean to converge.
         gain: The fraction of a residual used in each iteration. If this is too low, clean takes
             unnecessarily long. If it is too high, clean does a poor job of deconvolving.
+        edgecut : int, number of bins to null at both side of the FFT axis. This is not the
+            same as flagging the edge bins: this ensures that if a taper is applied, it
+            smoothly connects to the edge of the unflagged bins. In a sense, it uses the
+            edgebins as a zero-padding.
         win_kwargs : any keyword arguments for the window function selection in aipy.dsp.gen_window.
             Currently, the only window that takes a kwarg is the tukey window with a alpha=0.5 default.
 
@@ -271,13 +278,14 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
         info : CLEAN info
     """
     # run fourier filter
-    mdl, res, info = high_pass_fourier_filter(data.T, wgts.T, max_frate, dt, tol=tol, window=window,
+    mdl, res, info = high_pass_fourier_filter(data.T, wgts.T, max_frate, dt, tol=tol, window=window, edgecut=edgecut,
                                               skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, **win_kwargs)
     return mdl.T, res.T, info
 
 
 def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, standoff=0.0, horizon=1., min_dly=0., 
-               tol=1e-4, window='none', maxiter=100, gain=1e-1, skip_wgt=0.5, filt2d_mode='rect', **win_kwargs):
+               tol=1e-4, window='none', maxiter=100, gain=1e-1, skip_wgt=0.5, filt2d_mode='rect',
+               edgecut=0, **win_kwargs):
     """
     A generalized interface to delay and/or fringe-rate 1D CLEAN functions, or a full 2D clean
     if both bl_len & sdf and max_frate & dt variables are specified.
@@ -305,6 +313,10 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
             If 'rect', a 2D rectangular filter is constructed in fourier space (default).
             If 'plus', the 'rect' filter is first constructed, but only the plus-shaped
             slice along 0 delay and fringe-rate is kept.
+        edgecut : int, number of bins to null at both side of the FFT axis. This is not the
+            same as flagging the edge bins: this ensures that if a taper is applied, it
+            smoothly connects to the edge of the unflagged bins. In a sense, it uses the
+            edgebins as a zero-padding.
         win_kwargs : any keyword arguments for the window function selection in aipy.dsp.gen_window.
             Currently, the only window that takes a kwarg is the tukey window with a alpha=0.5 default.
 
@@ -331,11 +343,11 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
         # time clean
         if timeclean:
             mdl, res, info = fringe_filter(data, wgts, max_frate, dt, tol=tol, skip_wgt=skip_wgt, maxiter=maxiter,
-                                           gain=gain, window=window, **win_kwargs)
+                                           gain=gain, window=window, edgecut=edgecut, **win_kwargs)
 
         # freq clean
         elif freqclean:
-            mdl, res, info = delay_filter(data, wgts, bl_len, sdf, standoff=standoff, horizon=horizon, tol=tol,
+            mdl, res, info = delay_filter(data, wgts, bl_len, sdf, standoff=standoff, horizon=horizon, tol=tol, edgecut=edgecut,
                                           min_dly=min_dly, gain=gain, maxiter=maxiter, skip_wgt=skip_wgt, window=window, **win_kwargs)
 
     # 2D clean
@@ -344,7 +356,7 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
         bl_dly = _get_bl_dly(bl_len, horizon=horizon, standoff=standoff, min_dly=min_dly)
 
         # 2D clean
-        mdl, res, info = high_pass_fourier_filter(data, wgts, (max_frate, bl_dly), (dt, sdf), tol=tol, window=window,
+        mdl, res, info = high_pass_fourier_filter(data, wgts, (max_frate, bl_dly), (dt, sdf), tol=tol, window=window, edgecut=edgecut,
                                                   maxiter=maxiter, gain=gain, clean2d=True, filt2d_mode=filt2d_mode, **win_kwargs)
 
     return mdl, res, info
@@ -359,6 +371,31 @@ def _get_bl_dly(bl_len, horizon=1., standoff=0., min_dly=0.):
 
     return bl_dly
 
+
+def gen_taper(taper, N, alpha=0.5):
+    """
+    Generate a 1D tapering function of length N.
+
+    Args:
+        taper : str, tapering function. See aipy.dsp.gen_window
+        N : int, number of channels for tapering function.
+        alpha : if taper is 'tukey', this is its alpha parameter.
+    """
+    # parse multiple input tapers or special tapers
+    if taper in ['none', None, 'None', 'boxcar', 'tophat']:
+        return windows.boxcar(N)
+    elif taper in ['blackmanharris', 'blackman-harris']:
+        return windows.blackmanharris(N)
+    elif taper in ['hanning', 'hann']:
+        return windows.hann(N)
+    elif taper == 'tukey':
+        return windows.tukey(N, alpha)
+    else:
+        try:
+            # return any single-arg taper from windows
+            return getattr(windows, taper)(N)
+        except KeyError:
+            raise ValueError("Didn't recognize taper {}".format(taper))
 
 
 #import binning

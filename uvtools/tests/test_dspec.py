@@ -132,6 +132,12 @@ def test_vis_filter():
                                            tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
     nt.assert_true(np.isclose(mdl - mdl2, 0.0).all())
 
+    # delay filter edgecut execution
+    mdl, res, info = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.0,
+                                        tol=1e-4, window='none', skip_wgt=0.1, gain=0.1, edgecut=5)
+    nt.assert_equal(mdl.shape, (60, 64))
+    nt.assert_equal(res.shape, (60, 64))
+
     # fringe filter basic execution 
     mdl, res, info = dspec.fringe_filter(d, w, frs[10], dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
     nt.assert_equal(mdl.shape, (60, 64))
@@ -157,7 +163,7 @@ def test_vis_filter():
     nt.assert_equal(res.shape, (60, 64))
 
     # try plus filtmode on 2d clean
-    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1, filt2d_mode='plus')
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, tol=1e-4, window=('none', 'blackman'), edgecut=(0, 5), maxiter=100, gain=1e-1, filt2d_mode='plus')
     nt.assert_equal(mdl.shape, (60, 64))
     nt.assert_equal(res.shape, (60, 64))
 
