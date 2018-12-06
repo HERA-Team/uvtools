@@ -138,7 +138,7 @@ def test_vis_filter():
     nt.assert_equal(res.shape, (60, 64))
 
     # test vis filter is the same
-    mdl2, res2, info2 = dspec.vis_filter(d, w, max_frq=frs[10], dt=dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+    mdl2, res2, info2 = dspec.vis_filter(d, w, max_frate=frs[10], dt=dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
     nt.assert_true(np.isclose(mdl - mdl2, 0.0).all())
 
     # try non-symmetric filter
@@ -147,12 +147,12 @@ def test_vis_filter():
     nt.assert_equal(res.shape, (60, 64))
 
     # 2d clean
-    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frq=frs[10], dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1)
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=frs[10], dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1)
     nt.assert_equal(mdl.shape, (60, 64))
     nt.assert_equal(res.shape, (60, 64))
 
     # non-symmetric 2D clean
-    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frq=(frs[-20], frs[10]), dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1)
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1)
     nt.assert_equal(mdl.shape, (60, 64))
     nt.assert_equal(res.shape, (60, 64))
 
