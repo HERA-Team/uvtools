@@ -147,6 +147,35 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
                                     skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, **win_kwargs)
 
 
+def fourier_operator(dsize, nmax):
+    """
+    Return a complex Fourier analysis operator for a given data dimension and 
+    number of Fourier modes.
+    
+    Parameters
+    ----------
+    dsize : int
+        Size of data array.
+    
+    nmax : int
+        Maximum Fourier mode number. Modes will be constructed between 
+        [-nmax, nmax], for a total of 2*nmax + 1 modes.
+    
+    Returns
+    -------
+    F : array_like
+        Fourier matrix operator, of shape (Nmodes, Ndata)
+    """
+    # Construct frequency array (*not* in physical frequency units)
+    nu = np.arange(dsize)
+    L = nu[-1] - nu[0]
+    
+    # Build matrix operator for complex Fourier basis
+    n = np.arange(-nmax, nmax+1)
+    F = np.array([np.exp(-1.j * _n * nu / L) for _n in n])
+    return F
+
+
 def fourier_model(cn, Nfreqs):
     """
     Calculate a 1D (complex) Fourier series model from a set of complex 
@@ -168,16 +197,15 @@ def fourier_model(cn, Nfreqs):
         Fourier model constructed from the input harmonic coefficients. 
         Shape: (Nfreqs,).
     """
-    # Frequency array (*not* in physical frequency units)
-    nu = np.arange(Nfreqs)
-    L = nu[-1] - nu[0]
-    
-    assert(len(cn.shape) == 1), "cn must be a 1D array"
+    try:
+        cn_shape = cn.shape
+        if len(cn.shape) != 1: raise ValueError("cn must be a 1D array")
+    except:
+        raise ValueError("cn must be a 1D array")
     nmax = (cn.size - 1) // 2 # Max. harmonic
     
     # Build matrix operator for complex Fourier basis
-    n = np.arange(-nmax, nmax+1)
-    F = np.array([np.exp(-1.j * _n * nu / L) for _n in n])
+    F = fourier_operator(dsize=Nfreqs, nmax=nmax)
     
     # Return model
     return np.dot(cn, F)
@@ -232,7 +260,7 @@ def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False,
         Default: True.
     
     operator : array_like, optional
-        Fourier basis operator matrix. Must have shape (Nfreq, Nmodes), where 
+        Fourier basis operator matrix. Must have shape (Nmodes, Nfreq), where 
         Nmodes = 2*nmax + 1.
     
     Returns
@@ -241,39 +269,34 @@ def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False,
         Best-fit model, composed of a sum of Fourier modes.
         
     model_coeffs : array_like
-        Coefficients of Fourier modes, ordered from modes [-n, +n].
+        Coefficients of Fourier modes, ordered from modes [-nmax, +nmax].
     
     data_out : array_like
         In-painted data.
     """
     # Construct Fourier basis operator if not specified
     if operator is None:
-        # Frequency array
-        nu = np.arange(data.size)
-        L = nu[-1] - nu[0]
-        
-        # Build matrix operator for complex Fourier basis
-        n = np.arange(-nmax, nmax+1)
-        F = np.array([np.exp(-1.j * _n * nu / L) for _n in n])
+        F = fourier_operator(dsize=data.size, nmax=nmax)
     else:
         F = operator
-        n = np.arange(-nmax, nmax+1)
-        assert F.shape[0] == 2*nmax+1, "Fourier basis operator has the wrong shape"
+        #n = np.arange(-nmax, nmax+1)
+        try:
+            if F.shape[0] != 2*nmax+1:
+                raise ValueError("Fourier basis operator has the wrong shape. "
+                                 "Must have shape (Nmodes, Nfreq).")
+        except: 
+            raise ValueError("Fourier basis operator has the wrong shape. "
+                             "Must have shape (Nmodes, Nfreq).")
     
     # Turn flags into a mask
     w = np.logical_not(flags)
     
     # Define model and likelihood function
     model = lambda cn: np.dot(cn, F)
-    
-    def loglike(cn):
-        # Need to do real and imaginary parts separately, otherwise leastsq() fails
-        _delta = w * (data - model(cn[:n.size] + 1.j*cn[n.size:]))
-        delta = np.concatenate((_delta.real/sigma, _delta.imag/sigma))
-        return -0.5 * delta**2.
+    nmodes = 2*nmax + 1
     
     # Initial guess for Fourier coefficients (real + imaginary blocks)
-    cn_in = np.zeros(2*n.size)
+    cn_in = np.zeros(2*nmodes)
     if cn_guess is not None:
         assert cn_in.size == 2*cn_guess.size, "cn_guess must be of size %s" \
             % (cn_in.size/2)
@@ -288,8 +311,20 @@ def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False,
         cn_out = res.x
     else:
         # Use full non-linear leastsq fit
+        def loglike(cn):
+            """
+            Simple log-likelihood, assuming Gaussian data. Calculates: 
+                logL = -0.5 [w*(data - model)]^2 / sigma^2.
+            """
+            # Need to do real and imaginary parts separately, otherwise 
+            # leastsq() fails
+            _delta = w * (data - model(cn[:nmodes] + 1.j*cn[nmodes:]))
+            delta = np.concatenate((_delta.real/sigma, _delta.imag/sigma))
+            return -0.5 * delta**2.
+        
+        # Do non-linear least-squares calculation
         cn, stat = leastsq(loglike, cn_in)
-        cn_out = cn[:n.size] + 1.j*cn[n.size:]
+        cn_out = cn[:nmodes] + 1.j*cn[nmodes:]
     
     # Inject smooth best-fit model into masked areas
     bf_model = model(cn_out)
@@ -298,7 +333,8 @@ def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False,
     
     # Add noise to in-painted regions if requested
     if add_noise:
-        noise = np.random.randn(np.sum(flags)) + 1.j * np.random.randn(np.sum(flags))
+        noise = np.random.randn(np.sum(flags)) \
+              + 1.j * np.random.randn(np.sum(flags))
         if isinstance(sigma, np.ndarray):
             data_out[flags] += sigma[flags] * noise
         else:
@@ -311,14 +347,18 @@ def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False,
 def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, 
                          cn_guess=None, use_linear=True):
     """
-    Fit a smooth model to 2D complex-valued data with flags, using a linear 
-    least-squares solver. The model is a Fourier series up to a specified 
-    order. As well as calculating a best-fit model, this will also return a 
-    copy of the data with flagged regions filled in ('in-painted') with the 
-    smooth solution. 
+    Fit a smooth model to each 1D slice of 2D complex-valued data with flags, 
+    using a linear least-squares solver. The model is a Fourier series up to a 
+    specified order. As well as calculating a best-fit model, this will also 
+    return a copy of the data with flagged regions filled in ('in-painted') 
+    with the smooth solution.
     
     Optionally, you can also add an uncorrelated noise realization on top of 
     the smooth model in the flagged region.
+    
+    N.B. This is just a wrapper around delay_filter_leastsq_1d() but with some 
+    time-saving precomputations. It fits to each 1D slice of the data 
+    individually, and does not perform a global fit to the 2D data.
     
     Parameters
     ----------
@@ -368,14 +408,12 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False,
         In-painted data.
     """
     # Construct and cache Fourier basis operator (for speed)
-    nu = np.arange(data.shape[1])
-    L = nu[-1] - nu[0]
-    n = np.arange(-nmax, nmax+1)
-    F = np.array([np.exp(-1.j * _n * nu / L) for _n in n])
+    F = fourier_operator(dsize=data.shape[1], nmax=nmax)
+    nmodes = 2*nmax + 1
     
     # Array to store in-painted data
     inp_data = np.zeros(data.shape, dtype=np.complex)
-    cn_array = np.zeros((data.shape[0], n.size), dtype=np.complex)
+    cn_array = np.zeros((data.shape[0], nmodes), dtype=np.complex)
     mdl_array = np.zeros(data.shape, dtype=np.complex)
     
     # Loop over array
