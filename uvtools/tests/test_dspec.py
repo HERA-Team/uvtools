@@ -74,7 +74,78 @@ class TestMethods(unittest.TestCase):
         dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=1e-9)
         np.testing.assert_allclose(np.average(data,axis=1), np.average(dmdl,axis=1), atol=1e-3)
         np.testing.assert_allclose(np.average(dres,axis=1), 0, atol=1e-3)
-    
+
+    def test_fourier_model(self):
+        NMAX = 7
+        NFREQS = 100
+        nmodes = 2*NMAX + 1
+        cn = (np.arange(nmodes) + 1.j*np.arange(nmodes)) / float(nmodes)
+        model = dspec.fourier_model(cn, NFREQS)
+
+        # Test shape of output model
+        self.assertEqual((NFREQS,), model.shape)
+
+        # Test errors
+        nt.assert_raises(ValueError, dspec.fourier_model, 3, NFREQS)
+        nt.assert_raises(ValueError, dspec.fourier_model, np.empty((3, 3)), NFREQS)
+
+    def test_delay_filter_leastsq(self):
+        NCHAN = 128
+        NTIMES = 10
+        TOL = 1e-7
+        data = np.ones((NTIMES, NCHAN), dtype=np.complex)
+        flags = np.zeros((NTIMES, NCHAN), dtype=np.bool)
+        sigma = 0.1 # Noise level (not important here)
+
+        # Fourier coeffs for input data, ordered from (-nmax, nmax)
+        cn = np.array([-0.1-0.1j, -0.1+0.1j, -0.3-0.01j, 0.5+0.01j, 
+                       -0.3-0.01j, -0.1+0.1j, 0.1-0.1j])
+        data *= np.atleast_2d( dspec.fourier_model(cn, NCHAN) )
+
+        # Estimate smooth Fourier model on unflagged data
+        bf_model, cn_out, data_out = dspec.delay_filter_leastsq(data, flags, 
+                                                                sigma, nmax=3, 
+                                                                add_noise=False)
+        np.testing.assert_allclose(data, bf_model, atol=NCHAN*TOL)
+        np.testing.assert_allclose(cn, cn_out[0], atol=1e-6)
+
+        # Estimate smooth Fourier model on data with some flags
+        flags[:,10] = True
+        flags[:,65:70] = True
+        bf_model, cn_out, data_out = dspec.delay_filter_leastsq(data, flags, 
+                                                                sigma, nmax=3, 
+                                                                add_noise=False)
+        np.testing.assert_allclose(data, bf_model, atol=NCHAN*TOL)
+        np.testing.assert_allclose(data, data_out, atol=NCHAN*TOL)
+
+        # Test 1D code directly
+        bf_model, cn_out, data_out = dspec.delay_filter_leastsq_1d(
+            data[0], flags[0], sigma, nmax=3, add_noise=False)
+        np.testing.assert_allclose(data[0], bf_model, atol=NCHAN*TOL)
+
+        # Test 1D code with non-linear leastsq
+        bf_model, cn_out, data_out = dspec.delay_filter_leastsq_1d(
+            data[0], flags[0], sigma, nmax=3, add_noise=False, use_linear=False)
+        np.testing.assert_allclose(data[0], bf_model, atol=NCHAN*TOL)
+
+        # Test that noise injection can be switched on
+        bf_model, cn_out, data_out = dspec.delay_filter_leastsq_1d(
+            data[0], flags[0], sigma, nmax=3, add_noise=True)
+        np.testing.assert_allclose(data[0], bf_model, atol=NCHAN * TOL * sigma)
+
+        # Test with a noise array
+        sigma_array = sigma * np.ones_like(data[0])
+        bf_model, cn_out, data_out = dspec.delay_filter_leastsq_1d(
+            data[0], flags[0], sigma_array, nmax=3, add_noise=True)
+        np.testing.assert_allclose(data[0], bf_model, atol=NCHAN * TOL * sigma)
+
+        # Test errors
+        nt.assert_raises(ValueError, dspec.delay_filter_leastsq_1d,
+                         data[0], flags[0], sigma, nmax=3, operator=np.empty((3, 3)))
+        nt.assert_raises(ValueError, dspec.delay_filter_leastsq_1d,
+                         data[0], flags[0], sigma, nmax=3, cn_guess=np.array([3]))
+
+
     def test_skip_wgt(self):
         NCHAN = 128
         NTIMES = 10
