@@ -402,6 +402,8 @@ def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, **kwargs):
     # parse multiple input window or special windows
     w = np.zeros(N, dtype=np.float)
     Ncut = edgecut_low + edgecut_hi
+    if Ncut >= N:
+        raise ValueError("Ncut >= N for edgecut_low {} and edgecut_hi {}".format(edgecut_low, edgecut_hi))
     if edgecut_hi > 0:
         edgecut_hi = -edgecut_hi
     else:
