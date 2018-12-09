@@ -127,7 +127,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
     # 1D clean
     if not clean2d:
         # setup _d and _w arrays
-        _window = gen_window(window, data.shape[1], alpha=alpha, edgecut_low=edgecut_low, edgecut_hi=edgecut_hi)
+        _window = gen_window(window, data.shape[-1], alpha=alpha, edgecut_low=edgecut_low, edgecut_hi=edgecut_hi)
         if dndim == 2:
             _window = _window[None, :]
         _d = np.fft.ifft(data * wgts * _window, axis=-1)
