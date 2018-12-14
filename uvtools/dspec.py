@@ -162,7 +162,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                     info.append({'skipped': True})
                 else:
                     _d_cl, info_here = aipy.deconv.clean(_d[i], _w[i], area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
-                    d_mdl[i] = np.fft.fft(_d_cl + info_here['res'] * area)
+                    d_mdl[i] = np.fft.fft(_d_cl)
                     del info_here['res']
                     info.append(info_here)
 
@@ -197,7 +197,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             
         # run clean
         _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
-        d_mdl = np.fft.fft2(_d_cl + info['res'] * area, axes=(0, 1))
+        d_mdl = np.fft.fft2(_d_cl, axes=(0, 1))
         del info['res']
 
     d_res = data - d_mdl
