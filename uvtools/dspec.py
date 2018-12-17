@@ -64,7 +64,7 @@ def calc_width(filter_size, real_delta, nsamples):
 
 def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False, tol=1e-9, window='none', 
                              skip_wgt=0.1, maxiter=100, gain=0.1, filt2d_mode='rect', alpha=0.5,
-                             edgecut_low=0, edgecut_hi=0):
+                             edgecut_low=0, edgecut_hi=0, add_clean_residual=False):
     '''Apply a highpass fourier filter to data. Uses aipy.deconv.clean. Default is a 1D clean
     on the last axis of data.
 
@@ -102,6 +102,10 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         edgecut_hi : int, number of bins to consider zero-padded at high-side of the FFT axis,
             such that the windowing function smoothly approaches zero. For 2D cleaning, can
             be fed as a tuple specifying edgecut_hi for first and second FFT axis.
+        add_clean_residual : bool, if True, adds the residual within the CLEAN bounds
+            in fourier space to the CLEAN model (and sets residual within CLEAN bounds to zero).
+            This is more in-line with a standard filtering operation, rather than a CLEAN operation.
+            If False, residual is not added to the CLEAN model.
 
     Returns:
         d_mdl: best fit low-pass filter components (CLEAN model) in real space
@@ -149,24 +153,23 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         if dndim == 1:
             # For 1D data array run once
             _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
-            d_mdl = np.fft.fft(_d_cl)
-            d_res = np.fft.fft(info['res'])
+            _d_res = info['res']
             del info['res']
 
         elif data.ndim == 2:
             # For 2D data array, iterate
             info = []
-            d_mdl = np.empty_like(data)
-            d_res = np.empty_like(data)
+            _d_cl = np.empty_like(data)
+            _d_res = np.empty_like(data)
             for i in range(data.shape[0]):
                 if _w[i, 0] < skip_wgt:
-                    d_mdl[i] = 0 # skip highly flagged (slow) integrations
-                    d_res[i] = _d[i]
+                    _d_cl[i] = 0 # skip highly flagged (slow) integrations
+                    _d_res[i] = _d[i]
                     info.append({'skipped': True})
                 else:
-                    _d_cl, info_here = aipy.deconv.clean(_d[i], _w[i], area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
-                    d_mdl[i] = np.fft.fft(_d_cl)
-                    d_res[i] = np.fft.fft(info_here['res'])
+                    _cl, info_here = aipy.deconv.clean(_d[i], _w[i], area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
+                    _d_cl[i] = _cl
+                    _d_res[i] = info_here['res']
                     del info_here['res']
                     info.append(info_here)
 
@@ -201,16 +204,29 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
 
         # run clean
         _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
-        d_mdl = np.fft.fft2(_d_cl, axes=(0, 1))
-        d_res = np.fft.fft2(info['res'], axes=(0, 1))
+        _d_res = info['res']
         del info['res']
+
+    # add residual in CLEAN bounds if requested
+    if add_clean_residual:
+        _d_cl += _d_res * area
+        _d_res -= _d_res * area
+
+    # fft back to input space
+    if clean2d:
+        d_mdl = np.fft.fft2(_d_cl, axes=(0, 1))
+        d_res = np.fft.fft2(_d_res, axes=(0, 1))
+
+    else:
+        d_mdl = np.fft.fft(_d_cl)
+        d_res = np.fft.fft(_d_res)
 
     return d_mdl, d_res, info
 
 
 def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, tol=1e-4,
                  window='none', skip_wgt=0.5, maxiter=100, gain=0.1, edgecut_low=0, edgecut_hi=0,
-                 alpha=0.5):
+                 alpha=0.5, add_clean_residual=False):
     '''Apply a wideband delay filter to data. Variable names preserved for 
         backward compatability with capo/PAPER analysis.
 
@@ -240,6 +256,10 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
             such that the windowing function smoothly approaches zero. For 2D cleaning, can
             be fed as a tuple specifying edgecut_hi for first and second FFT axis.
         alpha : float, if window is tukey this is its alpha parameter.
+        add_clean_residual : bool, if True, adds the residual within the CLEAN bounds
+            in fourier space to the CLEAN model (and sets residual within CLEAN bounds to zero).
+            This is more in-line with a standard filtering operation, rather than a CLEAN operation.
+            If False, residual is not added to the CLEAN model.
 
     Returns:
         d_mdl: best fit low-pass filter components (CLEAN model) in the frequency domain
@@ -255,11 +275,12 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
 
     # run fourier filter
     return high_pass_fourier_filter(data, wgts, bl_dly, sdf, tol=tol, window=window, edgecut_low=edgecut_low,
-                                    edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, alpha=alpha)
+                                    edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain,
+                                    alpha=alpha, add_clean_residual=add_clean_residual)
 
 
-def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100,
-                  gain=0.1, window='none', edgecut_low=0, edgecut_hi=0, alpha=0.5):
+def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100, gain=0.1,
+                  window='none', edgecut_low=0, edgecut_hi=0, alpha=0.5, add_clean_residual=False):
     """
     Run a CLEAN deconvolution along the time axis.
 
@@ -284,6 +305,10 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
             such that the windowing function smoothly approaches zero. For 2D cleaning, can
             be fed as a tuple specifying edgecut_hi for first and second FFT axis.
         alpha : float, if window is tukey this is its alpha parameter.
+        add_clean_residual : bool, if True, adds the residual within the CLEAN bounds
+            in fourier space to the CLEAN model (and sets residual within CLEAN bounds to zero).
+            This is more in-line with a standard filtering operation, rather than a CLEAN operation.
+            If False, residual is not added to the CLEAN model.
 
     Returns:
         mdl : CLEAN model, in the time domain
@@ -296,13 +321,14 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
 
     # run fourier filter
     mdl, res, info = high_pass_fourier_filter(data.T, wgts.T, max_frate, dt, tol=tol, window=window, edgecut_low=edgecut_low,
-                                              edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, alpha=alpha)
+                                              edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain,
+                                              alpha=alpha, add_clean_residual=add_clean_residual)
     return mdl.T, res.T, info
 
 
 def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, standoff=0.0, horizon=1., min_dly=0., 
                tol=1e-4, window='none', maxiter=100, gain=1e-1, skip_wgt=0.5, filt2d_mode='rect',
-               edgecut_low=0, edgecut_hi=0, alpha=0.5):
+               edgecut_low=0, edgecut_hi=0, alpha=0.5, add_clean_residual=False):
     """
     A generalized interface to delay and/or fringe-rate 1D CLEAN functions, or a full 2D clean
     if both bl_len & sdf and max_frate & dt variables are specified.
@@ -337,6 +363,10 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
             such that the windowing function smoothly approaches zero. For 2D cleaning, can
             be fed as a tuple specifying edgecut_hi for first and second FFT axis.
         alpha : float, if window is tukey, this is its alpha parameter.
+        add_clean_residual : bool, if True, adds the residual within the CLEAN bounds
+            in fourier space to the CLEAN model (and sets residual within CLEAN bounds to zero).
+            This is more in-line with a standard filtering operation, rather than a CLEAN operation.
+            If False, residual is not added to the CLEAN model.
 
     Returns:
         mdl : CLEAN model in data space
@@ -365,14 +395,16 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
         # time clean
         if timeclean:
             mdl, res, info = high_pass_fourier_filter(data.T, wgts.T, max_frate, dt, tol=tol, window=window, edgecut_low=edgecut_low,
-                                                      edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, alpha=alpha)
+                                                      edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain,
+                                                      alpha=alpha, add_clean_residual=add_clean_residual)
             mdl, res = mdl.T, res.T
 
         # freq clean
         elif freqclean:
             bl_dly = _get_bl_dly(bl_len, horizon=horizon, standoff=standoff, min_dly=min_dly)
             mdl, res, info = high_pass_fourier_filter(data, wgts, bl_dly, sdf, tol=tol, window=window, edgecut_low=edgecut_low,
-                                                      edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, alpha=alpha)
+                                                      edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain,
+                                                      alpha=alpha, add_clean_residual=add_clean_residual)
 
     # 2D clean
     else:
@@ -381,7 +413,8 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
 
         # 2D clean
         mdl, res, info = high_pass_fourier_filter(data, wgts, (max_frate, bl_dly), (dt, sdf), tol=tol, window=window, edgecut_low=edgecut_low,
-                                                  edgecut_hi=edgecut_hi, maxiter=maxiter, gain=gain, clean2d=True, filt2d_mode=filt2d_mode, alpha=alpha)
+                                                  edgecut_hi=edgecut_hi, maxiter=maxiter, gain=gain, clean2d=True, filt2d_mode=filt2d_mode,
+                                                  alpha=alpha, add_clean_residual=add_clean_residual)
 
     return mdl, res, info
 

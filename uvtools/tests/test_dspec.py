@@ -282,6 +282,11 @@ def test_vis_filter():
     # exceptions
     nt.assert_raises(ValueError, dspec.vis_filter, d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, filt2d_mode='foo')
 
+    # test add_clean_residual: test res of filtered modes are zero
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=frs[15], dt=dt, tol=1e-6, window='none', maxiter=100, gain=1e-1, add_clean_residual=True)
+    rfft = np.fft.ifft2(res)
+    nt.assert_true(np.isclose(np.abs(rfft[:15, :17]), 0.0).all())
+
 
 if __name__ == '__main__':
     unittest.main()
