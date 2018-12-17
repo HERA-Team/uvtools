@@ -50,7 +50,7 @@ def calc_width(filter_size, real_delta, nsamples):
             and ending at lthresh (which is a negative integer and also not filtered).
             Designed for area = np.ones(nsamples, dtype=np.int); area[uthresh:lthresh] = 0
     '''
-    if isinstance(filter_size, (list, tuple)):
+    if isinstance(filter_size, (list, tuple, np.ndarray)):
         _, l = calc_width(np.abs(filter_size[1]), real_delta, nsamples)
         u, _ = calc_width(np.abs(filter_size[0]), real_delta, nsamples)
         return (u, l)        
@@ -194,7 +194,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             pass
         else:
             raise ValueError("Didn't recognize filt2d_mode {}".format(filt2d_mode))
-            
+
         # run clean
         _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
         d_mdl = np.fft.fft2(_d_cl, axes=(0, 1))
