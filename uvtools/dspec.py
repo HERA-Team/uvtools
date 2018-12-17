@@ -150,19 +150,23 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             # For 1D data array run once
             _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
             d_mdl = np.fft.fft(_d_cl)
+            d_res = np.fft.fft(info['res'])
             del info['res']
 
         elif data.ndim == 2:
             # For 2D data array, iterate
             info = []
             d_mdl = np.empty_like(data)
+            d_res = np.empty_like(data)
             for i in range(data.shape[0]):
                 if _w[i, 0] < skip_wgt:
                     d_mdl[i] = 0 # skip highly flagged (slow) integrations
+                    d_res[i] = _d[i]
                     info.append({'skipped': True})
                 else:
                     _d_cl, info_here = aipy.deconv.clean(_d[i], _w[i], area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
                     d_mdl[i] = np.fft.fft(_d_cl)
+                    d_res[i] = np.fft.fft(info_here['res'])
                     del info_here['res']
                     info.append(info_here)
 
@@ -198,9 +202,8 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         # run clean
         _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
         d_mdl = np.fft.fft2(_d_cl, axes=(0, 1))
+        d_res = np.fft.fft2(info['res'], axes=(0, 1))
         del info['res']
-
-    d_res = data - d_mdl
 
     return d_mdl, d_res, info
 
