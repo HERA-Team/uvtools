@@ -210,16 +210,15 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
     # add residual in CLEAN bounds if requested
     if add_clean_residual:
         _d_cl += _d_res * area
-        _d_res -= _d_res * area
 
     # fft back to input space
     if clean2d:
         d_mdl = np.fft.fft2(_d_cl, axes=(0, 1))
-        d_res = np.fft.fft2(_d_res, axes=(0, 1))
 
     else:
         d_mdl = np.fft.fft(_d_cl)
-        d_res = np.fft.fft(_d_res)
+
+    d_res = data - d_mdl
 
     return d_mdl, d_res, info
 
