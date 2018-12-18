@@ -138,11 +138,11 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
     # 1D clean
     if not clean2d:
         # setup _d and _w arrays
-        _window = gen_window(window, data.shape[-1], alpha=alpha, edgecut_low=edgecut_low, edgecut_hi=edgecut_hi)
+        win = gen_window(window, data.shape[-1], alpha=alpha, edgecut_low=edgecut_low, edgecut_hi=edgecut_hi)
         if dndim == 2:
-            _window = _window[None, :]
-        _d = np.fft.ifft(data * wgts * _window, axis=-1)
-        _w = np.fft.ifft(wgts * _window, axis=-1)
+            win = win[None, :]
+        _d = np.fft.ifft(data * wgts * win, axis=-1)
+        _w = np.fft.ifft(wgts * win, axis=-1)
 
         # calculate area array
         area = np.ones(data.shape[-1], dtype=np.int)
@@ -176,11 +176,11 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
     # 2D clean on 2D data
     else:
         # setup _d and _w arrays
-        _w1 = gen_window(window[0], data.shape[0], alpha=alpha[0], edgecut_low=edgecut_low[0], edgecut_hi=edgecut_hi[0])
-        _w2 = gen_window(window[1], data.shape[1], alpha=alpha[1], edgecut_low=edgecut_low[1], edgecut_hi=edgecut_hi[1])
-        _window = _w1[:, None] * _w2[None, :]
-        _d = np.fft.ifft2(data * wgts * _window, axes=(0, 1))
-        _w = np.fft.ifft2(wgts * _window, axes=(0, 1))
+        win1 = gen_window(window[0], data.shape[0], alpha=alpha[0], edgecut_low=edgecut_low[0], edgecut_hi=edgecut_hi[0])
+        win2 = gen_window(window[1], data.shape[1], alpha=alpha[1], edgecut_low=edgecut_low[1], edgecut_hi=edgecut_hi[1])
+        win = win1[:, None] * win2[None, :]
+        _d = np.fft.ifft2(data * wgts * win, axes=(0, 1))
+        _w = np.fft.ifft2(wgts * win, axes=(0, 1))
 
         # calculate area array
         a1 = np.ones(data.shape[0], dtype=np.int)
@@ -218,7 +218,9 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
     else:
         d_mdl = np.fft.fft(_d_cl)
 
-    d_res = data - d_mdl
+    # set residual to zero where data has zero weight: i.e. is flagged
+    f = np.isclose(wgts * win, 0.0)
+    d_res = (data - d_mdl) * ~f
 
     return d_mdl, d_res, info
 
