@@ -107,8 +107,9 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             If False, residual is not added to the CLEAN model.
 
     Returns:
-        d_mdl: best fit low-pass filter components (CLEAN model) in real space
-        d_res: best fit high-pass filter components (CLEAN residual) in real space
+        d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
+        d_res: CLEAN residual -- best fit high-pass filter components (CLEAN residual) in real space
+        d_cln: CLEAN'd data -- best fit CLEAN model plus residual without flagged data in real space
         info: dictionary (1D case) or list of dictionaries (2D case) with CLEAN metadata
     '''
     # type checks
@@ -162,7 +163,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             _d_res = np.empty_like(data)
             for i in range(data.shape[0]):
                 if _w[i, 0] < skip_wgt:
-                    _d_cl[i] = 0 # skip highly flagged (slow) integrations
+                    _d_cl[i] = 0  # skip highly flagged (slow) integrations
                     _d_res[i] = _d[i]
                     info.append({'skipped': True})
                 else:
@@ -206,22 +207,23 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         _d_res = info['res']
         del info['res']
 
-    # add residual in CLEAN bounds if requested
+    # add resid to model in CLEAN bounds
     if add_clean_residual:
         _d_cl += _d_res * area
+        _d_res -= _d_res * area
 
     # fft back to input space
     if clean2d:
         d_mdl = np.fft.fft2(_d_cl, axes=(0, 1))
-
+        d_res = np.fft.fft2(_d_res, axes=(0, 1))
     else:
         d_mdl = np.fft.fft(_d_cl)
+        d_res = np.fft.fft(_d_res)
 
-    # set residual to zero where data has zero weight: i.e. is flagged
-    f = np.isclose(wgts * win, 0.0)
-    d_res = (data - d_mdl) * ~f
-
-    return d_mdl, d_res, info
+    # form clean data
+    d_cln = d_mdl + d_res
+                               
+    return d_mdl, d_res, d_cln, info
 
 
 def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, tol=1e-4,
@@ -262,8 +264,9 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
             If False, residual is not added to the CLEAN model.
 
     Returns:
-        d_mdl: best fit low-pass filter components (CLEAN model) in the frequency domain
-        d_res: best fit high-pass filter components (CLEAN residual) in the frequency domain
+        d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
+        d_res: CLEAN residual -- best fit high-pass filter components (CLEAN residual) in real space
+        d_cln: CLEAN'd data -- best fit CLEAN model plus residual without flagged data in real space
         info: dictionary (1D case) or list of dictionaries (2D case) with CLEAN metadata
     '''
     # print deprecation warning
@@ -311,19 +314,20 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
             If False, residual is not added to the CLEAN model.
 
     Returns:
-        mdl : CLEAN model, in the time domain
-        res : residual, in the time domain
-        info : CLEAN info
+        d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
+        d_res: CLEAN residual -- best fit high-pass filter components (CLEAN residual) in real space
+        d_cln: CLEAN'd data -- best fit CLEAN model plus residual without flagged data in real space
+        info: dictionary (1D case) or list of dictionaries (2D case) with CLEAN metadata
     """
     # print deprecation warning
     warn("Warning: dspec.fringe_filter will soon be deprecated in favor of filtering.fringe_filter",
          DeprecationWarning)
 
     # run fourier filter
-    mdl, res, info = high_pass_fourier_filter(data.T, wgts.T, max_frate, dt, tol=tol, window=window, edgecut_low=edgecut_low,
+    mdl, res, cln, info = high_pass_fourier_filter(data.T, wgts.T, max_frate, dt, tol=tol, window=window, edgecut_low=edgecut_low,
                                               edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain,
                                               alpha=alpha, add_clean_residual=add_clean_residual)
-    return mdl.T, res.T, info
+    return mdl.T, res.T, cln.T, info
 
 
 def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, standoff=0.0, horizon=1., min_dly=0., 
@@ -369,9 +373,10 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
             If False, residual is not added to the CLEAN model.
 
     Returns:
-        mdl : CLEAN model in data space
-        res : CLEAN residual in data space
-        info : CLEAN info
+        d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
+        d_res: CLEAN residual -- best fit high-pass filter components (CLEAN residual) in real space
+        d_cln: CLEAN'd data -- best fit CLEAN model plus residual without flagged data in real space
+        info: dictionary (1D case) or list of dictionaries (2D case) with CLEAN metadata
     """
     # print deprecation warning
     warn("Warning: dspec.vis_filter will soon be deprecated in favor of filtering.vis_filter",
@@ -394,15 +399,15 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
     if not clean2d:
         # time clean
         if timeclean:
-            mdl, res, info = high_pass_fourier_filter(data.T, wgts.T, max_frate, dt, tol=tol, window=window, edgecut_low=edgecut_low,
+            mdl, res, cln, info = high_pass_fourier_filter(data.T, wgts.T, max_frate, dt, tol=tol, window=window, edgecut_low=edgecut_low,
                                                       edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain,
                                                       alpha=alpha, add_clean_residual=add_clean_residual)
-            mdl, res = mdl.T, res.T
+            mdl, res, cln = mdl.T, res.T, cln.T
 
         # freq clean
         elif freqclean:
             bl_dly = _get_bl_dly(bl_len, horizon=horizon, standoff=standoff, min_dly=min_dly)
-            mdl, res, info = high_pass_fourier_filter(data, wgts, bl_dly, sdf, tol=tol, window=window, edgecut_low=edgecut_low,
+            mdl, res, cln, info = high_pass_fourier_filter(data, wgts, bl_dly, sdf, tol=tol, window=window, edgecut_low=edgecut_low,
                                                       edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain,
                                                       alpha=alpha, add_clean_residual=add_clean_residual)
 
@@ -412,11 +417,11 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
         bl_dly = _get_bl_dly(bl_len, horizon=horizon, standoff=standoff, min_dly=min_dly)
 
         # 2D clean
-        mdl, res, info = high_pass_fourier_filter(data, wgts, (max_frate, bl_dly), (dt, sdf), tol=tol, window=window, edgecut_low=edgecut_low,
+        mdl, res, cln, info = high_pass_fourier_filter(data, wgts, (max_frate, bl_dly), (dt, sdf), tol=tol, window=window, edgecut_low=edgecut_low,
                                                   edgecut_hi=edgecut_hi, maxiter=maxiter, gain=gain, clean2d=True, filt2d_mode=filt2d_mode,
                                                   alpha=alpha, add_clean_residual=add_clean_residual)
 
-    return mdl, res, info
+    return mdl, res, cln, info
 
 
 def _get_bl_dly(bl_len, horizon=1., standoff=0., min_dly=0.):
