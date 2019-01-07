@@ -1,5 +1,7 @@
-import aipy, numpy as np, pylab as plt
-import sys, scipy
+import aipy
+import numpy as np
+import sys
+import scipy
 
 def data_mode(data, mode='abs'):
     if mode.startswith('phs'): data = np.angle(data)
@@ -15,6 +17,8 @@ def data_mode(data, mode='abs'):
     return data
 
 def waterfall(d, mode='log', mx=None, drng=None, recenter=False, **kwargs):
+    # import matplotlib
+    import pylab as plt
     if np.ma.isMaskedArray(d): d = d.filled(0)
     if recenter: d = aipy.img.recenter(d, np.array(d.shape)/2)
     d = data_mode(d, mode=mode)
@@ -56,6 +60,7 @@ def plot_phase_ratios(data):
     '''Plots ratios of baselines given in data. 
        Data is a nested dictionary. First key is baseline, second key is pol. 
     '''
+    import pylab as plt
     bls = data.keys()
     nbls = len(bls)
     pol = data[bls[0]].keys()[0]
@@ -81,6 +86,7 @@ def plot_phase_ratios(data):
     plt.colorbar(cax=cax, orientation='horizontal')
 
 def omni_view(reds,vis,pol,integration=10,chan=500,norm=False,cursor=True,save=None,colors=None,symbols=None, ex_ants=[], title=''):
+    import pylab as plt
     if not colors:
         colors = ["#006BA4", "#FF7F0E", "#2CA02C", "#D61D28", "#9467BD", "#8C564B", "#E377C2", "#7F7F7F", "#BCBD22", "#17BECF"]
     if not symbols: 
