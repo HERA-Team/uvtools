@@ -42,16 +42,16 @@ class TestMethods(unittest.TestCase):
         TOL = 1e-6
         data = np.ones(NCHAN, dtype=np.complex)
         wgts = .5*np.ones(NCHAN, dtype=np.complex)
-        dmdl, dres, dcln, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
+        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
         np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
         np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
         wgts[::16] = 0
-        dmdl, dres, dcln, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
+        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
         np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
         np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
         data = np.random.normal(size=NCHAN)
         wgts = np.ones_like(data)
-        dmdl, dres, dcln, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=1e-9)
+        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=1e-9)
         self.assertAlmostEqual(np.average(data), np.average(dmdl), 3)
         self.assertAlmostEqual(np.average(dres), 0, 3)
 
@@ -61,17 +61,17 @@ class TestMethods(unittest.TestCase):
         TOL = 1e-6
         data = np.ones((NTIMES, NCHAN), dtype=np.complex)
         wgts = np.ones((NTIMES, NCHAN), dtype=np.complex)
-        dmdl, dres, dcln, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
+        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
         np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
         np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
         wgts[:,::16] = 0;
         wgts*=.9 #tests to make sure wgts**2 normalization works
-        dmdl, dres, dcln, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
+        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
         np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
         np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
         data = np.array(np.random.normal(size=(NTIMES,NCHAN)),dtype=complex)
         wgts = np.ones_like(data)
-        dmdl, dres, dcln, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=1e-9)
+        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=1e-9)
         np.testing.assert_allclose(np.average(data,axis=1), np.average(dmdl,axis=1), atol=1e-3)
         np.testing.assert_allclose(np.average(dres,axis=1), 0, atol=1e-3)
 
@@ -152,7 +152,7 @@ class TestMethods(unittest.TestCase):
         data = np.ones((NTIMES, NCHAN), dtype=np.complex)
         wgts = np.ones((NTIMES, NCHAN), dtype=np.complex)
         wgts[0, 0:-4] = 0
-        dmdl, dres, dcln, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL, skip_wgt=.1)
+        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL, skip_wgt=.1)
         np.testing.assert_allclose(data[1:,:], dmdl[1:,:], atol=NCHAN*TOL)
         np.testing.assert_allclose(dres[1:,:], np.zeros_like(dres)[1:,:], atol=NCHAN*TOL)
         np.testing.assert_allclose(dmdl[0,:], np.zeros_like(dmdl[0,:]), atol=NCHAN*TOL)
@@ -174,6 +174,15 @@ class TestMethods(unittest.TestCase):
         u, l = dspec.calc_width(filter_size, dt, nchan)
         nt.assert_true(np.all((frs[u:l] < -1e-2) | (frs[u:l] > 2e-2)))
 
+    def test_gen_window(self):
+        for w in ['none', 'blackmanharris', 'hann', 'tukey', 'barthann']:
+            win = dspec.gen_window(w, 100)
+            nt.assert_true(len(win), 100)
+            nt.assert_true(isinstance(win, np.ndarray))
+            nt.assert_true(win.min() >= 0.0)
+            nt.assert_true(win.max() <= 1.0)
+
+        nt.assert_raises(ValueError, dspec.gen_window, 'foo', 200)
 
 def test_vis_filter():
     # load file
@@ -216,20 +225,22 @@ def test_vis_filter():
     bl_len = 70.0 / 2.99e8
 
     # delay filter basic execution
-    mdl, res, cln, info = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.0,
+    mdl, res, info = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.0,
                                              tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+    cln = mdl + res
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=1, avgax=0)
     nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=3))
     nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
 
     # test vis filter is the same
-    mdl2, res2, cln2, info2 = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, standoff=0, horizon=1.0, min_dly=0.0,
+    mdl2, res2, info2 = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, standoff=0, horizon=1.0, min_dly=0.0,
                                                tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
     nt.assert_true(np.isclose(mdl - mdl2, 0.0).all())
 
     # fringe filter basic execution 
-    mdl, res, cln, info = dspec.fringe_filter(d, w, frs[15], dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+    mdl, res, info = dspec.fringe_filter(d, w, frs[15], dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+    cln = mdl + res
 
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=0, avgax=1)
@@ -237,11 +248,13 @@ def test_vis_filter():
     nt.assert_true(np.isclose(snrs[1], time_snr2, atol=3))
 
     # test vis filter is the same
-    mdl2, res2, cln2, info2 = dspec.vis_filter(d, w, max_frate=frs[15], dt=dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+    mdl2, res2, info2 = dspec.vis_filter(d, w, max_frate=frs[15], dt=dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+    cln2 = mdl2 + res2
     nt.assert_true(np.isclose(mdl - mdl2, 0.0).all())
 
     # try non-symmetric filter
-    mdl, res, cln, info = dspec.fringe_filter(d, w, (frs[-20], frs[10]), dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+    mdl, res, info = dspec.fringe_filter(d, w, (frs[-20], frs[10]), dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+    cln = mdl + res
 
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=0, avgax=1)
@@ -249,7 +262,8 @@ def test_vis_filter():
     nt.assert_true(np.isclose(snrs[1], time_snr2, atol=3))
 
     # 2d clean
-    mdl, res, cln, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=frs[15], dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1)
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=frs[15], dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1)
+    cln = mdl + res
 
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=1, avgax=0)
@@ -257,7 +271,8 @@ def test_vis_filter():
     nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
 
     # non-symmetric 2D clean
-    mdl, res, cln, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1)
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1)
+    cln = mdl + res
 
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=1, avgax=0)
@@ -265,8 +280,9 @@ def test_vis_filter():
     nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
 
     # try plus filtmode on 2d clean
-    mdl, res, cln, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[10], frs[10]), dt=dt, tol=1e-4, window=('none', 'none'), edgecut_low=(0, 5), edgecut_hi=(2, 5), maxiter=100, gain=1e-1, filt2d_mode='plus')
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[10], frs[10]), dt=dt, tol=1e-4, window=('none', 'none'), edgecut_low=(0, 5), edgecut_hi=(2, 5), maxiter=100, gain=1e-1, filt2d_mode='plus')
     mfft = np.fft.ifft2(mdl)
+    cln = mdl + res
 
     # assert clean components fall only in plus area
     clean_comp = np.where(~np.isclose(np.abs(mfft), 0.0))
@@ -276,10 +292,12 @@ def test_vis_filter():
     # exceptions
     nt.assert_raises(ValueError, dspec.vis_filter, d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, filt2d_mode='foo')
 
-    # test add_clean_residual: test res of filtered modes are zero
-    mdl, res, cln, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=frs[15], dt=dt, tol=1e-6, window='none', maxiter=100, gain=1e-1, add_clean_residual=True)
+    # test add_clean_residual: test res of filtered modes are lower when add_residual is True
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=frs[15], dt=dt, tol=1e-6, window='none', maxiter=100, gain=1e-1, add_clean_residual=False)
+    mdl2, res2, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=frs[15], dt=dt, tol=1e-6, window='none', maxiter=100, gain=1e-1, add_clean_residual=True)
     rfft = np.fft.ifft2(res)
-    nt.assert_true(np.isclose(np.abs(rfft[:15, :17]), 0.0).all())
+    rfft2 = np.fft.ifft2(res2)
+    nt.assert_true(np.median(np.abs(rfft2[:15, :23] / rfft[:15, :23])) < 1)
 
 if __name__ == '__main__':
     unittest.main()
