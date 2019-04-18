@@ -450,12 +450,17 @@ def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, **kwargs):
         edgecut_hi = None
     if window in ['none', None, 'None', 'boxcar', 'tophat']:
         w[edgecut_low:edgecut_hi] = windows.boxcar(N - Ncut)
-    elif window in ['blackmanharris', 'blackman-harris']:
+    elif window in ['blackmanharris', 'blackman-harris', 'bh', 'bh4']:
         w[edgecut_low:edgecut_hi] =  windows.blackmanharris(N - Ncut)
     elif window in ['hanning', 'hann']:
         w[edgecut_low:edgecut_hi] =  windows.hann(N - Ncut)
     elif window == 'tukey':
         w[edgecut_low:edgecut_hi] =  windows.tukey(N - Ncut, alpha)
+    elif window in ['blackmanharris-7term', 'blackman-harris-7term', 'bh7']:
+        # https://ieeexplore.ieee.org/document/940309
+        a_k = [0.27105140069342, -0.43329793923448, 0.21812299954311, -0.06592544638803,
+               0.01081174209837, -0.00077658482522, 0.00001388721735]
+        w[edgecut_low:edgecut_hi] = np.sum([[ak * np.cos(2 * np.pi * k * n / float(N - Ncut - 1)) for n in range(N - Ncut)] for k, ak in enumerate(a_k)], axis=0)
     else:
         try:
             # return any single-arg window from windows
