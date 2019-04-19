@@ -175,7 +175,8 @@ class TestMethods(unittest.TestCase):
         nt.assert_true(np.all((frs[u:l] < -1e-2) | (frs[u:l] > 2e-2)))
 
     def test_gen_window(self):
-        for w in ['none', 'blackmanharris', 'hann', 'tukey', 'barthann', 'blackmanharris-7term']:
+        for w in ['none', 'blackmanharris', 'hann', 'tukey', 'barthann', 'blackmanharris-7term',
+                  'cosinesum-9term', 'cosinesum-11term']:
             win = dspec.gen_window(w, 100)
             nt.assert_true(len(win), 100)
             nt.assert_true(isinstance(win, np.ndarray))

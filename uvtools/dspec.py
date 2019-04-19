@@ -457,9 +457,21 @@ def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, **kwargs):
     elif window == 'tukey':
         w[edgecut_low:edgecut_hi] =  windows.tukey(N - Ncut, alpha)
     elif window in ['blackmanharris-7term', 'blackman-harris-7term', 'bh7']:
-        # https://ieeexplore.ieee.org/document/940309
+        # https://ieeexplore.ieee.org/document/293419
         a_k = [0.27105140069342, -0.43329793923448, 0.21812299954311, -0.06592544638803,
                0.01081174209837, -0.00077658482522, 0.00001388721735]
+        w[edgecut_low:edgecut_hi] = np.sum([[ak * np.cos(2 * np.pi * k * n / float(N - Ncut - 1)) for n in range(N - Ncut)] for k, ak in enumerate(a_k)], axis=0)
+    elif window in ['cosinesum-9term', 'cosinesum9term', 'cs9']:
+        # https://ieeexplore.ieee.org/document/940309
+        a_k = [2.384331152777942e-1, -4.00554534864382e-1, 2.358242530472107e-1, -9.527918858383112e-2,
+               2.537395516617152e-2, -4.152432907505835e-3, 3.68560416329818e-4, -1.38435559391703e-5,
+               1.161808358932861e-7]
+        w[edgecut_low:edgecut_hi] = np.sum([[ak * np.cos(2 * np.pi * k * n / float(N - Ncut - 1)) for n in range(N - Ncut)] for k, ak in enumerate(a_k)], axis=0)
+    elif window in ['cosinesum-11term', 'cosinesum11term', 'cs11']:
+        # https://ieeexplore.ieee.org/document/940309
+        a_k = [2.151527506679809e-1, -3.731348357785249e-1, 2.424243358446660e-1, -1.166907592689211e-1,
+               4.077422105878731e-2, -1.000904500852923e-2, 1.639806917362033e-3, -1.651660820997142e-4,
+               8.884663168541479e-6, -1.938617116029048e-7, 8.482485599330470e-10]
         w[edgecut_low:edgecut_hi] = np.sum([[ak * np.cos(2 * np.pi * k * n / float(N - Ncut - 1)) for n in range(N - Ncut)] for k, ak in enumerate(a_k)], axis=0)
     else:
         try:
