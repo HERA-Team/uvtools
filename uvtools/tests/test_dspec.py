@@ -55,6 +55,8 @@ class TestMethods(unittest.TestCase):
         self.assertAlmostEqual(np.average(data), np.average(dmdl), 3)
         self.assertAlmostEqual(np.average(dres), 0, 3)
 
+    #def test_linear_delay_filter()
+
     def test_delay_filter_2D(self):
         NCHAN = 128
         NTIMES = 10
@@ -98,13 +100,13 @@ class TestMethods(unittest.TestCase):
         sigma = 0.1 # Noise level (not important here)
 
         # Fourier coeffs for input data, ordered from (-nmax, nmax)
-        cn = np.array([-0.1-0.1j, -0.1+0.1j, -0.3-0.01j, 0.5+0.01j, 
+        cn = np.array([-0.1-0.1j, -0.1+0.1j, -0.3-0.01j, 0.5+0.01j,
                        -0.3-0.01j, -0.1+0.1j, 0.1-0.1j])
         data *= np.atleast_2d( dspec.fourier_model(cn, NCHAN) )
 
         # Estimate smooth Fourier model on unflagged data
-        bf_model, cn_out, data_out = dspec.delay_filter_leastsq(data, flags, 
-                                                                sigma, nmax=3, 
+        bf_model, cn_out, data_out = dspec.delay_filter_leastsq(data, flags,
+                                                                sigma, nmax=3,
                                                                 add_noise=False)
         np.testing.assert_allclose(data, bf_model, atol=NCHAN*TOL)
         np.testing.assert_allclose(cn, cn_out[0], atol=1e-6)
@@ -112,8 +114,8 @@ class TestMethods(unittest.TestCase):
         # Estimate smooth Fourier model on data with some flags
         flags[:,10] = True
         flags[:,65:70] = True
-        bf_model, cn_out, data_out = dspec.delay_filter_leastsq(data, flags, 
-                                                                sigma, nmax=3, 
+        bf_model, cn_out, data_out = dspec.delay_filter_leastsq(data, flags,
+                                                                sigma, nmax=3,
                                                                 add_noise=False)
         np.testing.assert_allclose(data, bf_model, atol=NCHAN*TOL)
         np.testing.assert_allclose(data, data_out, atol=NCHAN*TOL)
@@ -185,6 +187,21 @@ class TestMethods(unittest.TestCase):
 
         nt.assert_raises(ValueError, dspec.gen_window, 'foo', 200)
 
+
+def test_sinc_downweight_mat_inv():
+    cmat = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = [], filter_widths = [], filter_factors = [])
+    #verify that the inverse cleaning matrix without cleaning windows is the identity!
+    np.testing.assert_array_equal(cmat, np.identity(32).astype(np.complex128))
+    #next, test with a single filter window with list and float arguments supplied
+    cmat1 = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = 0., filter_widths = 100e-9, filter_factors = 1e-9)
+    cmat2 = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = [0.], filter_widths = [100e-9], filter_factors = [1e-9])
+    x,y = np.meshgrid(np.arange(-16,16), np.arange(-16,16))
+    cmata = np.identity(32).astype(np.complex128) + 1e9 * np.sinc( (x-y) * 100e3 * 200e-9 ).astype(np.complex128)
+    np.testing.assert_array_equal(cmat1, cmat2)
+    #next test that the array is equal to what we expect
+    np.testing.assert_almost_equal(cmat1, cmata)
+
+
 def test_vis_filter():
     # load file
     uvd = UVData()
@@ -239,7 +256,7 @@ def test_vis_filter():
                                                tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
     nt.assert_true(np.isclose(mdl - mdl2, 0.0).all())
 
-    # fringe filter basic execution 
+    # fringe filter basic execution
     mdl, res, info = dspec.fringe_filter(d, w, frs[15], dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
     cln = mdl + res
 

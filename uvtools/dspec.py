@@ -220,19 +220,23 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
 
     return d_mdl, d_res, info
 
-def linear_delay_filter(data, wgts, filter_centers. filter_widths, filter_factors):
+def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_factors, cache = {}):
     '''Apply a linear delay filter to waterfall data.
     Arguments:
         data: 1D or 2D (real or complex) numpy array where last dimension is frequency.
         Does not assume that weights have already been multiplied!
         wgts: real numpy array of linear multiplicative weights with the same shape as the data.
         filter_centers: float, list, or 1d numpy array of delays at which to center filter windows
+                        Provide in units of (seconds)
         filter_widths: float, list, or 1d numpy array of widths of each delay filtere window
                         with centers specified by filter_centers.
+                        Provide in units of (seconds)
         filter_factors: float, list, or 1d numpy array of factors by which filtering should be
                         applied within each filter window specified in filter_centers and
                         filter_widths. If a float or length-1 list/ndarray is provided,
                         the same filter factor will be used in every filter window.
+        df: the width of the frequency bins in Hz: float
+        cache: optional dictionary for storing pre-computed delay filter matrices.
 
     Returns:
         2d clean residual with data filtered along the frequency direction.
@@ -261,7 +265,7 @@ def linear_delay_filter(data, wgts, filter_centers. filter_widths, filter_factor
         if len(filter_widths) != len(filter_centers):
             raise ValueError("Number of elements in filter_factor must be equal"
                              "to one or the number of elements in filter_centers"
-                             "and filter_widths")
+                             "and filter_widths!")
     d_shape = data.shape
     w_shape = wghts.shape
     d_dim = data.ndims
@@ -291,8 +295,12 @@ def linear_delay_filter(data, wgts, filter_centers. filter_widths, filter_factor
     output = np.zeros_like(data)
     for sample_num, sample, wght in zip(range(d_shape[0]), data, wghts):
         wght_mat = np.outer(wght.T, wght)
-        filter_mat = sinc_downweight_mat_inv(len(sample), ,weights, filter_centers, filter_widths, filter_factors) * wght_mat
-        filter_mat = np.linalg.pinv(filter_mat)
+        filter_mat = sinc_downweight_mat_inv(len(sample),df , filter_centers, filter_widths, filter_factors, cache) * wght_mat
+        filter_key = (nchan, df, ) + tuple(filter_centers) + \
+        tuple(filter_widths) + tuple(filter_factors) + wght.astuple() + ('inverse',)
+        if not filter_key in cache:
+            cache[filter_key] = np.linalg.pinv(filter_mat)
+        filter_mat = cache[filter_key]
         output[sample_num] = np.dot(filter_mat, data)
     if data_1d:
         output = output[0]
@@ -858,7 +866,7 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False,
     return mdl_array, cn_array, inp_data
 
 
-def sinc_downweight_mat_inv(nchan, df, weights, filter_centers, filter_widths, filter_factors):
+def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_widths, filter_factors, cache = {}):
     """
     Computes inverse of clean weights for a baseline.
     This form of weighting is diagonal in delay-space and down-weights tophat regions
@@ -869,14 +877,15 @@ def sinc_downweight_mat_inv(nchan, df, weights, filter_centers, filter_widths, f
         Number of channels on baseline
     df: float
         channel width (Hz)
-    weights: array-like (complex or float)
-        nchan array of weights shape = (Nfreqs,)
     filter_centers: float or list
         float or list of floats of centers of delay filter windows in nanosec
     filter_widths: float or list
         float or list of floats of widths of delay filter windows in nanosec
     filter_factors: float or list
         float or list of floats of filtering factors.
+    cache: dictionary, optional dictionary storing filter matrices with keys
+    (nchan, df, ) + (filter_centers) + (filter_widths) + \
+    (filter_factors)
 
     Returns
     ----------
@@ -889,14 +898,16 @@ def sinc_downweight_mat_inv(nchan, df, weights, filter_centers, filter_widths, f
         filter_widths = [filter_widths]
     if isinstance(filter_factors,float):
         filter_factors = [filter_factors]
-    x = np.arange(-int(nchan/2),int(np.ceil(nchan/2)))
-    fx, fy = np.meshgrid(x,x)
-    sdwi_mat = np.identity(fx.shape[0]).astype(np.complex128)
-    for fc, fw, ff in zip(filter_centers, filter_widths, filter_factors):
-        if not ff == 0:
-            sdwi_mat = sdwi_mat + np.sinc( 2. * (fx-fy) * df * fw ).astype(np.complex128)\
-                    * np.exp(-2j * np.pi * (fx-fy) * df * fc) / ff
-    #multiply by weights matrix.
-    weights_mat = np.outer(weights, weights)
-    sdwi_mat = sdwi_mat * weights_mat
+    filter_key = (nchan, df, ) + tuple(filter_centers) + \
+    tuple(filter_widths) + tuple(filter_factors)
+    if not filter_key in cache:
+        x = np.arange(-int(nchan/2),int(np.ceil(nchan/2)))
+        fx, fy = np.meshgrid(x,x)
+        sdwi_mat = np.identity(fx.shape[0]).astype(np.complex128)
+        for fc, fw, ff in zip(filter_centers, filter_widths, filter_factors):
+            if not ff == 0:
+                sdwi_mat = sdwi_mat + np.sinc( 2. * (fx-fy) * df * fw ).astype(np.complex128)\
+                        * np.exp(-2j * np.pi * (fx-fy) * df * fc) / ff
+    else:
+        sdwi_mat = cache[filter_key]
     return sdwi_mat
