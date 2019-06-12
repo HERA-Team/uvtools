@@ -247,7 +247,7 @@ def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_fa
         filter_centers = list(filter_centers)
     if isinstance(filter_widths, np.ndarray):
         filter_widths = list(filter_widths)
-    if isinstance(flter_factors, np.ndarray):
+    if isinstance(filter_factors, np.ndarray):
         filter_factors = list(filter_factors)
     if isinstance(filter_centers, np.float):
         filter_centers = [filter_centers]
@@ -259,49 +259,53 @@ def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_fa
     if not len(filter_centers) == len(filter_widths):
         raise ValueError("Number of elements in filter_centers must equal the"
                          " number of elements filter_widths!")
-    if len(filter_widths) == 1:
-        filter_widths = [filter_widths[0] for m in range(len(filter_centers))]
-    else:
-        if len(filter_widths) != len(filter_centers):
+    if len(filter_factors) == 1:
+        filter_factors = [filter_factors[0] for m in range(len(filter_centers))]
+    elif len(filter_factors) != len(filter_centers):
             raise ValueError("Number of elements in filter_factor must be equal"
                              "to one or the number of elements in filter_centers"
                              "and filter_widths!")
     d_shape = data.shape
-    w_shape = wghts.shape
-    d_dim = data.ndims
-    w_dim = wghts.ndims
+    w_shape = wgts.shape
+    d_dim = data.ndim
+    w_dim = wgts.ndim
     if not (d_dim == 1 or d_dim == 2):
         raise ValueError("number of dimensions in data array does not "
                          "equal 1 or 2! data dim = %d"%(d_dim))
     if not (w_dim == 1 or w_dim == 2):
-        raise ValueError("number of dimensions in wghts array does not "
+        raise ValueError("number of dimensions in wgts array does not "
                          "equal 1 or 2! wght dim = %d"%(w_dim))
     if not w_dim == d_dim:
         raise ValueError("number of dimensions in data array does not equal "
                          "number of dimensions in weights array."
-                         "data.dim == %d, wghts.dim == %d"%(d_dim, w_dim))
+                         "data.dim == %d, wgts.dim == %d"%(d_dim, w_dim))
     for dim in range(d_dim):
         if not d_shape[dim] == w_shape[dim]:
             raise ValueError("number of elements along data dimension %d, nel=%d"
                              "does not equal the number of elements along weight"
                              "dimension %d, nel = %d"%(dim, d_shape[dim], dim, w_shape[dim]))
-    if len(data_dim == 1):
+    #convert 1d data to 2d data to save lines of code.
+    if d_dim == 1:
         data = np.asarray([data])
-        wghts = np.asarray([wghts])
+        wgts = np.asarray([wgts])
         data_1d = True
     else:
         data_1d = False
 
     output = np.zeros_like(data)
-    for sample_num, sample, wght in zip(range(d_shape[0]), data, wghts):
+    nchan = data.shape[1]
+    for sample_num, sample, wght in zip(range(d_shape[0]), data, wgts):
         wght_mat = np.outer(wght.T, wght)
-        filter_mat = sinc_downweight_mat_inv(len(sample),df , filter_centers, filter_widths, filter_factors, cache) * wght_mat
+        filter_mat = sinc_downweight_mat_inv(nchan, df, filter_centers, filter_widths, filter_factors, cache) * wght_mat
         filter_key = (nchan, df, ) + tuple(filter_centers) + \
-        tuple(filter_widths) + tuple(filter_factors) + wght.astuple() + ('inverse',)
+        tuple(filter_widths) + tuple(filter_factors) + tuple(wght.tolist()) + ('inverse',)
         if not filter_key in cache:
             cache[filter_key] = np.linalg.pinv(filter_mat)
         filter_mat = cache[filter_key]
-        output[sample_num] = np.dot(filter_mat, data)
+        #print(np.std(sample.real))
+        #print(np.diag(filter_mat))
+        output[sample_num] = np.dot(filter_mat, sample)
+        #print(np.std(output[sample_num].real))
     if data_1d:
         output = output[0]
     return output
