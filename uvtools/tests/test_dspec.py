@@ -252,13 +252,28 @@ def test_sinc_downweight_mat_inv():
     #verify that the inverse cleaning matrix without cleaning windows is the identity!
     np.testing.assert_array_equal(cmat, np.identity(32).astype(np.complex128))
     #next, test with a single filter window with list and float arguments supplied
-    cmat1 = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = 0., filter_widths = 100e-9, filter_factors = 1e-9)
-    cmat2 = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = [0.], filter_widths = [100e-9], filter_factors = [1e-9])
+    cmat1 = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = 0., filter_widths = 112e-9, filter_factors = 1e-9)
+    cmat2 = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = [0.], filter_widths = [112e-9], filter_factors = [1e-9])
     x,y = np.meshgrid(np.arange(-16,16), np.arange(-16,16))
-    cmata = np.identity(32).astype(np.complex128) + 1e9 * np.sinc( (x-y) * 100e3 * 200e-9 ).astype(np.complex128)
+    cmata = np.identity(32).astype(np.complex128) + 1e9 * np.sinc( (x-y) * 100e3 * 224e-9 ).astype(np.complex128)
     np.testing.assert_array_equal(cmat1, cmat2)
     #next test that the array is equal to what we expect
     np.testing.assert_almost_equal(cmat1, cmata)
+    #now test no_regularization
+    cmat1 = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = 0.,
+            filter_widths = 112e-9, filter_factors = 1, no_regularization = True)
+    np.sinc( (x-y) * 100e3 * 224e-9 ).astype(np.complex128)
+    np.testing.assert_almost_equal(cmat1, cmata / 1e9)
+    #now test wrap!
+    cmat1 = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = 0.,
+            filter_widths = 112e-9, filter_factors = 1, wrap = True,
+             no_regularization = True)
+    cmata = np.zeros_like(cmat1)
+    for m in range(-500,500):
+        cmata += np.sinc((x-y - 32 * m) * 100e3 * 224e-9)
+    np.testing.assert_almost_equal(cmat1, cmata)
+
+
 
 
 def test_vis_filter():

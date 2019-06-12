@@ -870,7 +870,9 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False,
     return mdl_array, cn_array, inp_data
 
 
-def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_widths, filter_factors, cache = {}):
+def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_widths,
+                            filter_factors, cache = {}, wrap = False, wrap_interval=1,
+                            nwraps = 1000, no_regularization = False):
     """
     Computes inverse of clean weights for a baseline.
     This form of weighting is diagonal in delay-space and down-weights tophat regions
@@ -891,27 +893,46 @@ def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_widths, filter_fac
     (nchan, df, ) + (filter_centers) + (filter_widths) + \
     (filter_factors)
 
+    !!!-------------
+    WARNING: The following parameters are intended for studying weighting
+    but shouldn't not be changed from defaults in practical data analysis!
+    !!!------------
+        wrap: bool, If true, add a wrap around, equivalent to situation
+              where we want sinc weights to be the IDFT of a diagonal matrix
+        wrap_interval: integer, interval of wrap around in units of nf * df (bandwidth)
+        nwraps: number of wraps to include.
+        no_regularization: bool,  if True, do not include diagonal regularization.
+
     Returns
     ----------
      (nchan, nchan) complex inverse of the tophat filtering matrix assuming that the delay-space covariance is diagonal and zero outside
          of the horizon
     """
-    if isinstance(filter_centers, float):
+    if isinstance(filter_centers, float) or isinstance(filter_factors, int):
         filter_centers = [filter_centers]
-    if isinstance(filter_widths, float):
+    if isinstance(filter_widths, float) or isinstance(filter_factors, int):
         filter_widths = [filter_widths]
-    if isinstance(filter_factors,float):
+    if isinstance(filter_factors,float) or isinstance(filter_factors, int):
         filter_factors = [filter_factors]
     filter_key = (nchan, df, ) + tuple(filter_centers) + \
-    tuple(filter_widths) + tuple(filter_factors)
+    tuple(filter_widths) + tuple(filter_factors) + (wrap, wrap_interval, nwraps, no_regularization)
     if not filter_key in cache:
         x = np.arange(-int(nchan/2),int(np.ceil(nchan/2)))
         fx, fy = np.meshgrid(x,x)
         sdwi_mat = np.identity(fx.shape[0]).astype(np.complex128)
+        if no_regularization:
+            sdwi_mat *= 0.
         for fc, fw, ff in zip(filter_centers, filter_widths, filter_factors):
             if not ff == 0:
-                sdwi_mat = sdwi_mat + np.sinc( 2. * (fx-fy) * df * fw ).astype(np.complex128)\
-                        * np.exp(-2j * np.pi * (fx-fy) * df * fc) / ff
+                if not wrap:
+                    sdwi_mat = sdwi_mat + np.sinc( 2. * (fx-fy) * df * fw ).astype(np.complex128)\
+                            * np.exp(-2j * np.pi * (fx-fy) * df * fc) / ff
+                else:
+                    for wnum in np.arange(-nwraps//2, nwraps//2):
+                        offset = nchan * wnum * wrap_interval
+                        sdwi_mat = sdwi_mat + \
+                        np.sinc( 2. * ( (fx-fy - offset) * df * fw ) ).astype(np.complex128)\
+                        * np.exp(-2j * np.pi * (fx-fy - offset) * df * fc) / ff
     else:
         sdwi_mat = cache[filter_key]
     return sdwi_mat
