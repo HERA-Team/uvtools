@@ -48,10 +48,10 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
         dps = []
         dfs = []
         for template in templates:
-            df = glob.glob(template.format(pol=pol))
-            if len(df) > 0:
-                dfs.extend(df)
-                dps.append(pol)
+            _dfs = glob.glob(template.format(pol=pol))
+            if len(_dfs) > 0:
+                dfs.extend(_dfs)
+                dps.extend([pol for df in _dfs])
         if len(dfs) > 0:
             datafiles.append(sorted(dfs))
             datapols.append(dps)
