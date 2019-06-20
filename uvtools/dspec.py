@@ -874,8 +874,8 @@ def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_widths,
                             filter_factors, cache = {}, wrap = False, wrap_interval=1,
                             nwraps = 1000, no_regularization = False):
     """
-    Computes inverse of clean weights for a baseline.
-    This form of weighting is diagonal in delay-space and down-weights tophat regions
+    Computes the inverse of sinc weights for a baseline.
+    This form of weighting is diagonal in delay-space and down-weights tophat regions.
 
     Parameters
     ----------
@@ -894,8 +894,9 @@ def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_widths,
     (filter_factors)
 
     !!!-------------
-    WARNING: The following parameters are intended for studying weighting
-    but shouldn't not be changed from defaults in practical data analysis!
+    WARNING: The following parameters are intended for theoretical
+    studies of how inverse sinc-weighting functions
+    but should not be changed from defaults in practical data analysis!
     !!!------------
         wrap: bool, If true, add a wrap around, equivalent to situation
               where we want sinc weights to be the IDFT of a diagonal matrix
@@ -931,7 +932,7 @@ def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_widths,
                     for wnum in np.arange(-nwraps//2, nwraps//2):
                         offset = nchan * wnum * wrap_interval
                         sdwi_mat = sdwi_mat + \
-                        np.sinc( 2. * ( (fx-fy - offset) * df * fw ) ).astype(np.complex128)\
+                        np.sinc( 2. *  (fx-fy - offset) * df * fw  ).astype(np.complex128)\
                         * np.exp(-2j * np.pi * (fx-fy - offset) * df * fc) / ff
     else:
         sdwi_mat = cache[filter_key]
