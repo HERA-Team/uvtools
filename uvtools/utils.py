@@ -7,7 +7,7 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
     Glob-parse data templates to search for data files.
 
     Parameters
-    ---------- 
+    ----------
     templates : str or list
         A glob-parsable search string, or list of such strings, with a {pol}
         spot for string formatting. Ex. ["zen.even.{pol}.LST.*.HH.uv"]

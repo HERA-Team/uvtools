@@ -52,7 +52,7 @@ def calc_width(filter_size, real_delta, nsamples):
     if isinstance(filter_size, (list, tuple, np.ndarray)):
         _, l = calc_width(np.abs(filter_size[0]), real_delta, nsamples)
         u, _ = calc_width(np.abs(filter_size[1]), real_delta, nsamples)
-        return (u, l)        
+        return (u, l)
     bin_width = 1.0 / (real_delta * nsamples)
     w = int(np.around(filter_size / bin_width))
     uthresh, lthresh = w + 1, -w
@@ -61,7 +61,7 @@ def calc_width(filter_size, real_delta, nsamples):
     return (uthresh, lthresh)
 
 
-def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False, tol=1e-9, window='none', 
+def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False, tol=1e-9, window='none',
                              skip_wgt=0.1, maxiter=100, gain=0.1, filt2d_mode='rect', alpha=0.5,
                              edgecut_low=0, edgecut_hi=0, add_clean_residual=False):
     '''Apply a highpass fourier filter to data. Uses aipy.deconv.clean. Default is a 1D clean
@@ -81,7 +81,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             If 2D cleaning, then real_delta must also be a len-2 list.
         clean2d : bool, if True perform 2D clean, else perform a 1D clean on last axis.
         tol: CLEAN algorithm convergence tolerance (see aipy.deconv.clean)
-        window: window function for filtering applied to the filtered axis. 
+        window: window function for filtering applied to the filtered axis.
             See dspec.gen_window for options. If clean2D, can be fed as a list
             specifying the window for each axis in data.
         skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
@@ -216,15 +216,109 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         d_mdl = np.fft.fft(_d_cl)
 
     # get residual in data space
-    d_res = (data - d_mdl) * ~np.isclose(wgts * win, 0.0)           
+    d_res = (data - d_mdl) * ~np.isclose(wgts * win, 0.0)
 
     return d_mdl, d_res, info
+
+def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_factors, cache = {}):
+    '''Apply a linear delay filter to waterfall data.
+    Arguments:
+        data: 1D or 2D (real or complex) numpy array where last dimension is frequency.
+        Does not assume that weights have already been multiplied!
+        wgts: real numpy array of linear multiplicative weights with the same shape as the data.
+        filter_centers: float, list, or 1d numpy array of delays at which to center filter windows
+                        Provide in units of (seconds)
+        filter_widths: float, list, or 1d numpy array of widths of each delay filtere window
+                        with centers specified by filter_centers.
+                        Provide in units of (seconds)
+        filter_factors: float, list, or 1d numpy array of factors by which filtering should be
+                        applied within each filter window specified in filter_centers and
+                        filter_widths. If a float or length-1 list/ndarray is provided,
+                        the same filter factor will be used in every filter window.
+        df: the width of the frequency bins in Hz: float
+        cache: optional dictionary for storing pre-computed delay filter matrices.
+
+    Returns:
+        2d clean residual with data filtered along the frequency direction.
+        TODO: Add functionality for linear clean in time dimension
+         -- Matrix inversion could  prohibitively expensive if kernel is not separable.
+    '''
+    if isinstance(filter_centers, np.ndarray):
+        filter_centers = list(filter_centers)
+    if isinstance(filter_widths, np.ndarray):
+        filter_widths = list(filter_widths)
+    if isinstance(filter_factors, np.ndarray):
+        filter_factors = list(filter_factors)
+    if isinstance(filter_centers, np.float):
+        filter_centers = [filter_centers]
+    if isinstance(filter_widths, np.float):
+        filter_widths = [filter_widths]
+    if isinstance(filter_factors, np.float):
+        filter_factors = [filter_factors]
+
+    if not len(filter_centers) == len(filter_widths):
+        raise ValueError("Number of elements in filter_centers must equal the"
+                         " number of elements filter_widths!")
+    if len(filter_factors) == 1:
+        filter_factors = [filter_factors[0] for m in range(len(filter_centers))]
+    elif len(filter_factors) != len(filter_centers):
+            raise ValueError("Number of elements in filter_factor must be equal"
+                             "to one or the number of elements in filter_centers"
+                             "and filter_widths!")
+    d_shape = data.shape
+    w_shape = wgts.shape
+    d_dim = data.ndim
+    w_dim = wgts.ndim
+    if not (d_dim == 1 or d_dim == 2):
+        raise ValueError("number of dimensions in data array does not "
+                         "equal 1 or 2! data dim = %d"%(d_dim))
+    if not (w_dim == 1 or w_dim == 2):
+        raise ValueError("number of dimensions in wgts array does not "
+                         "equal 1 or 2! wght dim = %d"%(w_dim))
+    if not w_dim == d_dim:
+        raise ValueError("number of dimensions in data array does not equal "
+                         "number of dimensions in weights array."
+                         "data.dim == %d, wgts.dim == %d"%(d_dim, w_dim))
+    for dim in range(d_dim):
+        if not d_shape[dim] == w_shape[dim]:
+            raise ValueError("number of elements along data dimension %d, nel=%d"
+                             "does not equal the number of elements along weight"
+                             "dimension %d, nel = %d"%(dim, d_shape[dim], dim, w_shape[dim]))
+    #convert 1d data to 2d data to save lines of code.
+    if d_dim == 1:
+        data = np.asarray([data])
+        wgts = np.asarray([wgts])
+        data_1d = True
+    else:
+        data_1d = False
+
+    output = np.zeros_like(data)
+    nchan = data.shape[1]
+    for sample_num, sample, wght in zip(range(d_shape[0]), data, wgts):
+        wght_mat = np.outer(wght.T, wght)
+        filter_mat = sinc_downweight_mat_inv(nchan, df, filter_centers, filter_widths, filter_factors, cache) * wght_mat
+        filter_key = (nchan, df, ) + tuple(filter_centers) + \
+        tuple(filter_widths) + tuple(filter_factors) + tuple(wght.tolist()) + ('inverse',)
+        if not filter_key in cache:
+            cache[filter_key] = np.linalg.pinv(filter_mat)
+        filter_mat = cache[filter_key]
+        #print(np.std(sample.real))
+        #print(np.diag(filter_mat))
+        output[sample_num] = np.dot(filter_mat, sample)
+        #print(np.std(output[sample_num].real))
+    if data_1d:
+        output = output[0]
+    return output
+
+
+
+
 
 
 def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, tol=1e-4,
                  window='none', skip_wgt=0.5, maxiter=100, gain=0.1, edgecut_low=0, edgecut_hi=0,
                  alpha=0.5, add_clean_residual=False):
-    '''Apply a wideband delay filter to data. Variable names preserved for 
+    '''Apply a wideband delay filter to data. Variable names preserved for
         backward compatability with capo/PAPER analysis.
 
     Arguments:
@@ -238,8 +332,8 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
         horizon: proportionality constant for bl_len where 1 is the horizon (full light travel time)
         min_dly: a minimum delay used for cleaning: if bl_dly < min_dly, use min_dly. same units as bl_len
         tol: CLEAN algorithm convergence tolerance (see aipy.deconv.clean)
-        window: window function for filtering applied to the filtered axis. 
-            See dspec.gen_window for options.        
+        window: window function for filtering applied to the filtered axis.
+            See dspec.gen_window for options.
         skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
             Model is left as 0s, residual is left as data, and info is {'skipped': True} for that
             time. Only works properly when all weights are all between 0 and 1.
@@ -270,7 +364,6 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
     # get bl delay
     bl_dly = _get_bl_dly(bl_len, horizon=horizon, standoff=standoff, min_dly=min_dly)
 
-    # run fourier filter
     return high_pass_fourier_filter(data, wgts, bl_dly, sdf, tol=tol, window=window, edgecut_low=edgecut_low,
                                     edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain,
                                     alpha=alpha, add_clean_residual=add_clean_residual)
@@ -287,10 +380,10 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
         max_frate : float, maximum fringe-rate (i.e. frequency) to CLEAN, units of 1/[dt]
         dt : float, time-bin width of data
         tol: CLEAN algorithm convergence tolerance (see aipy.deconv.clean)
-        window: window function for filtering applied to the filtered axis. 
-            See gen_window for options.        
+        window: window function for filtering applied to the filtered axis.
+            See gen_window for options.
         skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
-            Model is left as 0s, residual is left as data, and info is {'skipped': True} for that 
+            Model is left as 0s, residual is left as data, and info is {'skipped': True} for that
             time. Only works properly when all weights are all between 0 and 1.
         maxiter: Maximum number of iterations for aipy.deconv.clean to converge.
         gain: The fraction of a residual used in each iteration. If this is too low, clean takes
@@ -323,7 +416,7 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
     return mdl.T, res.T, info
 
 
-def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, standoff=0.0, horizon=1., min_dly=0., 
+def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, standoff=0.0, horizon=1., min_dly=0.,
                tol=1e-4, window='none', maxiter=100, gain=1e-1, skip_wgt=0.5, filt2d_mode='rect',
                edgecut_low=0, edgecut_hi=0, alpha=0.5, add_clean_residual=False):
     """
@@ -341,10 +434,10 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
         horizon: proportionality constant for bl_len where 1 is the horizon (full light travel time)
         min_dly: a minimum delay used for cleaning: if bl_dly < min_dly, use min_dly. same units as bl_len
         tol: CLEAN algorithm convergence tolerance (see aipy.deconv.clean)
-        window: window function for filtering applied to the filtered axis. 
-            See gen_window for options.        
+        window: window function for filtering applied to the filtered axis.
+            See gen_window for options.
         skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
-            Model is left as 0s, residual is left as data, and info is {'skipped': True} for that 
+            Model is left as 0s, residual is left as data, and info is {'skipped': True} for that
             time. Only works properly when all weights are all between 0 and 1.
         maxiter: Maximum number of iterations for aipy.deconv.clean to converge.
         gain: The fraction of a residual used in each iteration. If this is too low, clean takes
@@ -775,3 +868,72 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False,
         mdl_array[i, :] = bf_model
 
     return mdl_array, cn_array, inp_data
+
+
+def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_widths,
+                            filter_factors, cache = {}, wrap = False, wrap_interval=1,
+                            nwraps = 1000, no_regularization = False):
+    """
+    Computes the inverse of sinc weights for a baseline.
+    This form of weighting is diagonal in delay-space and down-weights tophat regions.
+
+    Parameters
+    ----------
+    nchan: integer
+        Number of channels on baseline
+    df: float
+        channel width (Hz)
+    filter_centers: float or list
+        float or list of floats of centers of delay filter windows in nanosec
+    filter_widths: float or list
+        float or list of floats of widths of delay filter windows in nanosec
+    filter_factors: float or list
+        float or list of floats of filtering factors.
+    cache: dictionary, optional dictionary storing filter matrices with keys
+    (nchan, df, ) + (filter_centers) + (filter_widths) + \
+    (filter_factors)
+
+    !!!-------------
+    WARNING: The following parameters are intended for theoretical
+    studies of how inverse sinc-weighting functions
+    but should not be changed from defaults in practical data analysis!
+    !!!------------
+        wrap: bool, If true, add a wrap around, equivalent to situation
+              where we want sinc weights to be the IDFT of a diagonal matrix
+        wrap_interval: integer, interval of wrap around in units of nf * df (bandwidth)
+        nwraps: number of wraps to include.
+        no_regularization: bool,  if True, do not include diagonal regularization.
+
+    Returns
+    ----------
+     (nchan, nchan) complex inverse of the tophat filtering matrix assuming that the delay-space covariance is diagonal and zero outside
+         of the horizon
+    """
+    if isinstance(filter_centers, float) or isinstance(filter_factors, int):
+        filter_centers = [filter_centers]
+    if isinstance(filter_widths, float) or isinstance(filter_factors, int):
+        filter_widths = [filter_widths]
+    if isinstance(filter_factors,float) or isinstance(filter_factors, int):
+        filter_factors = [filter_factors]
+    filter_key = (nchan, df, ) + tuple(filter_centers) + \
+    tuple(filter_widths) + tuple(filter_factors) + (wrap, wrap_interval, nwraps, no_regularization)
+    if not filter_key in cache:
+        x = np.arange(-int(nchan/2),int(np.ceil(nchan/2)))
+        fx, fy = np.meshgrid(x,x)
+        sdwi_mat = np.identity(fx.shape[0]).astype(np.complex128)
+        if no_regularization:
+            sdwi_mat *= 0.
+        for fc, fw, ff in zip(filter_centers, filter_widths, filter_factors):
+            if not ff == 0:
+                if not wrap:
+                    sdwi_mat = sdwi_mat + np.sinc( 2. * (fx-fy) * df * fw ).astype(np.complex128)\
+                            * np.exp(-2j * np.pi * (fx-fy) * df * fc) / ff
+                else:
+                    for wnum in np.arange(-nwraps//2, nwraps//2):
+                        offset = nchan * wnum * wrap_interval
+                        sdwi_mat = sdwi_mat + \
+                        np.sinc( 2. *  (fx-fy - offset) * df * fw  ).astype(np.complex128)\
+                        * np.exp(-2j * np.pi * (fx-fy - offset) * df * fc) / ff
+    else:
+        sdwi_mat = cache[filter_key]
+    return sdwi_mat
