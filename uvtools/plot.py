@@ -25,7 +25,8 @@ def waterfall(d, mode='log', mx=None, drng=None, recenter=False, **kwargs):
     if mx is None: mx = d.max()
     if drng is None: drng = mx - d.min()
     mn = mx - drng
-    return plt.imshow(d, vmax=mx, vmin=mn, aspect='auto', interpolation='nearest', **kwargs)
+    if not kwargs.has_key('aspect'): kwargs['aspect'] = 'auto'
+    return plt.imshow(d, vmax=mx, vmin=mn, interpolation='nearest', **kwargs)
 
 def plot_hmap_ortho(h, cmap='jet', mode='log', mx=None, drng=None, 
         res=0.25, verbose=False, normalize=False):
@@ -34,7 +35,7 @@ def plot_hmap_ortho(h, cmap='jet', mode='log', mx=None, drng=None,
     if verbose:
         print('SCHEME:', h.scheme())
         print('NSIDE:', h.nside())
-    lons,lats,x,y = m.makegrid(360/res,180/res, returnxy=True)
+    lons,lats,x,y = m.makegrid(int(360/res),int(180/res), returnxy=True)
     lons = 360 - lons
     lats *= aipy.img.deg2rad; lons *= aipy.img.deg2rad
     y,x,z = aipy.coord.radec2eq(np.array([lons.flatten(), lats.flatten()]))
@@ -55,6 +56,30 @@ def plot_hmap_ortho(h, cmap='jet', mode='log', mx=None, drng=None,
     #step = (mx - mn) / 10
     #levels = np.arange(mn-step, mx+step, step)
     #map.contourf(cx,cy,data,levels,linewidth=0,cmap=cmap)
+
+def plot_antpos(aa, ants=None, ex_ants=None, aspect_equal=True, 
+        ant_numbers=True, elevation=False, grid=True):
+    if ants is None: ants = range(len(aa.ants))
+    if ex_ants is not None: ants = [i for i in ants if i not in ex_ants]
+    antpos = [aa.get_baseline(0,i,src='z') for i in ants]
+    antpos = np.array(antpos) * aipy.const.len_ns / 100.
+    x,y,z = antpos[:,0], antpos[:,1], antpos[:,2]
+    x -= np.average(x)
+    y -= np.average(y)
+    plt.plot(x,y, 'k.')
+    for (ant,xa,ya,za) in zip(ants,x,y,z):
+        if elevation:
+            hx,hy = r*za*np.cos(th)+xa, r*za*np.sin(th)+ya
+            if za > 0: fmt = '#eeeeee'
+            else: fmt = '#a0a0a0'
+            plt.fill(hx,hy, fmt)
+        if ant_numbers: plt.text(xa,ya, str(ant))
+    if grid: plt.grid()
+    plt.xlabel("East-West Antenna Position (m)")
+    plt.ylabel("North-South Antenna Position (m)")
+    ax = plt.gca()
+    if aspect_equal: ax.set_aspect('equal')
+    return ax
     
 def plot_phase_ratios(data):
     '''Plots ratios of baselines given in data. 
