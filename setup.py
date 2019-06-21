@@ -32,7 +32,8 @@ setup_args = {
     'packages': ['uvtools'],
     'package_data': {'uvtools': data_files},
     'version': version.version,
-    'include_package_data': True
+    'include_package_data': True,
+    'scripts': glob.glob('scripts/*'),
 }
 
 
