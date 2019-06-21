@@ -25,7 +25,7 @@ def waterfall(d, mode='log', mx=None, drng=None, recenter=False, **kwargs):
     if mx is None: mx = d.max()
     if drng is None: drng = mx - d.min()
     mn = mx - drng
-    if not kwargs.has_key('aspect'): kwargs['aspect'] = 'auto'
+    if 'aspect' not in kwargs.keys(): kwargs['aspect'] = 'auto'
     return plt.imshow(d, vmax=mx, vmin=mn, interpolation='nearest', **kwargs)
 
 def plot_hmap_ortho(h, cmap='jet', mode='log', mx=None, drng=None, 
