@@ -27,6 +27,12 @@ class TestMethods(unittest.TestCase):
             uvt.plot.waterfall(data, mode=mode)
             matplotlib.pyplot.show()
             matplotlib.pyplot.clf()
+    def test_plot_antpos(self):
+        antpos = {i: [i,i,0] for i in range(10)}
+        import matplotlib
+        matplotlib.use(BACKEND)
+        uvt.plot.plot_antpos(antpos)
+        matplotlib.pyplot.show()
         
     
 if __name__ == '__main__':
