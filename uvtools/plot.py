@@ -1,11 +1,9 @@
 import aipy
 import numpy as np
-import sys
-import scipy
 
 def data_mode(data, mode='abs'):
     if mode.startswith('phs'): data = np.angle(data)
-    elif mode.startswith('lin'):
+    elif mode.startswith('abs'):
         data = np.absolute(data)
         #data = np.masked_less_equal(data, 0)
     elif mode.startswith('real'): data = data.real
@@ -57,28 +55,27 @@ def plot_hmap_ortho(h, cmap='jet', mode='log', mx=None, drng=None,
     #levels = np.arange(mn-step, mx+step, step)
     #map.contourf(cx,cy,data,levels,linewidth=0,cmap=cmap)
 
-def plot_antpos(aa, ants=None, ex_ants=None, aspect_equal=True, 
+def plot_antpos(antpos, ants=None, ex_ants=None, aspect_equal=True, 
         ant_numbers=True, elevation=False, grid=True):
-    if ants is None: ants = range(len(aa.ants))
-    if ex_ants is not None: ants = [i for i in ants if i not in ex_ants]
-    antpos = [aa.get_baseline(0,i,src='z') for i in ants]
-    antpos = np.array(antpos) * aipy.const.len_ns / 100.
-    x,y,z = antpos[:,0], antpos[:,1], antpos[:,2]
-    x -= np.average(x)
-    y -= np.average(y)
-    plt.plot(x,y, 'k.')
-    for (ant,xa,ya,za) in zip(ants,x,y,z):
-        if elevation:
-            hx,hy = r*za*np.cos(th)+xa, r*za*np.sin(th)+ya
-            if za > 0: fmt = '#eeeeee'
-            else: fmt = '#a0a0a0'
-            plt.fill(hx,hy, fmt)
-        if ant_numbers: plt.text(xa,ya, str(ant))
-    if grid: plt.grid()
-    plt.xlabel("East-West Antenna Position (m)")
-    plt.ylabel("North-South Antenna Position (m)")
+    import pylab as plt
+    if ants is None:
+        ants = antpos.keys()
+    if not ex_ants is None:
+        ants = [ant for ant in ants if i not in ex_ants]
+    xs = [antpos[ant][0] for ant in ants]
+    ys = [antpos[ant][1] for ant in ants]
+    #x -= np.average(x)
+    #y -= np.average(y)
+    plt.figure()
+    plt.scatter(xs, ys, marker='.', color='k', s=3000) # plot the antenna positions with black circles
+    if ant_numbers:
+        for i, ant in enumerate(ants):
+            plt.text(xs[i], ys[i], ant, color='w', va='center', ha='center')
+    plt.xlabel('X-position (m)')
+    plt.ylabel('Y-position (m)')
+    if aspect_equal:
+        plt.axis('equal')
     ax = plt.gca()
-    if aspect_equal: ax.set_aspect('equal')
     return ax
     
 def plot_phase_ratios(data):
