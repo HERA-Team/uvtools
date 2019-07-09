@@ -5,10 +5,11 @@
 
 from __future__ import absolute_import, division, print_function
 
-import os
+import os, sys
 import subprocess
 import json
-import six
+
+PY2 = sys.version_info < (3, 0)
 
 def construct_version_info():
     uvtools_dir = os.path.dirname(os.path.realpath(__file__))
@@ -26,12 +27,12 @@ def construct_version_info():
 
         data = data.strip()
 
-        if six.PY2:
+        if PY2:
             return data
         return data.decode('utf8')
 
     def unicode_to_str(u):
-        if six.PY2:
+        if PY2:
             return u.encode('utf8')
         return u
 
