@@ -25,12 +25,10 @@ install:
   - conda info -a
 
   # create environment and install dependencies
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scipy astropy nose pip matplotlib coverage basemap
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION coverage coveralls
   - source activate test-environment
-  - conda install -c conda-forge healpy aipy
-  - pip install coveralls
-  - pip install git+https://github.com/HERA-Team/pyuvdata.git
-  - python setup.py install
+  - conda env update -n test-environment -f environment.yml
+  - pip install .
 
 script:
   - nosetests uvtools/tests/test_dspec.py uvtools/tests/test_utils.py --with-coverage --cover-package=uvtools

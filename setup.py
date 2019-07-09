@@ -2,8 +2,10 @@ from setuptools import setup
 import glob
 import os
 import sys
-from uvtools import version
 import json
+
+sys.path.append("uvtools")
+import version
 
 data = [version.git_origin, version.git_hash, version.git_description, version.git_branch]
 with open(os.path.join('uvtools', 'GIT_INFO'), 'w') as outfile:
@@ -34,6 +36,12 @@ setup_args = {
     'version': version.version,
     'include_package_data': True,
     'scripts': glob.glob('scripts/*'),
+    'install_requires':[
+        'numpy',
+        'aipy>=3.0rc2',
+        'six',
+        'scipy'
+    ]
 }
 
 
