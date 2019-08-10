@@ -5,15 +5,17 @@ from mpl_toolkits.basemap import Basemap
 import uvtools.fringe as fringe
 
 # XXX these aren't actually unittests.  need real ones.
+# Currently disabled!
 
+"""
 class TestFRFilter(unittest.TestCase):
     def setUp(self):
         self.aa = a.cal.get_aa('psa6240_v003', n.linspace(.1,.2,203))
     def test_get_beam_w_fr(self):
         interps = fringe.get_beam_w_fr(self.aa, (1,4), ref_chan=160)
         t,firs, frbins, frspace = fringe.get_fringe_rate_kernels(interps, 42.9, 401)
-        print n.ones_like(frspace).sum()
-        print n.sum(frspace**2)
+        print(n.ones_like(frspace).sum())
+        print(n.sum(frspace**2))
         p.subplot(121)
         p.plot(t, firs[160])
         p.plot(t, n.abs(firs[160]))
@@ -65,9 +67,9 @@ class TestFRFilter(unittest.TestCase):
         m.drawmapboundary(linewidth=2)
         m.drawmeridians(n.arange(0, 360, 30), linewidth=2)
         m.drawparallels(n.arange(-90,90,30), linewidth=2)
-        print bm_I.sum()*(4*n.pi/h.npix()),
+        print(bm_I.sum()*(4*n.pi/h.npix()),)
         bm_I2 = bm_I**2
-        print bm_I.sum()*(4*n.pi/h.npix())
+        print(bm_I.sum()*(4*n.pi/h.npix()))
         p.subplot(122)
         plot_hmap(bm_I2)
         m.drawmapboundary(linewidth=2)
@@ -76,7 +78,7 @@ class TestFRFilter(unittest.TestCase):
         p.show()
         xyz = (xyz[1], xyz[0], xyz[2])
         bl = self.aa.get_baseline(1,4,'r') * freq
-        print 'Baseline:', bl
+        print('Baseline:', bl)
         fng = fringe.mk_fng(bl, *xyz)
         h_I, bin_edges = n.histogram(fng, bins=bin_edges, weights=bm_I2)
         h_I = n.sqrt(h_I)
@@ -87,6 +89,7 @@ class TestFRFilter(unittest.TestCase):
         p.plot(bins, fringe.gauss(bins, cen, wid), label='gaussian')
         p.legend(loc='best')
         p.show()
+"""
 
 if __name__ == '__main__':
     unittest.main()
