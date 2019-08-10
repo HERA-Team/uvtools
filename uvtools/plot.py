@@ -28,7 +28,6 @@ def data_mode(data, mode='abs'):
         data = np.angle(data)
     elif mode.startswith('abs'):
         data = np.absolute(data)
-        #data = np.masked_less_equal(data, 0)
     elif mode.startswith('real'):
         data = data.real
     elif mode.startswith('imag'):
@@ -68,11 +67,11 @@ def waterfall(d, mode='log', vmin=None, vmax=None, drng=None, mx=None,
         have been transformed according to `mode`. So, if `mode='log'`, these 
         values are the min. and max. of log_10(data).
         
-    mx : float, optional (deprecated)
+    mx : float, optional
         The max. value of the color scale in the plot (equivalent to vmax). 
         Cannot be specified at the same time as `vmin` and `vmax`.
     
-    drng : float, optional (deprecated)
+    drng : float, optional
         The difference between the min. and max. values of the color scale in 
         the plot, `drng = mx - min`, where these are the min/max values after 
         applying the transformation specified by `mode`.
@@ -88,6 +87,9 @@ def waterfall(d, mode='log', vmin=None, vmax=None, drng=None, mx=None,
     plot : matplotlib.imshow
         Waterfall plot.
     """
+    # import matplotlib
+    import pylab as plt
+    
     # Check validity of inputs
     validity_msg = "Must specify either `vmin` and `vmax` *or* `mx` and `drng`."
     if mx is not None or drng is not None:
@@ -97,9 +99,6 @@ def waterfall(d, mode='log', vmin=None, vmax=None, drng=None, mx=None,
         assert mx is None and drng is None, validity_msg
         mx = vmax
         drng = vmax - vmin
-    
-    # import matplotlib
-    import pylab as plt
     
     # Fill masked array and recenter if requested
     if np.ma.isMaskedArray(d):
@@ -130,8 +129,8 @@ def plot_hmap_ortho(h, cmap='jet', mode='log', mx=None, drng=None,
     
     Parameters
     ----------
-    h : healpix map
-        Healpy HEALPIX map.
+    h : aipy HealpixMap object
+        HEALPIX map.
     
     cmap : str, optional
         Which matplotlib colormap to use. Default: 'jet'.
@@ -148,11 +147,11 @@ def plot_hmap_ortho(h, cmap='jet', mode='log', mx=None, drng=None,
         have been transformed according to `mode`. So, if `mode='log'`, these 
         values are the min. and max. of log_10(data).
         
-    mx : float, optional (deprecated)
+    mx : float, optional
         The max. value of the color scale in the plot (equivalent to vmax). 
         Cannot be specified at the same time as `vmin` and `vmax`.
     
-    drng : float, optional (deprecated)
+    drng : float, optional
         The difference between the min. and max. values of the color scale in 
         the plot, `drng = mx - min`, where these are the min/max values after 
         applying the transformation specified by `mode`.
@@ -174,6 +173,8 @@ def plot_hmap_ortho(h, cmap='jet', mode='log', mx=None, drng=None,
     plot : matplotlib.imshow
         Healpix map in ortho projection.
     """
+    from mpl_toolkits.basemap import Basemap
+    
     # Check validity of inputs
     validity_msg = "Must specify either `vmin` and `vmax` *or* `mx` and `drng`."
     if mx is not None or drng is not None:
@@ -184,16 +185,17 @@ def plot_hmap_ortho(h, cmap='jet', mode='log', mx=None, drng=None,
         mx = vmax
         drng = vmax - vmin
     
-    from mpl_toolkits.basemap import Basemap
+    # Create new Basemap
     m = Basemap(projection='ortho', lat_0=90, lon_0=180, rsphere=1.)
     if verbose:
         print('SCHEME:', h.scheme())
         print('NSIDE:', h.nside())
     
     # Make grid of lat/long coords
-    lons, lats, x, y = m.makegrid(int(360/res),int(180/res), returnxy=True)
+    lons, lats, x, y = m.makegrid(int(360/res), int(180/res), returnxy=True)
     lons = 360 - lons
-    lats *= aipy.img.deg2rad; lons *= aipy.img.deg2rad
+    lats *= aipy.img.deg2rad
+    lons *= aipy.img.deg2rad
     
     # Convert coordinates
     y,x,z = aipy.coord.radec2eq(np.array([lons.flatten(), lats.flatten()]))
@@ -252,6 +254,7 @@ def plot_antpos(antpos, ants=None, xants=None, aspect_equal=True,
         Plot of antenna x,y positions.
     """
     import pylab as plt
+    
     if ants is None:
         ants = antpos.keys()
     if xants is not None:
@@ -293,6 +296,7 @@ def plot_phase_ratios(data, cmap='twilight'):
         Colormap to use for plots. Default: 'twilight'.
     """
     import pylab as plt
+    
     bls = data.keys()
     nbls = len(bls)
     pol = data[bls[0]].keys()[0]
@@ -317,8 +321,10 @@ def plot_phase_ratios(data, cmap='twilight'):
         waterfall(data[k[0]][pol]*np.conj(data[k[-1]][pol])*g, 
                   mode='phs', cmap=cmap, mx=np.pi, drng=2*np.pi)
         plt.grid(0)
-        if divmod(i,c)[-1] != 0:  ax.yaxis.set_visible(False) 
-        if divmod(i,c)[0] != r-1: ax.xaxis.set_visible(False)
+        if divmod(i,c)[-1] != 0:
+            ax.yaxis.set_visible(False) 
+        if divmod(i,c)[0] != r-1:
+            ax.xaxis.set_visible(False)
     cax = fig.add_axes([0.2, 0.06, 0.6, 0.01])
     plt.colorbar(cax=cax, orientation='horizontal')
 
@@ -425,11 +431,11 @@ def omni_view(reds, vis, pol, integration=10, chan=500, norm=False,
     
     # Choose scale according to whether normalized
     if norm:         
-        plt.xlim(-1,1)
-        plt.ylim(-1,1)
+        plt.xlim(-1, 1)
+        plt.ylim(-1, 1)
     else: 
-        plt.xlim(-max_x-.1*max_x,max_x+.1*max_x)
-        plt.ylim(-max_y-.1*max_y,max_y+.1*max_y)
+        plt.xlim(-1.1 * max_x, 1.1 * max_x)
+        plt.ylim(-1.1 * max_y, 1.1 * max_y)
     plt.ylabel('imag(V)')
     plt.xlabel('real(V)')
     
@@ -454,6 +460,7 @@ def omni_view_gif(filenames, name='omni_movie.gif'):
         Output filename for animation. Default: 'omni_movie.gif'.
     """
     import imageio
+    
     images = []
     for filename in filenames:
         images.append(imageio.imread(filename))
