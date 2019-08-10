@@ -31,6 +31,9 @@ install:
   - conda install basemap
   - pip install .
 
+before_script:
+  - "export MPLBACKEND=agg"
+
 script:
   - nosetests uvtools --with-coverage --cover-package=uvtools
 after_success:
