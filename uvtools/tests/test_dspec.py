@@ -274,11 +274,12 @@ def test_linear_delay_filter():
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df.flatten())**2.)),
                                     1., decimal = 1)
 
-    #filter in both domains.
+    #filter in both domains. I use a smaller filter factor
+    #for each domain since they multiply in the target region. 
 
     filtered_data_df_fr = dspec.linear_delay_filter(data_2d, np.ones_like(data_2d), df = [dt,100e3],
-                        filter_centers = [[0.],[0.]], filter_widths = [[0.00002],[100e-9]], filter_factors = [[1e-10],[1e-10]],
-                        clean_dimensions = [True, True],cache = TEST_CACHE)
+                    filter_centers = [[0.002],[0.]], filter_widths = [[0.001],[100e-9]], filter_factors = [[1e-5],[1e-5]],
+                    clean_dimensions = [True, True],cache = TEST_CACHE)
 
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df_fr.flatten())**2.)),
                                     1., decimal = 1)
