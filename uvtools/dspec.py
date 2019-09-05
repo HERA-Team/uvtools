@@ -220,8 +220,10 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
 
     return d_mdl, d_res, info
 
-def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_factors, cache = {}):
+def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_factors, cache = {},
+                        clean_dimensions = [False, True]):
     '''Apply a linear delay filter to waterfall data.
+        Due to performance reasons, linear cleaning only supports separable delay-rate filters.
     Arguments:
         data: 1D or 2D (real or complex) numpy array where last dimension is frequency.
         Does not assume that weights have already been multiplied!
@@ -237,38 +239,60 @@ def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_fa
                         the same filter factor will be used in every filter window.
         df: the width of the frequency bins in Hz: float
         cache: optional dictionary for storing pre-computed delay filter matrices.
-
+        clean_dimensions: list, 2-list of bools specifying on which dimension cleaning is supposed
+                          to be applied.
     Returns:
         2d clean residual with data filtered along the frequency direction.
         TODO: Add functionality for linear clean in time dimension
          -- Matrix inversion could  prohibitively expensive if kernel is not separable.
     '''
-    if isinstance(filter_centers, np.ndarray):
-        filter_centers = list(filter_centers)
-    if isinstance(filter_widths, np.ndarray):
-        filter_widths = list(filter_widths)
-    if isinstance(filter_factors, np.ndarray):
-        filter_factors = list(filter_factors)
-    if isinstance(filter_centers, np.float):
-        filter_centers = [filter_centers]
-    if isinstance(filter_widths, np.float):
-        filter_widths = [filter_widths]
-    if isinstance(filter_factors, np.float):
-        filter_factors = [filter_factors]
+    check_vars = [filter_centers, filter_widths, filter_factors]
+    check_names = ['filter_centers', 'filter_widths', 'filter_factors']
+    for anum,avar in enumerate(check_vars):
+        if isinstance(avar, np.ndarray):
+            check_vars[anum] = list(avar)
+        elif isinstance(avar, np.float):
+            check_vars[anum] = [avar]
+    filter_centers,filter_widths,filter_factors = check_vars
+    if clean_dimensions[0] and clean_dimensions[1]:
+        for avar,aname in zip(check_vars,check_names):
+            err_msg = "2d clean specified! %s must be a length-2 list of lists for 2d clean"%aname
+            if len(avar) == 2:
+                if not (isinstance(avar[0], list) and isinstance(avar[1], list)):
+                    raise ValueError(err_msg)
+            else:
+                raise ValueError(err_msg)
+        for ff_num,ff_list in zip([0,1],filter_factors):
+            if len(ff_list) == 1:
+                ff_list = [ff_list[0] for m in range(len(filter_centers[ff_num]))]
+    else:
+        if len(filter_factors) == 1:
+            filter_factors = [filter_factors[0] for m in range(len(filter_centers))]
+        if clean_dimensions[0]:
+            filter_factors = [filter_factors,[]]
+            filter_centers = [filter_centers,[]]
+            filter_widths = [filter_widths,[]]
+            df = [df,0.]
+        else:
+            filter_factors = [[],filter_factors]
+            filter_centers = [[],filter_centers]
+            filter_widths = [[],filter_widths]
+            df = [0., df]
+    check_vars = [filter_centers, filter_widths, filter_factors]
+    for dim_num, clean_dim in zip([0,1],clean_dimensions):
+        if clean_dim:
+            for aname1,avar1 in zip(check_names,check_vars):
+                for aname2,avar2 in zip(check_names,check_vars):
+                    if not len(avar1[dim_num]) == len(avar2[dim_num]):
+                        raise ValueError("Number of elements in %s-%d must equal the"
+                                         " number of elements %s-%d!"%(aname1, clean_dim, aname2, clean_dim))
 
-    if not len(filter_centers) == len(filter_widths):
-        raise ValueError("Number of elements in filter_centers must equal the"
-                         " number of elements filter_widths!")
-    if len(filter_factors) == 1:
-        filter_factors = [filter_factors[0] for m in range(len(filter_centers))]
-    elif len(filter_factors) != len(filter_centers):
-            raise ValueError("Number of elements in filter_factor must be equal"
-                             "to one or the number of elements in filter_centers"
-                             "and filter_widths!")
+
     d_shape = data.shape
     w_shape = wgts.shape
     d_dim = data.ndim
     w_dim = wgts.ndim
+
     if not (d_dim == 1 or d_dim == 2):
         raise ValueError("number of dimensions in data array does not "
                          "equal 1 or 2! data dim = %d"%(d_dim))
@@ -294,20 +318,37 @@ def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_fa
 
     output = np.zeros_like(data)
     nchan = data.shape[1]
-    for sample_num, sample, wght in zip(range(d_shape[0]), data, wgts):
-        wght_mat = np.outer(wght.T, wght)
-        filter_mat = sinc_downweight_mat_inv(nchan, df, filter_centers, filter_widths, filter_factors, cache) * wght_mat
-        filter_key = (nchan, df, ) + tuple(filter_centers) + \
-        tuple(filter_widths) + tuple(filter_factors) + tuple(wght.tolist()) + ('inverse',)
-        if not filter_key in cache:
-            cache[filter_key] = np.linalg.pinv(filter_mat)
-        filter_mat = cache[filter_key]
-        #print(np.std(sample.real))
-        #print(np.diag(filter_mat))
-        output[sample_num] = np.dot(filter_mat, sample)
-        #print(np.std(output[sample_num].real))
-    if data_1d:
-        output = output[0]
+    ntimes = data.shape[0]
+    if clean_dimensions[1]:
+        for sample_num, sample, wght in zip(range(data.shape[0]), data, wgts):
+            wght_mat = np.outer(wght.T, wght)
+            filter_mat = sinc_downweight_mat_inv(nchan, df[1], filter_centers[1], filter_widths[1], filter_factors[1], cache) * wght_mat
+            filter_key = (nchan, df[1], ) + tuple(filter_centers[1]) + \
+            tuple(filter_widths[1]) + tuple(filter_factors[1]) + tuple(wght.tolist()) + ('inverse',)
+            if not filter_key in cache:
+                cache[filter_key] = np.linalg.pinv(filter_mat)
+            filter_mat = cache[filter_key]
+            #print(np.std(sample.real))
+            #print(np.diag(filter_mat))
+            output[sample_num] = np.dot(filter_mat, sample)
+            #print(np.std(output[sample_num].real))
+        if data_1d:
+            output = output[0]
+    else:
+        output[:] = data[:]
+    if clean_dimensions[0]:
+        for sample_num, sample, wght in zip(range(data.shape[1]), output.T, wghts.T):
+            wght_mat = np.outer(wght.T, wght)
+            filter_mat = sinc_downweight_mat_inv(ntimes, df[0], filter_centers[0], filter_widths[0], filter_factors[0], cache) * wght_mat
+            filter_key = (ntimes, df[0], ) + tuple(filter_centers[0]) + \
+            tuple(filter_widths[1]) + tuple(filter_factors[0]) + tuple(wght.tolist()) + ('inverse',)
+            if not filter_key in cache:
+                cache[filter_key] = np.linalg.pinv(filter_mat)
+            filter_mat = cache[filter_key]
+            output[:,sample_num] = np.dot(filter_mat, sample)
+        if data_1d:
+            output = output[:,0]
+
     return output
 
 
