@@ -248,7 +248,7 @@ def test_linear_delay_filter():
     #source moving overhead perpindicular to baseline
     TEST_CACHE = {}
     OMEGA_EARTH = 2. * np.pi / 3600. / 24.
-    times = np.linspace(0., 3600., nf, endpoint = False)
+    times = np.linspace(-1800, 1800., nf, endpoint = False)
     dt = times[1]-times[0]
     freqs = np.linspace(145e6, 155e6, nf, endpoint=False)
     fg, tg = np.meshgrid(freqs,times)

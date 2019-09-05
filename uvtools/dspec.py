@@ -342,7 +342,7 @@ def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_fa
             filter_mat = sinc_downweight_mat_inv(ntimes, df[0], filter_centers[0],
              filter_widths[0], filter_factors[0], cache) * wght_mat
             filter_key = (ntimes, df[0], ) + tuple(filter_centers[0]) + \
-            tuple(filter_widths[1]) + tuple(filter_factors[0]) + tuple(wght.tolist()) + ('inverse',)
+            tuple(filter_widths[0]) + tuple(filter_factors[0]) + tuple(wght.tolist()) + ('inverse',)
             if not filter_key in cache:
                 cache[filter_key] = np.linalg.pinv(filter_mat)
             filter_mat = cache[filter_key]
