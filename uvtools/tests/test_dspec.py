@@ -244,9 +244,44 @@ def test_linear_delay_filter():
                                          filter_factors)
     np.testing.assert_almost_equal( (np.std(filtered_signal.real)**2. + np.std(filtered_signal.imag)**2.)/1e4,
                                   (np.std(sg_tone.real)**2. + np.std(sg_tone.imag)**2.)/1e4, decimal = 0)
+    #Next, we test performing a fringe-rate clean. Generate a 50-meter EW baseline with a single
+    #source moving overhead perpindicular to baseline
+    TEST_CACHE = {}
+    OMEGA_EARTH = 2. * np.pi / 3600. / 24.
+    times = np.linspace(0., 3600., nf, endpoint = False)
+    dt = times[1]-times[0]
+    freqs = np.linspace(145e6, 155e6, nf, endpoint=False)
+    fg, tg = np.meshgrid(freqs,times)
+    signal_2d = 1e6 * np.exp(2j * np.pi * 50. / 3e8 * np.sin(OMEGA_EARTH * tg) * fg)
+    noise_2d = np.random.randn(nf,nf)/np.sqrt(2.)\
+    + 1j*np.random.randn(nf,nf)/np.sqrt(2.)
+    data_2d = signal_2d + noise_2d
+    #now, only filter fringe-rate domain. The fringe rate for a source
+    #overhead should be roughly 0.0036 for this baseline.
+    filtered_data_fr = dspec.linear_delay_filter(data_2d, np.ones_like(data_2d), df = dt,
+                        filter_centers = [0.], filter_widths = [0.004], filter_factors = [1e-10],
+                        clean_dimensions = [True, False], cache = TEST_CACHE)
 
+    np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_fr.flatten())**2.)),
+                                    1., decimal = 1)
 
+    #only filter in the delay-domain.
 
+    filtered_data_df = dspec.linear_delay_filter(data_2d, np.ones_like(data_2d), df = 100e3,
+                        filter_centers = [0.], filter_widths = [100e-9], filter_factors = [1e-10],
+                        clean_dimensions = [False, True], cache = TEST_CACHE)
+
+    np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df.flatten())**2.)),
+                                    1., decimal = 1)
+
+    #filter in both domains.
+
+    filtered_data_df_fr = dspec.linear_delay_filter(data_2d, np.ones_like(data_2d), df = [dt,100e3],
+                        filter_centers = [[0.],[0.]], filter_widths = [[0.00002],[100e-9]], filter_factors = [[1e-10],[1e-10]],
+                        clean_dimensions = [True, True],cache = TEST_CACHE)
+
+    np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df_fr.flatten())**2.)),
+                                    1., decimal = 1)
 def test_sinc_downweight_mat_inv():
     cmat = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = [], filter_widths = [], filter_factors = [])
     #verify that the inverse cleaning matrix without cleaning windows is the identity!
