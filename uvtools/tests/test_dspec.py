@@ -506,24 +506,17 @@ def test_vis_filter_linear():
     nt.assert_true(np.isclose(snrs[1], time_snr2, atol=3))
 
     # 2d clean
-    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=frs[15], dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1, linear = True, filt2d_mode = 'plus')
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=frs[15], dt=dt, tol=1e-6, window='none', maxiter=100, gain=1e-1, linear = True, filt2d_mode = 'plus')
     cln = mdl + res
-    print('%e'%frs[15])
-    print('%e'%sdf)
-    print('%e'%dt)
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=1, avgax=0)
-    print(freq_snr1)
-    print(freq_snr2)
-    print(snrs[0])
-    print(snrs[1])
+
     nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=3))
     nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
 
     # non-symmetric 2D clean
-    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1, linear = True)
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1, linear = True, filt2d_mode = 'plus')
     cln = mdl + res
-
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=1, avgax=0)
     nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=3))
@@ -541,8 +534,6 @@ def test_vis_filter_linear():
 
     # exceptions
     nt.assert_raises(ValueError, dspec.vis_filter, d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, filt2d_mode='foo')
-    #make sure that rect throws an exception.
-    nt.assert_raises(ValueError, dspec.vis_filter, d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, filt2d_mode='rect', linear=True)
 
 
 if __name__ == '__main__':

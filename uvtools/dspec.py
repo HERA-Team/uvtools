@@ -163,13 +163,13 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                 ff = [ tol ]
                 if isinstance(filtersize, np.float) == 1:
                     fc = [ 0. ]
-                    fw = [ filter_size / real_delta / data.shape[-1] ]
+                    fw = [ filter_size ]
                 else:
                     total_width = filter_size[1]-filter_size[0]
                     half_width = total_width / 2.
                     center = (filter_size[0] + filter_size[1]) / 2.
-                    fc = [ center / real_delta / data.shape[-1] ]
-                    fw = [ half_width / real_delta / data.shape[-1]]
+                    fc = [ center  ]
+                    fw = [ half_width ]
                 d, info = linear_delay_filter(data * wgts * win, wgts * win, df = real_delta, filter_centers = fc, filter_widths = fw, filter_factors = ff, cache = cache)
                 _d_res = np.fft.ifft(d)
                 _d_cl = np.zeros_like(_d_res)
@@ -195,13 +195,12 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                         ff = [ tol ]
                         if isinstance(filter_size, np.float):
                             fc = [ 0. ]
-                            fw = [ filter_size / real_delta / data.shape[-1] ]
+                            fw = [ filter_size ]
                         else:
-                            total_width = filter_size[1]-filter_size[0]
-                            half_width = total_width / 2.
+                            half_width =  (filter_size[1]-filter_size[0]) / 2.
                             center = (filter_size[0] + filter_size[1]) / 2.
-                            fc = [ center / real_delta / data.shape[-1] ]
-                            fw = [ half_width / real_delta / data.shape[-1]]
+                            fc = [ center ]
+                            fw = [ half_width ]
                         _d_cl[i,:] = 0.
                         d, info_here = linear_delay_filter(data[i] * wgts[i] * win, wgts[i] * win, df = real_delta, filter_centers = fc, filter_widths = fw, filter_factors = ff, cache = cache)
                         _d_res[i] = np.fft.ifft(d)
@@ -244,11 +243,20 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             del info['res']
         else:
             assert filt2d_mode == "plus", "2d linear deconvolution only supports filt2d_mode == 'plus'."
-            fc = [ [0. ], [0. ] ]
-            fw = [ [filter_size[0] / real_delta[0] / data.shape[0]], [filter_size[-1] / real_delta[-1] / data.shape[-1]] ]
+            fc = []
+            fw = []
+            for fs in range(2):
+                if isinstance(filter_size[fs], tuple) or isinstance(filter_size[fs], list):
+                    fct = [ (filter_size[fs][1] + filter_size[fs][0]) / 2.  ]
+                    fwt = [ (filter_size[fs][1] - filter_size[fs][0]) / 2.  ]
+                else:
+                    fct = [ 0. ]
+                    fwt = [ filter_size[fs]  ]
+                fc.append(fct)
+                fw.append(fwt)
             ff = [ [tol],[tol] ]
             _d_cl = np.zeros_like(data)
-            d, info = linear_delay_filter(data * wgts * win, wgts * win, df = [real_delta[0],real_delta[-1]], filter_centers = fc, filter_widths = fw,
+            d, info = linear_delay_filter(data * wgts * win, wgts * win, df = [real_delta[0],real_delta[1]], filter_centers = fc, filter_widths = fw,
                                          filter_factors = ff, cache = cache, clean_dimensions = [True, True])
             _d_res = np.fft.ifft2(d)
 
