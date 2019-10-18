@@ -233,14 +233,14 @@ def test_linear_delay_filter():
     nt.assert_raises(ValueError, dspec.linear_delay_filter, wghts_1d, np.zeros((10,10,10)), df, filter_centers,
                     filter_widths, filter_factors)
     #now filter foregrounds and test that std of residuals are close to std of noise:
-    filtered_noise =  dspec.linear_delay_filter(data_1d, wghts_1d, df, filter_centers, filter_widths,
+    filtered_noise, _ =  dspec.linear_delay_filter(data_1d, wghts_1d, df, filter_centers, filter_widths,
                                          filter_factors)
     #print(np.std((data_1d - fg_tone).real)*np.sqrt(2.))
     #print(np.std((filtered_noise).real)*np.sqrt(2.))
     np.testing.assert_almost_equal( np.std(filtered_noise.real)**2. + np.std(filtered_noise.imag)**2.,
                                   np.std(noise.real)**2. + np.std(noise.imag)**2., decimal = 0)
     #now filter foregrounds and signal and test that std of residuals are close to std of signal.
-    filtered_signal=  dspec.linear_delay_filter(fg_sg, wghts_1d, df, filter_centers, filter_widths,
+    filtered_signal, _ =  dspec.linear_delay_filter(fg_sg, wghts_1d, df, filter_centers, filter_widths,
                                          filter_factors)
     np.testing.assert_almost_equal( (np.std(filtered_signal.real)**2. + np.std(filtered_signal.imag)**2.)/1e4,
                                   (np.std(sg_tone.real)**2. + np.std(sg_tone.imag)**2.)/1e4, decimal = 0)
@@ -258,7 +258,7 @@ def test_linear_delay_filter():
     data_2d = signal_2d + noise_2d
     #now, only filter fringe-rate domain. The fringe rate for a source
     #overhead should be roughly 0.0036 for this baseline.
-    filtered_data_fr = dspec.linear_delay_filter(data_2d, np.ones_like(data_2d), df = dt,
+    filtered_data_fr, _ = dspec.linear_delay_filter(data_2d, np.ones_like(data_2d), df = dt,
                         filter_centers = [0.], filter_widths = [0.004], filter_factors = [1e-10],
                         clean_dimensions = [True, False], cache = TEST_CACHE)
 
@@ -267,7 +267,7 @@ def test_linear_delay_filter():
 
     #only filter in the delay-domain.
 
-    filtered_data_df = dspec.linear_delay_filter(data_2d, np.ones_like(data_2d), df = 100e3,
+    filtered_data_df, _ = dspec.linear_delay_filter(data_2d, np.ones_like(data_2d), df = 100e3,
                         filter_centers = [0.], filter_widths = [100e-9], filter_factors = [1e-10],
                         clean_dimensions = [False, True], cache = TEST_CACHE)
 
@@ -275,9 +275,9 @@ def test_linear_delay_filter():
                                     1., decimal = 1)
 
     #filter in both domains. I use a smaller filter factor
-    #for each domain since they multiply in the target region. 
+    #for each domain since they multiply in the target region.
 
-    filtered_data_df_fr = dspec.linear_delay_filter(data_2d, np.ones_like(data_2d), df = [dt,100e3],
+    filtered_data_df_fr, _ = dspec.linear_delay_filter(data_2d, np.ones_like(data_2d), df = [dt,100e3],
                     filter_centers = [[0.002],[0.]], filter_widths = [[0.001],[100e-9]], filter_factors = [[1e-5],[1e-5]],
                     clean_dimensions = [True, True],cache = TEST_CACHE)
 
@@ -426,6 +426,124 @@ def test_vis_filter():
     rfft = np.fft.ifft2(res)
     rfft2 = np.fft.ifft2(res2)
     nt.assert_true(np.median(np.abs(rfft2[:15, :23] / rfft[:15, :23])) < 1)
+
+def test_vis_filter_linear():
+    # load file
+    uvd = UVData()
+    uvd.read_miriad(os.path.join(DATA_PATH, "zen.2458042.17772.xx.HH.uvXA"), bls=[(24, 25)])
+
+    freqs = uvd.freq_array.squeeze()
+    times = np.unique(uvd.time_array) * 24 * 3600
+    times -= np.mean(times)
+    sdf = np.median(np.diff(freqs))
+    dt = np.median(np.diff(times))
+    frs = np.fft.fftfreq(uvd.Ntimes, d=dt)
+    dlys = np.fft.fftfreq(uvd.Nfreqs, d=sdf) * 1e9
+
+    # simulate some data in fringe-rate and delay space
+    np.random.seed(0)
+    dfr, ddly = frs[1] - frs[0], dlys[1] - dlys[0]
+    d = 200 * np.exp(-2j*np.pi*times[:, None]*(frs[2]+dfr/4) - 2j*np.pi*freqs[None, :]*(dlys[2]+ddly/4)/1e9)
+    d += 50 * np.exp(-2j*np.pi*times[:, None]*(frs[20]) - 2j*np.pi*freqs[None, :]*(dlys[20])/1e9)
+    n = 10 * ((np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes).astype(np.complex) \
+         + 1j * np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes)).reshape(uvd.Ntimes, uvd.Nfreqs))
+    d += n
+
+    def get_snr(clean, fftax=1, avgax=0, modes=[2, 20]):
+        cfft = np.fft.ifft(clean, axis=fftax)
+        cavg = np.median(np.abs(cfft), axis=avgax)
+        std = np.median(cavg)
+        return [cavg[m] / std for m in modes]
+
+    # get snr of modes
+    freq_snr1, freq_snr2 = get_snr(n, fftax=1, avgax=0, modes=[2, 20])
+    time_snr1, time_snr2 = get_snr(n, fftax=0, avgax=1, modes=[2, 20])
+
+    # simulate some flags
+    f = np.zeros_like(d, dtype=np.bool)
+    d[:, 20:22] += 1e3
+    f[:, 20:22] = True
+    d[20, :] += 1e3
+    f[20, :] = True
+    w = (~f).astype(np.float)
+    bl_len = 70.0 / 2.99e8
+
+    # delay filter basic execution
+    mdl, res, info = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.0,
+                                             tol=1e-4, window='none', skip_wgt=0.1, gain=0.1, linear = True)
+    cln = mdl + res
+    # assert recovered snr of input modes
+    snrs = get_snr(n, fftax=1, avgax=0)
+    nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=3))
+    nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
+
+    # test vis filter is the same
+    mdl2, res2, info2 = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, standoff=0, horizon=1.0, min_dly=0.0,
+                                               tol=1e-4, window='none', skip_wgt=0.1, gain=0.1, linear = True)
+    nt.assert_true(np.isclose(mdl - mdl2, 0.0).all())
+
+    # fringe filter basic execution
+    mdl, res, info = dspec.fringe_filter(d, w, frs[15], dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1, linear = True)
+    cln = mdl + res
+
+    # assert recovered snr of input modes
+    snrs = get_snr(cln, fftax=0, avgax=1)
+    nt.assert_true(np.isclose(snrs[0], time_snr1, atol=3))
+    nt.assert_true(np.isclose(snrs[1], time_snr2, atol=3))
+
+    # test vis filter is the same
+    mdl2, res2, info2 = dspec.vis_filter(d, w, max_frate=frs[15], dt=dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1, linear = True)
+    cln2 = mdl2 + res2
+    nt.assert_true(np.isclose(mdl - mdl2, 0.0).all())
+
+    # try non-symmetric filter
+    mdl, res, info = dspec.fringe_filter(d, w, (frs[-20], frs[10]), dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1, linear = True)
+    cln = mdl + res
+
+    # assert recovered snr of input modes
+    snrs = get_snr(cln, fftax=0, avgax=1)
+    nt.assert_true(np.isclose(snrs[0], time_snr1, atol=3))
+    nt.assert_true(np.isclose(snrs[1], time_snr2, atol=3))
+
+    # 2d clean
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=frs[15], dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1, linear = True, filt2d_mode = 'plus')
+    cln = mdl + res
+    print('%e'%frs[15])
+    print('%e'%sdf)
+    print('%e'%dt)
+    # assert recovered snr of input modes
+    snrs = get_snr(cln, fftax=1, avgax=0)
+    print(freq_snr1)
+    print(freq_snr2)
+    print(snrs[0])
+    print(snrs[1])
+    nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=3))
+    nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
+
+    # non-symmetric 2D clean
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1, linear = True)
+    cln = mdl + res
+
+    # assert recovered snr of input modes
+    snrs = get_snr(cln, fftax=1, avgax=0)
+    nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=3))
+    nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
+
+    # try plus filtmode on 2d clean
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[10], frs[10]), dt=dt, tol=1e-4, window=('none', 'none'), edgecut_low=(0, 5), edgecut_hi=(2, 5), maxiter=100, gain=1e-1, filt2d_mode='plus' ,linear = True)
+    mfft = np.fft.ifft2(mdl)
+    cln = mdl + res
+
+    # assert clean components fall only in plus area
+    clean_comp = np.where(~np.isclose(np.abs(mfft), 0.0))
+    for cc in zip(*clean_comp):
+        nt.assert_true(0 in cc)
+
+    # exceptions
+    nt.assert_raises(ValueError, dspec.vis_filter, d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, filt2d_mode='foo')
+    #make sure that rect throws an exception.
+    nt.assert_raises(ValueError, dspec.vis_filter, d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, filt2d_mode='rect', linear=True)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -62,8 +62,8 @@ def calc_width(filter_size, real_delta, nsamples):
 
 
 def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False, tol=1e-9, window='none',
-                             skip_wgt=0.1, maxiter=100, gain=0.1, filt2d_mode='rect', alpha=0.5,
-                             edgecut_low=0, edgecut_hi=0, add_clean_residual=False):
+                             skip_wgt=0.1, maxiter=100, gain=0.1, filt2d_mode='rect', alpha=0.5, linear = False,
+                             edgecut_low=0, edgecut_hi=0, add_clean_residual=False, cache = {}):
     '''Apply a highpass fourier filter to data. Uses aipy.deconv.clean. Default is a 1D clean
     on the last axis of data.
 
@@ -91,6 +91,9 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         gain: The fraction of a residual used in each iteration. If this is too low, clean takes
             unnecessarily long. If it is too high, clean does a poor job of deconvolving.
         alpha : float, if window is 'tukey', this is its alpha parameter.
+        linear : bool, if True, perform a linear clean (Often faster and easier to propagate)
+            WARNING: Linear clean only returns a zero-value model.
+            WARNING: Linear clean requires filt2d_mode to be 'plus'.
         filt2d_mode : str, only applies if clean2d == True. options = ['rect', 'plus']
             If 'rect', a 2D rectangular filter is constructed in fourier space (default).
             If 'plus', the 'rect' filter is first constructed, but only the plus-shaped
@@ -104,6 +107,8 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         add_clean_residual : bool, if True, adds the CLEAN residual within the CLEAN bounds
             in fourier space to the CLEAN model. Note that the residual actually returned is
             not the CLEAN residual, but the residual in input data space.
+        cache : dict, optional dictionary for storing pre-computed filtering matrices in linear
+            cleaning.
 
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
@@ -150,9 +155,24 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         # run clean
         if dndim == 1:
             # For 1D data array run once
-            _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
-            _d_res = info['res']
-            del info['res']
+            if not linear:
+                _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
+                _d_res = info['res']
+                del info['res']
+            else:
+                ff = [ tol ]
+                if isinstance(filtersize, np.float) == 1:
+                    fc = [ 0. ]
+                    fw = [ filter_size / real_delta / data.shape[-1] ]
+                else:
+                    total_width = filter_size[1]-filter_size[0]
+                    half_width = total_width / 2.
+                    center = (filter_size[0] + filter_size[1]) / 2.
+                    fc = [ center / real_delta / data.shape[-1] ]
+                    fw = [ half_width / real_delta / data.shape[-1]]
+                d, info = linear_delay_filter(data * wgts * win, wgts * win, df = real_delta, filter_centers = fc, filter_widths = fw, filter_factors = ff, cache = cache)
+                _d_res = np.fft.ifft(d)
+                _d_cl = np.zeros_like(_d_res)
 
         elif data.ndim == 2:
             # For 2D data array, iterate
@@ -165,11 +185,28 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                     _d_res[i] = _d[i]
                     info.append({'skipped': True})
                 else:
-                    _cl, info_here = aipy.deconv.clean(_d[i], _w[i], area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
-                    _d_cl[i] = _cl
-                    _d_res[i] = info_here['res']
-                    del info_here['res']
-                    info.append(info_here)
+                    if not linear:
+                        _cl, info_here = aipy.deconv.clean(_d[i], _w[i], area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
+                        _d_cl[i] = _cl
+                        _d_res[i] = info_here['res']
+                        del info_here['res']
+                        info.append(info_here)
+                    else:
+                        ff = [ tol ]
+                        if isinstance(filter_size, np.float):
+                            fc = [ 0. ]
+                            fw = [ filter_size / real_delta / data.shape[-1] ]
+                        else:
+                            total_width = filter_size[1]-filter_size[0]
+                            half_width = total_width / 2.
+                            center = (filter_size[0] + filter_size[1]) / 2.
+                            fc = [ center / real_delta / data.shape[-1] ]
+                            fw = [ half_width / real_delta / data.shape[-1]]
+                        _d_cl[i,:] = 0.
+                        d, info_here = linear_delay_filter(data[i] * wgts[i] * win, wgts[i] * win, df = real_delta, filter_centers = fc, filter_widths = fw, filter_factors = ff, cache = cache)
+                        _d_res[i] = np.fft.ifft(d)
+                        info.append(info_here)
+
 
     # 2D clean on 2D data
     else:
@@ -201,12 +238,22 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             raise ValueError("Didn't recognize filt2d_mode {}".format(filt2d_mode))
 
         # run clean
-        _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
-        _d_res = info['res']
-        del info['res']
+        if not linear:
+            _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
+            _d_res = info['res']
+            del info['res']
+        else:
+            assert filt2d_mode == "plus", "2d linear deconvolution only supports filt2d_mode == 'plus'."
+            fc = [ [0. ], [0. ] ]
+            fw = [ [filter_size[0] / real_delta[0] / data.shape[0]], [filter_size[-1] / real_delta[-1] / data.shape[-1]] ]
+            ff = [ [tol],[tol] ]
+            _d_cl = np.zeros_like(data)
+            d, info = linear_delay_filter(data * wgts * win, wgts * win, df = [real_delta[0],real_delta[-1]], filter_centers = fc, filter_widths = fw,
+                                         filter_factors = ff, cache = cache, clean_dimensions = [True, True])
+            _d_res = np.fft.ifft2(d)
 
     # add resid to model in CLEAN bounds
-    if add_clean_residual:
+    if add_clean_residual and not linear:
         _d_cl += _d_res * area
 
     # fft back to input space
@@ -216,7 +263,14 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         d_mdl = np.fft.fft(_d_cl)
 
     # get residual in data space
-    d_res = (data - d_mdl) * ~np.isclose(wgts * win, 0.0)
+    if not linear:
+        d_res = (data - d_mdl) * ~np.isclose(wgts * win, 0.0)
+    else:
+        if clean2d:
+            d_res = np.fft.fft2(_d_res)
+        else:
+            d_res = np.fft.fft(_d_res, axis = 0)
+
 
     return d_mdl, d_res, info
 
@@ -237,14 +291,14 @@ def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_fa
                         applied within each filter window specified in filter_centers and
                         filter_widths. If a float or length-1 list/ndarray is provided,
                         the same filter factor will be used in every filter window.
-        df: the width of the frequency bins in Hz: float
+        df: the width of the frequency bins in Hz: float. if 2d clean, should be 2-tuple or 2-list
         cache: optional dictionary for storing pre-computed delay filter matrices.
         clean_dimensions: list, 2-list of bools specifying on which dimension cleaning is supposed
                           to be applied.
     Returns:
-        2d clean residual with data filtered along the frequency direction.
-        TODO: Add functionality for linear clean in time dimension
-         -- Matrix inversion could  prohibitively expensive if kernel is not separable.
+        data: array, 2d clean residual with data filtered along the frequency direction.
+        info: dictionary with filtering parameters and a list of skipped_times and skipped_channels
+
     '''
     check_vars = [filter_centers, filter_widths, filter_factors]
     check_names = ['filter_centers', 'filter_widths', 'filter_factors']
@@ -319,6 +373,9 @@ def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_fa
     output = np.zeros_like(data)
     nchan = data.shape[1]
     ntimes = data.shape[0]
+    info = {'filter_centers':filter_centers, 'filter_widths':filter_widths, 'filter_factors': filter_factors}
+    skipped_0 = []
+    skipped_1 = []
     if clean_dimensions[1]:
         for sample_num, sample, wght in zip(range(data.shape[0]), data, wgts):
             wght_mat = np.outer(wght.T, wght)
@@ -326,7 +383,12 @@ def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_fa
             filter_key = (nchan, df[1], ) + tuple(filter_centers[1]) + \
             tuple(filter_widths[1]) + tuple(filter_factors[1]) + tuple(wght.tolist()) + ('inverse',)
             if not filter_key in cache:
-                cache[filter_key] = np.linalg.pinv(filter_mat)
+                try:
+                    cache[filter_key] = np.linalg.pinv(filter_mat)
+                except LinearAlgError:
+                    #if SVD fails to converge, set filter matrix to zeros.
+                    cache[filter_key] = np.zeros((nf,nf), dtype = complex)
+                    skipped_1.append(sample_num)
             filter_mat = cache[filter_key]
             #print(np.std(sample.real))
             #print(np.diag(filter_mat))
@@ -344,13 +406,19 @@ def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_fa
             filter_key = (ntimes, df[0], ) + tuple(filter_centers[0]) + \
             tuple(filter_widths[0]) + tuple(filter_factors[0]) + tuple(wght.tolist()) + ('inverse',)
             if not filter_key in cache:
-                cache[filter_key] = np.linalg.pinv(filter_mat)
+                try:
+                    cache[filter_key] = np.linalg.pinv(filter_mat)
+                except LinearAlgError:
+                    #if SVD fails to converge, set filter matrix to zeros.
+                    cache[filter_key] = np.zeros((nf,nf), dtype = complex)
+                    skipped_0.append(sample_num)
             filter_mat = cache[filter_key]
             output[:,sample_num] = np.dot(filter_mat, sample)
         if data_1d and nchan == 1:
             output = output[:,0]
-
-    return output
+    info['skipped_time_steps'] = skipped_0
+    info['skipped_channels'] = skipped_1
+    return output, info
 
 
 
@@ -359,7 +427,7 @@ def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_fa
 
 def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, tol=1e-4,
                  window='none', skip_wgt=0.5, maxiter=100, gain=0.1, edgecut_low=0, edgecut_hi=0,
-                 alpha=0.5, add_clean_residual=False):
+                 alpha=0.5, add_clean_residual=False, linear = False, cache = {}):
     '''Apply a wideband delay filter to data. Variable names preserved for
         backward compatability with capo/PAPER analysis.
 
@@ -393,6 +461,8 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
             in fourier space to the CLEAN model (and sets residual within CLEAN bounds to zero).
             This is more in-line with a standard filtering operation, rather than a CLEAN operation.
             If False, residual is not added to the CLEAN model.
+        linear : bool, if True, perform linear delay filtering.
+                 Warning: linear filtering only returns residuals!
 
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
@@ -408,11 +478,11 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
 
     return high_pass_fourier_filter(data, wgts, bl_dly, sdf, tol=tol, window=window, edgecut_low=edgecut_low,
                                     edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain,
-                                    alpha=alpha, add_clean_residual=add_clean_residual)
+                                    alpha=alpha, add_clean_residual=add_clean_residual, linear = linear, cache = cache)
 
 
-def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100, gain=0.1,
-                  window='none', edgecut_low=0, edgecut_hi=0, alpha=0.5, add_clean_residual=False):
+def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100, gain=0.1, linear = False,
+                  window='none', edgecut_low=0, edgecut_hi=0, alpha=0.5, add_clean_residual=False, cache = {}):
     """
     Run a CLEAN deconvolution along the time axis.
 
@@ -441,6 +511,8 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
             in fourier space to the CLEAN model (and sets residual within CLEAN bounds to zero).
             This is more in-line with a standard filtering operation, rather than a CLEAN operation.
             If False, residual is not added to the CLEAN model.
+        linear : bool, if True, perform linear fringe-rate filtering.
+                 Warning: linear filtering returns a model with zeros!
 
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
@@ -454,13 +526,13 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
     # run fourier filter
     mdl, res, info = high_pass_fourier_filter(data.T, wgts.T, max_frate, dt, tol=tol, window=window, edgecut_low=edgecut_low,
                                               edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain,
-                                              alpha=alpha, add_clean_residual=add_clean_residual)
+                                              alpha=alpha, add_clean_residual=add_clean_residual, linear = linear, cache = cache)
     return mdl.T, res.T, info
 
 
 def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, standoff=0.0, horizon=1., min_dly=0.,
-               tol=1e-4, window='none', maxiter=100, gain=1e-1, skip_wgt=0.5, filt2d_mode='rect',
-               edgecut_low=0, edgecut_hi=0, alpha=0.5, add_clean_residual=False):
+               tol=1e-4, window='none', maxiter=100, gain=1e-1, skip_wgt=0.5, filt2d_mode='rect', linear=False,
+               edgecut_low=0, edgecut_hi=0, alpha=0.5, add_clean_residual=False, cache = {}):
     """
     A generalized interface to delay and/or fringe-rate 1D CLEAN functions, or a full 2D clean
     if both bl_len & sdf and max_frate & dt variables are specified.
@@ -488,6 +560,9 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
             If 'rect', a 2D rectangular filter is constructed in fourier space (default).
             If 'plus', the 'rect' filter is first constructed, but only the plus-shaped
             slice along 0 delay and fringe-rate is kept.
+        linear : bool, if True, perform a linear delay clean. (Easier to propagate and often faster)
+                WARNING: Linear clean will RETURN ZEROS for model.
+                WARNING: Linear clean currently only supports 'plus' filt2d_mode for 2d filtering.
         edgecut_low : int, number of bins to consider zero-padded at low-side of the FFT axis,
             such that the windowing function smoothly approaches zero. For 2D cleaning, can
             be fed as a tuple specifying edgecut_low for first and second FFT axis.
@@ -527,16 +602,16 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
         # time clean
         if timeclean:
             mdl, res, info = high_pass_fourier_filter(data.T, wgts.T, max_frate, dt, tol=tol, window=window, edgecut_low=edgecut_low,
-                                                      edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain,
-                                                      alpha=alpha, add_clean_residual=add_clean_residual)
+                                                      edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, linear = linear,
+                                                      alpha=alpha, add_clean_residual=add_clean_residual, cache = cache)
             mdl, res = mdl.T, res.T
 
         # freq clean
         elif freqclean:
             bl_dly = _get_bl_dly(bl_len, horizon=horizon, standoff=standoff, min_dly=min_dly)
             mdl, res, info = high_pass_fourier_filter(data, wgts, bl_dly, sdf, tol=tol, window=window, edgecut_low=edgecut_low,
-                                                      edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain,
-                                                      alpha=alpha, add_clean_residual=add_clean_residual)
+                                                      edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, linear = linear,
+                                                      alpha=alpha, add_clean_residual=add_clean_residual, cache = cache)
 
     # 2D clean
     else:
@@ -544,9 +619,9 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
         bl_dly = _get_bl_dly(bl_len, horizon=horizon, standoff=standoff, min_dly=min_dly)
 
         # 2D clean
-        mdl, res, info = high_pass_fourier_filter(data, wgts, (max_frate, bl_dly), (dt, sdf), tol=tol, window=window, edgecut_low=edgecut_low,
+        mdl, res, info = high_pass_fourier_filter(data, wgts, (max_frate, bl_dly), (dt, sdf), tol=tol, window=window, edgecut_low=edgecut_low, linear = linear,
                                                   edgecut_hi=edgecut_hi, maxiter=maxiter, gain=gain, clean2d=True, filt2d_mode=filt2d_mode,
-                                                  alpha=alpha, add_clean_residual=add_clean_residual)
+                                                  alpha=alpha, add_clean_residual=add_clean_residual, cache = cache)
 
     return mdl, res, info
 
