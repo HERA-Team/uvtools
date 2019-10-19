@@ -381,7 +381,8 @@ def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_fa
     output = np.zeros_like(data)
     nchan = data.shape[1]
     ntimes = data.shape[0]
-    info = {'filter_centers':filter_centers, 'filter_widths':filter_widths, 'filter_factors': filter_factors}
+    info = {'filter_centers':filter_centers, 'filter_widths':filter_widths, 'filter_factors': filter_factors,
+            'df':df, 'data_shape', data.shape}
     skipped_0 = []
     skipped_1 = []
     if clean_dimensions[1]:
