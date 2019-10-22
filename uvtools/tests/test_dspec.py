@@ -458,8 +458,6 @@ def test_vis_filter_linear():
 
     # simulate some flags
     f = np.zeros_like(d, dtype=np.bool)
-    import copy
-    s = copy.copy(d)
     d[:, 20:22] += 1e3
     f[:, 20:22] = True
     d[20, :] += 1e3
