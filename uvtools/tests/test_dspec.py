@@ -465,6 +465,15 @@ def test_vis_filter_linear():
     w = (~f).astype(np.float)
     bl_len = 70.0 / 2.99e8
 
+    # delay filter basic execution 1d with and without leastsq
+    mdl1, res1, info1 = dspec.delay_filter(d[0], w[0], bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.,
+                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, linear=True, deconv_linear_foregrounds=True, fg_deconv_method='leastsq')
+
+    mdl2, res2, info2 = dspec.delay_filter(d[0], w[0], bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.,
+                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, linear=True, deconv_linear_foregrounds=True, fg_deconv_method='clean')
+    #residuals should be same
+    nt.assert_true(np.isclose(res1 - res2, 0.0).all())
+
     # delay filter basic execution with leastsq
     mdl, res, info = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.,
                                              tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, linear=True, deconv_linear_foregrounds=True, fg_deconv_method='leastsq')
@@ -511,6 +520,12 @@ def test_vis_filter_linear():
     snrs = get_snr(cln, fftax=1, avgax=0)
     nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=3))
     nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
+
+    #2d linear clean with least squares fitting of foregrounds
+    mdl2, res2, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=1.5*frs[15], dt=dt, tol=1e-8, window='none', maxiter=100, gain=1e-1, linear=True, filt2d_mode='plus', deconv_linear_foregrounds=True, fg_deconv_method='leastsq')
+    #compare residuals
+    nt.assert_true(np.isclose(res - res2, 0.0).all())
+
 
     # non-symmetric 2D clean
     mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, tol=1e-8, window='none', maxiter=100, gain=1e-1, linear=True, filt2d_mode='plus', deconv_linear_foregrounds=True, fg_deconv_method='clean')

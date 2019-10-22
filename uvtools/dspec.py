@@ -170,7 +170,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                 del info['res']
             else:
                 ff = [ tol ]
-                if isinstance(filtersize, np.float) == 1:
+                if isinstance(filter_size, np.float) == 1:
                     fc = [ 0. ]
                     fw = [ filter_size ]
                 else:
