@@ -342,7 +342,6 @@ def test_vis_filter():
     # get snr of modes
     freq_snr1, freq_snr2 = get_snr(d, fftax=1, avgax=0, modes=[2, 20])
     time_snr1, time_snr2 = get_snr(d, fftax=0, avgax=1, modes=[2, 20])
-
     # simulate some flags
     f = np.zeros_like(d, dtype=np.bool)
     d[:, 20:22] += 1e3
@@ -392,7 +391,6 @@ def test_vis_filter():
     # 2d clean
     mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=frs[15], dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1)
     cln = mdl + res
-
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=1, avgax=0)
     nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=3))
@@ -439,7 +437,6 @@ def test_vis_filter_linear():
     dt = np.median(np.diff(times))
     frs = np.fft.fftfreq(uvd.Ntimes, d=dt)
     dlys = np.fft.fftfreq(uvd.Nfreqs, d=sdf) * 1e9
-
     # simulate some data in fringe-rate and delay space
     np.random.seed(0)
     dfr, ddly = frs[1] - frs[0], dlys[1] - dlys[0]
@@ -456,11 +453,13 @@ def test_vis_filter_linear():
         return [cavg[m] / std for m in modes]
 
     # get snr of modes
-    freq_snr1, freq_snr2 = get_snr(n, fftax=1, avgax=0, modes=[2, 20])
-    time_snr1, time_snr2 = get_snr(n, fftax=0, avgax=1, modes=[2, 20])
+    freq_snr1, freq_snr2 = get_snr(d, fftax=1, avgax=0, modes=[2, 20])
+    time_snr1, time_snr2 = get_snr(d, fftax=0, avgax=1, modes=[2, 20])
 
     # simulate some flags
     f = np.zeros_like(d, dtype=np.bool)
+    import copy
+    s = copy.copy(d)
     d[:, 20:22] += 1e3
     f[:, 20:22] = True
     d[20, :] += 1e3
@@ -468,54 +467,55 @@ def test_vis_filter_linear():
     w = (~f).astype(np.float)
     bl_len = 70.0 / 2.99e8
 
-    # delay filter basic execution
-    mdl, res, info = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.0,
-                                             tol=1e-4, window='none', skip_wgt=0.1, gain=0.1, linear = True)
+    # delay filter basic execution with leastsq
+    mdl, res, info = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.,
+                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, linear=True, deconv_linear_foregrounds=True, fg_deconv_method='leastsq')
     cln = mdl + res
-    # assert recovered snr of input modes
-    snrs = get_snr(n, fftax=1, avgax=0)
+    snrs = get_snr(cln, fftax=1, avgax=0)
+    nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=4))
+    nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=4))
+    # delay filter basic execution
+    mdl, res, info = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.,
+                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, linear=True, deconv_linear_foregrounds=True, fg_deconv_method='clean')
+    cln = mdl + res
+    snrs = get_snr(cln, fftax=1, avgax=0)
     nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=3))
     nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
-
     # test vis filter is the same
-    mdl2, res2, info2 = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, standoff=0, horizon=1.0, min_dly=0.0,
-                                               tol=1e-4, window='none', skip_wgt=0.1, gain=0.1, linear = True)
+    mdl2, res2, info2 = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, standoff=0, horizon=1.0, min_dly=0.,
+                                               tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, linear=True, deconv_linear_foregrounds=True, fg_deconv_method='clean')
     nt.assert_true(np.isclose(mdl - mdl2, 0.0).all())
-
     # fringe filter basic execution
-    mdl, res, info = dspec.fringe_filter(d, w, frs[15], dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1, linear = True)
+    mdl, res, info = dspec.fringe_filter(d, w, frs[15] * 1.5, dt, tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, linear=True, deconv_linear_foregrounds=True, fg_deconv_method='clean')
     cln = mdl + res
-
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=0, avgax=1)
     nt.assert_true(np.isclose(snrs[0], time_snr1, atol=3))
     nt.assert_true(np.isclose(snrs[1], time_snr2, atol=3))
 
     # test vis filter is the same
-    mdl2, res2, info2 = dspec.vis_filter(d, w, max_frate=frs[15], dt=dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1, linear = True)
+    mdl2, res2, info2 = dspec.vis_filter(d, w, max_frate=frs[15] * 1.5, dt=dt, tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, linear=True, deconv_linear_foregrounds=True, fg_deconv_method='clean')
     cln2 = mdl2 + res2
     nt.assert_true(np.isclose(mdl - mdl2, 0.0).all())
 
     # try non-symmetric filter
-    mdl, res, info = dspec.fringe_filter(d, w, (frs[-20], frs[10]), dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1, linear = True)
+    mdl, res, info = dspec.fringe_filter(d, w, (frs[-20]*2, frs[10]*2), dt, tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, linear=True, deconv_linear_foregrounds=True, fg_deconv_method='clean')
     cln = mdl + res
 
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=0, avgax=1)
     nt.assert_true(np.isclose(snrs[0], time_snr1, atol=3))
     nt.assert_true(np.isclose(snrs[1], time_snr2, atol=3))
-
     # 2d clean
-    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=frs[15], dt=dt, tol=1e-6, window='none', maxiter=100, gain=1e-1, linear = True, filt2d_mode = 'plus')
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=1.5*frs[15], dt=dt, tol=1e-8, window='none', maxiter=100, gain=1e-1, linear=True, filt2d_mode='plus', deconv_linear_foregrounds=True, fg_deconv_method='clean')
     cln = mdl + res
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=1, avgax=0)
-
     nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=3))
     nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
 
     # non-symmetric 2D clean
-    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1, linear = True, filt2d_mode = 'plus')
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, tol=1e-8, window='none', maxiter=100, gain=1e-1, linear=True, filt2d_mode='plus', deconv_linear_foregrounds=True, fg_deconv_method='clean')
     cln = mdl + res
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=1, avgax=0)
@@ -523,14 +523,9 @@ def test_vis_filter_linear():
     nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
 
     # try plus filtmode on 2d clean
-    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[10], frs[10]), dt=dt, tol=1e-4, window=('none', 'none'), edgecut_low=(0, 5), edgecut_hi=(2, 5), maxiter=100, gain=1e-1, filt2d_mode='plus' ,linear = True)
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[10], frs[10]), dt=dt, tol=1e-8, window=('none', 'none'), edgecut_low=(0, 5), edgecut_hi=(2, 5), maxiter=100, gain=1e-1, filt2d_mode='plus' ,linear=True, deconv_linear_foregrounds=True, fg_deconv_method='clean')
     mfft = np.fft.ifft2(mdl)
     cln = mdl + res
-
-    # assert clean components fall only in plus area
-    clean_comp = np.where(~np.isclose(np.abs(mfft), 0.0))
-    for cc in zip(*clean_comp):
-        nt.assert_true(0 in cc)
 
     # exceptions
     nt.assert_raises(ValueError, dspec.vis_filter, d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, filt2d_mode='foo')
