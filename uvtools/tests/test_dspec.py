@@ -260,7 +260,7 @@ def test_linear_delay_filter():
     #overhead should be roughly 0.0036 for this baseline.
     filtered_data_fr, _ = dspec.linear_delay_filter(data_2d, np.ones_like(data_2d), df = dt,
                         filter_centers = [0.], filter_widths = [0.004], filter_factors = [1e-10],
-                        clean_dimensions = [True, False], cache = TEST_CACHE)
+                        filter_dimensions = [True, False], cache = TEST_CACHE)
 
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_fr.flatten())**2.)),
                                     1., decimal = 1)
@@ -269,7 +269,7 @@ def test_linear_delay_filter():
 
     filtered_data_df, _ = dspec.linear_delay_filter(data_2d, np.ones_like(data_2d), df = 100e3,
                         filter_centers = [0.], filter_widths = [100e-9], filter_factors = [1e-10],
-                        clean_dimensions = [False, True], cache = TEST_CACHE)
+                        filter_dimensions = [False, True], cache = TEST_CACHE)
 
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df.flatten())**2.)),
                                     1., decimal = 1)
@@ -279,10 +279,20 @@ def test_linear_delay_filter():
 
     filtered_data_df_fr, _ = dspec.linear_delay_filter(data_2d, np.ones_like(data_2d), df = [dt,100e3],
                     filter_centers = [[0.002],[0.]], filter_widths = [[0.001],[100e-9]], filter_factors = [[1e-5],[1e-5]],
-                    clean_dimensions = [True, True],cache = TEST_CACHE)
+                    filter_dimensions = [True, True],cache = TEST_CACHE)
 
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df_fr.flatten())**2.)),
                                     1., decimal = 1)
+
+
+    #test linear algebra error
+    #wbad = np.ones(32,dtype=complex)
+    #wbad[2:30] = 0.
+    #d_fail, info_fail = dspec.linear_delay_filter(np.zeros(32,dtype=complex), wbad, 1e5, [0.], [32/1e5/32], [1e-9], cache = {},
+    #                        filter_dimensions = [False, True])
+    #np.testing.assert_array_equal(d_fail, np.zeros_like(d_fail))
+    #np.testing.assert_array_equal(np.array(info_fail['skipped_channels']), np.array([0]))
+
 def test_sinc_downweight_mat_inv():
     cmat = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = [], filter_widths = [], filter_factors = [])
     #verify that the inverse cleaning matrix without cleaning windows is the identity!
@@ -308,7 +318,6 @@ def test_sinc_downweight_mat_inv():
     for m in range(-500,500):
         cmata += np.sinc((x-y - 32 * m) * 100e3 * 224e-9)
     np.testing.assert_almost_equal(cmat1, cmata)
-
 
 
 
