@@ -62,8 +62,9 @@ def calc_width(filter_size, real_delta, nsamples):
 
 
 def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False, tol=1e-9, window='none',
-                             skip_wgt=0.1, maxiter=100, gain=0.1, filt2d_mode='rect', alpha=0.5, linear = False, fg_deconv_method='clean',
-                             edgecut_low=0, edgecut_hi=0, add_clean_residual=False, cache={}, deconv_linear_foregrounds=True):
+                             skip_wgt=0.1, maxiter=100, gain=0.1, filt2d_mode='rect', alpha=0.5,
+                             edgecut_low=0, edgecut_hi=0, add_clean_residual=False, linear = False, cache={},
+                             fg_deconv_method='clean', deconv_linear_foregrounds=False, fg_restore_size=None):
     '''Apply a highpass fourier filter to data. Uses aipy.deconv.clean. Default is a 1D clean
     on the last axis of data.
 
@@ -118,6 +119,12 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         fg_deconv_method : string, can be 'leastsq' or 'clean'. If 'leastsq', deconvolve difference between data and linear residual
                                    by performing linear least squares fitting of data - linear resid to dft modes in filter window.
                                    If 'clean', obtain deconv fg model using perform a hogboem clean of difference between data and linear residual.
+        fg_restore_size: float, optional, allow user to only restore foregrounds subtracted by linear filter
+                             within a region of this size. If None, set to filter_size.
+                             This allows us to avoid the problem that if we have RFI flagging and apply a linear filter
+                             that is larger then the horizon then the foregrounds that we fit might actually include super
+                             -horizon flagging side-lobes and restoring them will introduce spurious structure.
+
 
 
     Returns:
@@ -127,6 +134,8 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
     '''
     # type checks
     dndim = data.ndim
+    if fg_restore_size is None:
+        fg_restore_size = filter_size
     assert dndim == 1 or dndim == 2, "data must be a 1D or 2D ndarray"
     if clean2d:
         assert dndim == 2, "data must be 2D for 2D clean"
@@ -162,6 +171,24 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         uthresh, lthresh = calc_width(filter_size, real_delta, data.shape[-1])
         area[uthresh:lthresh] = 0
 
+        ff = [ tol ]
+        if isinstance(filter_size, np.float):
+            fc = [ 0. ]
+            fw = [ filter_size ]
+        else:
+            half_width =  (filter_size[1]-filter_size[0]) / 2.
+            center = (filter_size[0] + filter_size[1]) / 2.
+            fc = [ center ]
+            fw = [ half_width ]
+        if isinstance(fg_restore_size, float):
+            fcfg = [ 0. ]
+            fwfg = [ fg_restore_size ]
+        else:
+            fcfg = [ (fg_restore_size[0] + fg_restore_size[1]) / 2.  ]
+            fwfg = [ (fg_restore_size[1] - fg_restore_size[0]) / 2. ]
+        uthresh_fg, lthresh_fg = calc_width(fg_restore_size, real_delta, data.shape[-1])
+        area_fg = np.ones(data.shape[-1], dtype=np.int)
+        area_fg[uthresh_fg:lthresh_fg] = 0
         # run clean
         if dndim == 1:
             # For 1D data array run once
@@ -170,28 +197,18 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                 _d_res = info['res']
                 del info['res']
             else:
-                ff = [ tol ]
-                if isinstance(filter_size, float):
-                    fc = [ 0. ]
-                    fw = [ filter_size ]
-                else:
-                    total_width = filter_size[1]-filter_size[0]
-                    half_width = total_width / 2.
-                    center = (filter_size[0] + filter_size[1]) / 2.
-                    fc = [ center  ]
-                    fw = [ half_width ]
                 d_r, info = linear_delay_filter(data * wgts * win, wgts * win, df=real_delta, filter_centers=fc, filter_widths=fw, filter_factors=ff, cache=cache)
                 _d_res = np.fft.ifft(d_r)
                 if deconv_linear_foregrounds:
                     if fg_deconv_method == 'clean':
-                        _d_cl, info_fg = aipy.deconv.clean(_d - _d_res, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
+                        _d_cl, info_fg = aipy.deconv.clean(_d - _d_res, _w, area=area_fg, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
                         del info_fg['res']
                         info_fg['maxiter'] = maxiter
                         info_fg['gain'] = gain
                         info['fg_deconv'] = info_fg
                     elif fg_deconv_method == 'leastsq':
-                        nmin = int((fc[0] - fw[0]) * real_delta * data.shape[-1])
-                        nmax = int((fc[0] + fw[0]) * real_delta * data.shape[-1])
+                        nmin = int((fcfg[0] - fwfg[0]) * real_delta * data.shape[-1])
+                        nmax = int((fcfg[0] + fwfg[0]) * real_delta * data.shape[-1])
                         info['fg_deconv'] = {'method':'leastsq','nmin':nmin, 'nmax':nmax}
                         d_cl, _, _ = delay_filter_leastsq_1d( (data * wgts * win - d_r).squeeze(), flags=(wgts==0.).squeeze(), sigma=1.,
                                                             nmax=(nmin, nmax), freq_units=True, even_modes=True)
@@ -217,27 +234,18 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                         del info_here['res']
                         info.append(info_here)
                     else:
-                        ff = [ tol ]
-                        if isinstance(filter_size, np.float):
-                            fc = [ 0. ]
-                            fw = [ filter_size ]
-                        else:
-                            half_width =  (filter_size[1]-filter_size[0]) / 2.
-                            center = (filter_size[0] + filter_size[1]) / 2.
-                            fc = [ center ]
-                            fw = [ half_width ]
                         d_r, info_here = linear_delay_filter(data[i] * wgts[i] * win, wgts[i] * win, df=real_delta, filter_centers=fc, filter_widths=fw, filter_factors=ff, cache=cache)
                         _d_res[i] = np.fft.ifft(d_r)
                         if deconv_linear_foregrounds:
                             if fg_deconv_method == 'clean':
-                                _d_cl[i], info_fg = aipy.deconv.clean(_d[i] - _d_res[i], _w[i], area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
+                                _d_cl[i], info_fg = aipy.deconv.clean(_d[i] - _d_res[i], _w[i], area=area_fg, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
                                 del info_fg['res']
                                 info_fg['maxiter'] = maxiter
                                 info_fg['gain'] = gain
                                 info_here['fg_deconv'] = info_fg
                             elif fg_deconv_method == 'leastsq':
-                                nmin = int((fc[0] - fw[0]) * real_delta * data.shape[-1])
-                                nmax = int((fc[0] + fw[0]) * real_delta * data.shape[-1])
+                                nmin = int((fcfg[0] - fwfg[0]) * real_delta * data.shape[-1])
+                                nmax = int((fcfg[0] + fwfg[0]) * real_delta * data.shape[-1])
                                 info_here['fg_deconv'] = {'method':'leastsq','nmin':nmin, 'nmax':nmax}
                                 d_cl, _, _ = delay_filter_leastsq_1d( (data[i] * wgts[i] * win - d_r).squeeze(), flags=(wgts[i]==0.).squeeze(), sigma=1.,
                                                                     nmax=(nmin, nmax), freq_units=True, even_modes=True)
@@ -265,16 +273,51 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         a2[uthresh:lthresh] = 0
         area = np.outer(a1, a2)
 
+        uthresh_fg, lthresh_fg = calc_width(fg_restore_size[0], real_delta[0], data.shape[0])
+        a1fg = np.ones(data.shape[0], dtype=np.int)
+        a1fg[uthresh_fg:lthresh_fg] = 0
+        uthresh_fg, lthresh_fg = calc_width(fg_restore_size[1], real_delta[1], data.shape[1])
+        a2fg = np.ones(data.shape[-1], dtype=np.int)
+        a2fg[uthresh_fg:lthresh_fg] = 0
+        area_fg = np.outer(a1fg, a2fg)
+
+        fc = []
+        fw = []
+        fcfg = []
+        fwfg = []
+        for fs in range(2):
+            if isinstance(filter_size[fs], tuple) or isinstance(filter_size[fs], list):
+                fct = [ (filter_size[fs][1] + filter_size[fs][0]) / 2.  ]
+                fwt = [ (filter_size[fs][1] - filter_size[fs][0]) / 2.  ]
+            else:
+                fct = [ 0. ]
+                fwt = [ filter_size[fs]  ]
+            if isinstance(fg_restore_size[fs], float):
+                fcfgt = [ 0. ]
+                fwfgt = [ fg_restore_size[fs] ]
+            else:
+                fcfgt = [ (fg_restore_size[fs][0] + fg_restore_size[fs][1]) / 2.  ]
+                fwfgt = [ (fg_restore_size[fs][1] - fg_restore_size[fs][0]) / 2. ]
+            fc.append(fct)
+            fw.append(fwt)
+            fcfg.append(fcfgt)
+            fwfg.append(fwfgt)
+        ff = [ [tol],[tol] ]
+
         # check for filt2d_mode
         if filt2d_mode == 'plus':
             _area = np.zeros(data.shape, dtype=np.int)
+            _area_fg = np.zeros_like(_area)
             if not linear:
                 _area[:, 0] = area[:, 0]
                 _area[0, :] = area[0, :]
+                _area_fg[:, 0] = area_fg[:, 0]
+                _area_fg[0, :] = area_fg[0, :]
             else:
-                _area[a1 == 1.,:] = 1.
-                _area[:, a2 == 1.] = 1.
+                _area_fg[a1 == 1.,:] = 1.
+                _area_fg[:, a2 == 1.] = 1.
             area = _area
+            area_fg = _area_fg
         elif filt2d_mode == 'rect':
             pass
         else:
@@ -287,31 +330,20 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             del info['res']
         else:
             assert filt2d_mode == "plus", "2d linear deconvolution only supports filt2d_mode == 'plus'."
-            fc = []
-            fw = []
-            for fs in range(2):
-                if isinstance(filter_size[fs], tuple) or isinstance(filter_size[fs], list):
-                    fct = [ (filter_size[fs][1] + filter_size[fs][0]) / 2.  ]
-                    fwt = [ (filter_size[fs][1] - filter_size[fs][0]) / 2.  ]
-                else:
-                    fct = [ 0. ]
-                    fwt = [ filter_size[fs]  ]
-                fc.append(fct)
-                fw.append(fwt)
-            ff = [ [tol],[tol] ]
+
             d_r, info = linear_delay_filter(data * wgts * win, wgts * win, df=[real_delta[0],real_delta[1]], filter_centers=fc, filter_widths=fw,
                                          filter_factors=ff, cache=cache, filter_dimensions=[True, True])
             _d_res = np.fft.ifft2(d_r)
             if deconv_linear_foregrounds:
                 if fg_deconv_method == 'clean':
-                    _d_cl, info_fg = aipy.deconv.clean(_d - _d_res, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
+                    _d_cl, info_fg = aipy.deconv.clean(_d - _d_res, _w, area=area_fg, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
                     del info_fg['res']
                     info_fg['maxiter'] = maxiter
                     info_fg['gain'] = gain
                     info['fg_deconv'] = info_fg
                 elif fg_deconv_method == 'leastsq':
-                    nmin = int((fc[1][0] - fw[1][0]) * real_delta[1] * data.shape[-1])
-                    nmax = int((fc[1][0] + fw[1][0]) * real_delta[1] * data.shape[-1])
+                    nmin = int((fcfg[1][0] - fwfg[1][0]) * real_delta[1] * data.shape[-1])
+                    nmax = int((fcfg[1][0] + fwfg[1][0]) * real_delta[1] * data.shape[-1])
                     info['fg_deconv'] = {'method':'leastsq', 'nmin':nmin, 'nmax':nmax}
                     d_cl, _, _ = delay_filter_leastsq(data * wgts * win - d_r, flags=wgts==0., sigma=1.,
                                                       nmax=(nmin, nmax), freq_units=True, even_modes=True)
@@ -487,7 +519,8 @@ def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_fa
 
 def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, tol=1e-4,
                  window='none', skip_wgt=0.5, maxiter=100, gain=0.1, edgecut_low=0, edgecut_hi=0,
-                 alpha=0.5, add_clean_residual=False, linear=False, cache={}, deconv_linear_foregrounds=False, fg_deconv_method='clean'):
+                 alpha=0.5, add_clean_residual=False, linear=False, cache={},
+                 deconv_linear_foregrounds=False, fg_deconv_method='clean', fg_restore_size=None):
     '''Apply a wideband delay filter to data. Variable names preserved for
         backward compatability with capo/PAPER analysis.
 
@@ -535,6 +568,11 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
         fg_deconv_method : string, can be 'leastsq' or 'clean'. If 'leastsq', deconvolve difference between data and linear residual
                                    by performing linear least squares fitting of data - linear resid to dft modes in filter window.
                                    If 'clean', obtain deconv fg model using perform a hogboem clean of difference between data and linear residual.
+        fg_restore_size: float, optional, allow user to only restore foregrounds subtracted by linear filter
+                             within a region of this size. If None, set to filter_size.
+                             This allows us to avoid the problem that if we have RFI flagging and apply a linear filter
+                             that is larger then the horizon then the foregrounds that we fit might actually include super
+                             -horizon flagging side-lobes and restoring them will introduce spurious structure.
 
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
@@ -549,13 +587,16 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
     bl_dly = _get_bl_dly(bl_len, horizon=horizon, standoff=standoff, min_dly=min_dly)
 
     return high_pass_fourier_filter(data, wgts, bl_dly, sdf, tol=tol, window=window, edgecut_low=edgecut_low,
-                                    edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, fg_deconv_method=fg_deconv_method,
-                                    alpha=alpha, add_clean_residual=add_clean_residual, linear=linear, cache=cache, deconv_linear_foregrounds=deconv_linear_foregrounds)
+                                    edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain,
+                                    fg_deconv_method=fg_deconv_method, alpha=alpha,
+                                    add_clean_residual=add_clean_residual, linear=linear,
+                                    cache=cache, deconv_linear_foregrounds=deconv_linear_foregrounds,
+                                    fg_restore_size=fg_restore_size)
 
 
 def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100, gain=0.1,
                   window='none', edgecut_low=0, edgecut_hi=0, alpha=0.5, add_clean_residual=False,
-                  linear=False, cache = {}, deconv_linear_foregrounds=False, fg_deconv_method = 'clean'):
+                  linear=False, cache = {}, deconv_linear_foregrounds=False, fg_deconv_method='clean', fg_restore_size=None):
     """
     Run a CLEAN deconvolution along the time axis.
 
@@ -605,6 +646,11 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
         fg_deconv_method : string, can be 'leastsq' or 'clean'. If 'leastsq', deconvolve difference between data and linear residual
                                    by performing linear least squares fitting of data - linear resid to dft modes in filter window.
                                    If 'clean', obtain deconv fg model using perform a hogboem clean of difference between data and linear residual.
+        fg_restore_size: float, optional, allow user to only restore foregrounds subtracted by linear filter
+                             within a region of this size. If None, set to filter_size.
+                             This allows us to avoid the problem that if we have RFI flagging and apply a linear filter
+                             that is larger then the horizon then the foregrounds that we fit might actually include super
+                             -horizon flagging side-lobes and restoring them will introduce spurious structure.
 
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
@@ -618,14 +664,14 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
     # run fourier filter
     mdl, res, info = high_pass_fourier_filter(data.T, wgts.T, max_frate, dt, tol=tol, window=window, edgecut_low=edgecut_low, fg_deconv_method=fg_deconv_method,
                                               edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, deconv_linear_foregrounds=deconv_linear_foregrounds,
-                                              alpha=alpha, add_clean_residual=add_clean_residual, linear=linear, cache=cache)
+                                              alpha=alpha, add_clean_residual=add_clean_residual, linear=linear, cache=cache, fg_restore_size=fg_restore_size)
     return mdl.T, res.T, info
 
 
 def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, standoff=0.0, horizon=1., min_dly=0.,
                tol=1e-4, window='none', maxiter=100, gain=1e-1, skip_wgt=0.5, filt2d_mode='rect',
                edgecut_low=0, edgecut_hi=0, alpha=0.5, add_clean_residual=False, linear=False, cache={},
-               deconv_linear_foregrounds=False, fg_deconv_method='clean'):
+               deconv_linear_foregrounds=False, fg_deconv_method='clean', fg_restore_size=None):
     """
     A generalized interface to delay and/or fringe-rate 1D CLEAN functions, or a full 2D clean
     if both bl_len & sdf and max_frate & dt variables are specified.
@@ -678,6 +724,11 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
         fg_deconv_method : string, can be 'leastsq' or 'clean'. If 'leastsq', deconvolve difference between data and linear residual
                                    by performing linear least squares fitting of data - linear resid to dft modes in filter window.
                                    If 'clean', obtain deconv fg model using perform a hogboem clean of difference between data and linear residual.
+        fg_restore_size: float, optional, allow user to only restore foregrounds subtracted by linear filter
+                             within a region of this size. If None, set to filter_size.
+                             This allows us to avoid the problem that if we have RFI flagging and apply a linear filter
+                             that is larger then the horizon then the foregrounds that we fit might actually include super
+                             -horizon flagging side-lobes and restoring them will introduce spurious structure.
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
         d_res: CLEAN residual -- difference of data and d_mdl, nulled at flagged channels
@@ -705,16 +756,20 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
         # time clean
         if timeclean:
             mdl, res, info = high_pass_fourier_filter(data.T, wgts.T, max_frate, dt, tol=tol, window=window, edgecut_low=edgecut_low,
-                                                      edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, linear=linear, fg_deconv_method=fg_deconv_method,
-                                                      alpha=alpha, add_clean_residual=add_clean_residual, cache=cache, deconv_linear_foregrounds=deconv_linear_foregrounds)
+                                                      edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter,
+                                                      gain=gain, linear=linear, fg_deconv_method=fg_deconv_method,
+                                                      alpha=alpha, add_clean_residual=add_clean_residual, cache=cache,
+                                                      deconv_linear_foregrounds=deconv_linear_foregrounds, fg_restore_size=fg_restore_size)
             mdl, res = mdl.T, res.T
 
         # freq clean
         elif freqclean:
             bl_dly = _get_bl_dly(bl_len, horizon=horizon, standoff=standoff, min_dly=min_dly)
             mdl, res, info = high_pass_fourier_filter(data, wgts, bl_dly, sdf, tol=tol, window=window, edgecut_low=edgecut_low,
-                                                      edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, linear=linear, fg_deconv_method=fg_deconv_method,
-                                                      alpha=alpha, add_clean_residual=add_clean_residual, cache=cache, deconv_linear_foregrounds=deconv_linear_foregrounds)
+                                                      edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain,
+                                                      linear=linear, fg_deconv_method=fg_deconv_method,
+                                                      alpha=alpha, add_clean_residual=add_clean_residual,
+                                                      cache=cache, deconv_linear_foregrounds=deconv_linear_foregrounds, fg_restore_size=fg_restore_size)
 
     # 2D clean
     else:
@@ -723,8 +778,10 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
 
         # 2D clean
         mdl, res, info = high_pass_fourier_filter(data, wgts, (max_frate, bl_dly), (dt, sdf), tol=tol, window=window, edgecut_low=edgecut_low, linear = linear,
-                                                  edgecut_hi=edgecut_hi, maxiter=maxiter, gain=gain, clean2d=True, filt2d_mode=filt2d_mode, fg_deconv_method=fg_deconv_method,
-                                                  alpha=alpha, add_clean_residual=add_clean_residual, cache=cache, deconv_linear_foregrounds=deconv_linear_foregrounds)
+                                                  edgecut_hi=edgecut_hi, maxiter=maxiter, gain=gain, clean2d=True, filt2d_mode=filt2d_mode,
+                                                  fg_deconv_method=fg_deconv_method, fg_restore_size=fg_restore_size,
+                                                  alpha=alpha, add_clean_residual=add_clean_residual, cache=cache,
+                                                  deconv_linear_foregrounds=deconv_linear_foregrounds)
 
     return mdl, res, info
 
