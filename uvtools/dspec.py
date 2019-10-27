@@ -10,7 +10,7 @@ from six.moves import range
 from scipy.signal import windows
 from warnings import warn
 from scipy.optimize import leastsq, lsq_linear
-
+import copy
 
 def wedge_width(bl_len, sdf, nchan, standoff=0., horizon=1.):
     '''Return the (upper,lower) delay bins that geometrically correspond to the sky.
@@ -468,52 +468,61 @@ def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_fa
     else:
         data_1d = False
 
-    output = np.zeros_like(data)
     nchan = data.shape[1]
     ntimes = data.shape[0]
     info = {'filter_centers':filter_centers, 'filter_widths':filter_widths, 'filter_factors': filter_factors,
             'df':df, 'data_shape':data.shape, 'filter_dimensions': filter_dimensions}
-    skipped_0 = []
-    skipped_1 = []
-    if filter_dimensions[1]:
-        for sample_num, sample, wght in zip(range(data.shape[0]), data, wgts):
-            wght_mat = np.outer(wght.T, wght)
-            filter_mat = sinc_downweight_mat_inv(nchan, df[1], filter_centers[1], filter_widths[1], filter_factors[1], cache) * wght_mat
-            filter_key = (nchan, df[1], ) + tuple(filter_centers[1]) + \
-            tuple(filter_widths[1]) + tuple(filter_factors[1]) + tuple(wght.tolist()) + ('inverse',)
-            if not filter_key in cache:
-                try:
-                    cache[filter_key] = np.linalg.pinv(filter_mat)
-                except np.linalg.LinAlgError:
-                    #if SVD fails to converge, set filter matrix to zeros.
-                    cache[filter_key] = np.zeros((nf,nf), dtype = complex)
-                    skipped_0.append(sample_num)
-            filter_mat = cache[filter_key]
-            output[sample_num] = np.dot(filter_mat, sample)
-        if data_1d and ntimes == 1:
-            output = output[0]
-    else:
-        output[:] = data[:]
-    if filter_dimensions[0]:
-        for sample_num, sample, wght in zip(range(data.shape[1]), output.T, wgts.T):
-            wght_mat = np.outer(wght.T, wght)
-            filter_mat = sinc_downweight_mat_inv(ntimes, df[0], filter_centers[0],
-             filter_widths[0], filter_factors[0], cache) * wght_mat
-            filter_key = (ntimes, df[0], ) + tuple(filter_centers[0]) + \
-            tuple(filter_widths[0]) + tuple(filter_factors[0]) + tuple(wght.tolist()) + ('inverse',)
-            if not filter_key in cache:
-                try:
-                    cache[filter_key] = np.linalg.pinv(filter_mat)
-                except np.linalg.LinAlgError:
-                    #if SVD fails to converge, set filter matrix to zeros.
-                    cache[filter_key] = np.zeros((nf,nf), dtype = complex)
-                    skipped_1.append(sample_num)
-            filter_mat = cache[filter_key]
-            output[:,sample_num] = np.dot(filter_mat, sample)
-        if data_1d and nchan == 1:
-            output = output[:,0]
-    info['skipped_time_steps'] = skipped_0
-    info['skipped_channels'] = skipped_1
+    skipped = [[],[]]
+    #in the lines below, we iterate over the time dimension. For each time, we
+    #compute a lazy covariance matrix (filter_mat) from the weights (wght) and
+    #a sinc downweight matrix. (sinc_downweight_mat_inv). We then attempt to
+    #take the psuedo inverse to get a filtering matrix that removes foregrounds.
+    #we do this for the zeroth and first filter dimension.
+    output = copy.deepcopy(data)
+    #this loop iterates through dimensions to iterate over (fs is the non-filter)
+    #axis.
+    for fs in range(2):
+        if filter_dimensions[fs-1]:
+            if fs == 1:
+                _d, _w = output.T, wgts.T
+            else:
+                _d, _w = output, wgts
+            #if the axis orthogonal to the iteration axis is to be filtered, then
+            #filter it!.
+            for sample_num, sample, wght in zip(range(data.shape[fs]), _d, _w):
+                filter_key = (data.shape[fs-1], df[fs-1], ) + tuple(filter_centers[fs-1]) + \
+                tuple(filter_widths[fs-1]) + tuple(filter_factors[fs-1]) + tuple(wght.tolist()) + ('inverse',)
+                if not filter_key in cache:
+                    #only calculate filter matrix and psuedo-inverse explicitly if they are not already cached
+                    #(saves calculation time).
+                    wght_mat = np.outer(wght.T, wght)
+                    filter_mat = sinc_downweight_mat_inv(data.shape[fs-1], df[fs-1], filter_centers[fs-1], filter_widths[fs-1], filter_factors[fs-1], cache) * wght_mat
+                    try:
+                        #Try taking psuedo-inverse. Occasionally I've encountered SVD errors
+                        #when a lot of channels are flagged. Interestingly enough, I haven't
+                        #I'm not sure what the precise conditions for the error are but
+                        #I'm catching it here.
+                        cache[filter_key] = np.linalg.pinv(filter_mat)
+                    except np.linalg.LinAlgError:
+                        #if SVD fails to converge, set filter matrix to to lots of 9e99s and skip it
+                        #during multiplication.
+                        cache[filter_key] = np.ones((data.shape[fs-1], data.shape[fs-1]), dtype=complex) * 9e99
+                #if matrix is already cached,
+                filter_mat = cache[filter_key]
+                if not np.all(filter_mat == 9e99):
+                    if fs == 1:
+                        output[:, sample_num] = np.dot(filter_mat, sample)
+                    elif fs == 0:
+                        output[sample_num] = np.dot(filter_mat, sample)
+                else:
+                    skipped[fs].append(sample_num)
+
+    if data_1d and ntimes == 1:
+        output = output[0]
+    if data_1d and nchan == 1:
+        output = output[:, 0]
+    info['skipped_time_steps'] = skipped[0]
+    info['skipped_channels'] = skipped[1]
     return output, info
 
 
