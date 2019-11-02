@@ -55,7 +55,7 @@ class TestMethods(unittest.TestCase):
         self.assertAlmostEqual(np.average(data), np.average(dmdl), 3)
         self.assertAlmostEqual(np.average(dres), 0, 3)
 
-    #def test_linear_delay_filter()
+    #def test_linear_filter()
 
     def test_delay_filter_2D(self):
         NCHAN = 128
@@ -187,7 +187,7 @@ class TestMethods(unittest.TestCase):
 
         nt.assert_raises(ValueError, dspec.gen_window, 'foo', 200)
 
-def test_linear_delay_filter():
+def test_linear_filter():
     nf = 100
     df = 100e3
     freqs = np.arange(-nf//2, nf//2) * df
@@ -206,42 +206,42 @@ def test_linear_delay_filter():
     wghts_1d = np.ones(nf)
     wghts_2d = np.array([wghts_1d, wghts_1d])
     #test functionality for numpy arrays
-    dspec.linear_delay_filter(data_1d, wghts_1d, df, np.array(filter_centers), np.array(filter_widths),
+    dspec.linear_filter(data_1d, wghts_1d, df, [1], np.array(filter_centers), np.array(filter_widths),
                         np.array(filter_factors))
     #test functionality on floats
-    dspec.linear_delay_filter(data_1d, wghts_1d, df, filter_centers[0], filter_widths[0],
+    dspec.linear_filter(data_1d, wghts_1d, df, 1, filter_centers[0], filter_widths[0],
                         filter_factors[0])
     filter_widths2 = [200e-9, 200e-9]
     filter_centers2 = [0., -1400e-9]
     filter_factors2 = [1e-9, 1e-9]
     #check if throws error when number of filter_widths not equal to len filter_centers
-    nt.assert_raises(ValueError, dspec.linear_delay_filter, data_1d, wghts_1d, df, filter_centers,
+    nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_1d, df, [1], filter_centers,
                     filter_widths2, filter_factors)
     #check if throws error when number of filter_widths not equal to len filter_factors
-    nt.assert_raises(ValueError, dspec.linear_delay_filter, data_1d, wghts_1d, df, filter_centers,
+    nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_1d, df, 1, filter_centers,
                     filter_widths, filter_factors2)
     #check if error thrown when wghts have different length then data
-    nt.assert_raises(ValueError, dspec.linear_delay_filter, data_1d, wghts_1d[:-1], df, filter_centers,
+    nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_1d[:-1], df, 1, filter_centers,
                     filter_widths, filter_factors)
     #check if error thrown when dimension of data does not equal dimension of weights.
-    nt.assert_raises(ValueError, dspec.linear_delay_filter, data_1d, wghts_2d, df, filter_centers,
+    nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_2d, df, 1, filter_centers,
                     filter_widths, filter_factors)
     #check if error thrown if dimension of data does not equal 2 or 1.
-    nt.assert_raises(ValueError, dspec.linear_delay_filter, np.zeros((10,10,10)), wghts_1d, df, filter_centers,
+    nt.assert_raises(ValueError, dspec.linear_filter, np.zeros((10,10,10)), wghts_1d, df, 1, filter_centers,
                     filter_widths, filter_factors)
     #check if error thrown if dimension of weights does not equal 2 or 1.
-    nt.assert_raises(ValueError, dspec.linear_delay_filter, wghts_1d, np.zeros((10,10,10)), df, filter_centers,
+    nt.assert_raises(ValueError, dspec.linear_filter, wghts_1d, np.zeros((10,10,10)), df, 1, filter_centers,
                     filter_widths, filter_factors)
     #now filter foregrounds and test that std of residuals are close to std of noise:
-    filtered_noise, _ =  dspec.linear_delay_filter(data_1d, wghts_1d, df, filter_centers, filter_widths,
+    filtered_noise, _ =  dspec.linear_filter(data_1d, wghts_1d, df, [1], filter_centers, filter_widths,
                                          filter_factors)
     #print(np.std((data_1d - fg_tone).real)*np.sqrt(2.))
     #print(np.std((filtered_noise).real)*np.sqrt(2.))
     np.testing.assert_almost_equal( np.std(filtered_noise.real)**2. + np.std(filtered_noise.imag)**2.,
                                   np.std(noise.real)**2. + np.std(noise.imag)**2., decimal = 0)
     #now filter foregrounds and signal and test that std of residuals are close to std of signal.
-    filtered_signal, _ =  dspec.linear_delay_filter(fg_sg, wghts_1d, df, filter_centers, filter_widths,
-                                         filter_factors)
+    filtered_signal, _ =  dspec.linear_filter(fg_sg, wghts_1d, df, [1], filter_centers, filter_widths,
+                                              filter_factors)
     np.testing.assert_almost_equal( (np.std(filtered_signal.real)**2. + np.std(filtered_signal.imag)**2.)/1e4,
                                   (np.std(sg_tone.real)**2. + np.std(sg_tone.imag)**2.)/1e4, decimal = 0)
     #Next, we test performing a fringe-rate clean. Generate a 50-meter EW baseline with a single
@@ -258,18 +258,18 @@ def test_linear_delay_filter():
     data_2d = signal_2d + noise_2d
     #now, only filter fringe-rate domain. The fringe rate for a source
     #overhead should be roughly 0.0036 for this baseline.
-    filtered_data_fr, _ = dspec.linear_delay_filter(data_2d, np.ones_like(data_2d), df = dt,
+    filtered_data_fr, _ = dspec.linear_filter(data_2d, np.ones_like(data_2d), delta_data = dt,
                         filter_centers = [0.], filter_widths = [0.004], filter_factors = [1e-10],
-                        filter_dimensions = [True, False], cache = TEST_CACHE)
+                        filter_dimensions = [0], cache = TEST_CACHE)
 
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_fr.flatten())**2.)),
                                     1., decimal = 1)
 
     #only filter in the delay-domain.
 
-    filtered_data_df, _ = dspec.linear_delay_filter(data_2d, np.ones_like(data_2d), df = 100e3,
-                        filter_centers = [0.], filter_widths = [100e-9], filter_factors = [1e-10],
-                        filter_dimensions = [False, True], cache = TEST_CACHE)
+    filtered_data_df, _ = dspec.linear_filter(data_2d, np.ones_like(data_2d), delta_data=100e3,
+                        filter_centers = [0.], filter_widths=[100e-9], filter_factors=[1e-10],
+                        filter_dimensions = [1], cache = TEST_CACHE)
 
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df.flatten())**2.)),
                                     1., decimal = 1)
@@ -277,9 +277,9 @@ def test_linear_delay_filter():
     #filter in both domains. I use a smaller filter factor
     #for each domain since they multiply in the target region.
 
-    filtered_data_df_fr, _ = dspec.linear_delay_filter(data_2d, np.ones_like(data_2d), df = [dt,100e3],
+    filtered_data_df_fr, _ = dspec.linear_filter(data_2d, np.ones_like(data_2d), delta_data = [dt,100e3],
                     filter_centers = [[0.002],[0.]], filter_widths = [[0.001],[100e-9]], filter_factors = [[1e-5],[1e-5]],
-                    filter_dimensions = [True, True],cache = TEST_CACHE)
+                    filter_dimensions = [0,1],cache = TEST_CACHE)
 
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df_fr.flatten())**2.)),
                                     1., decimal = 1)
@@ -288,7 +288,7 @@ def test_linear_delay_filter():
     #test linear algebra error
     #wbad = np.ones(32,dtype=complex)
     #wbad[2:30] = 0.
-    #d_fail, info_fail = dspec.linear_delay_filter(np.zeros(32,dtype=complex), wbad, 1e5, [0.], [32/1e5/32], [1e-9], cache = {},
+    #d_fail, info_fail = dspec.linear_filter(np.zeros(32,dtype=complex), wbad, 1e5, [0.], [32/1e5/32], [1e-9], cache = {},
     #                        filter_dimensions = [False, True])
     #np.testing.assert_array_equal(d_fail, np.zeros_like(d_fail))
     #np.testing.assert_array_equal(np.array(info_fail['skipped_channels']), np.array([0]))

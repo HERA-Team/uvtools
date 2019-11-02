@@ -197,7 +197,8 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                 _d_res = info['res']
                 del info['res']
             else:
-                d_r, info = linear_delay_filter(data * wgts * win, wgts * win, df=real_delta, filter_centers=fc, filter_widths=fw, filter_factors=ff, cache=cache)
+                d_r, info = linear_filter(data * wgts * win, wgts * win, delta_data=real_delta,
+                                                filter_dimensions = [1], filter_centers=fc, filter_widths=fw, filter_factors=ff, cache=cache)
                 _d_res = np.fft.ifft(d_r)
                 if deconv_linear_foregrounds:
                     if fg_deconv_method == 'clean':
@@ -234,7 +235,8 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                         del info_here['res']
                         info.append(info_here)
                     else:
-                        d_r, info_here = linear_delay_filter(data[i] * wgts[i] * win, wgts[i] * win, df=real_delta, filter_centers=fc, filter_widths=fw, filter_factors=ff, cache=cache)
+                        d_r, info_here = linear_filter(data[i] * wgts[i] * win, wgts[i] * win, delta_data=real_delta,
+                                                            filter_dimensions=[1], filter_centers=fc, filter_widths=fw, filter_factors=ff, cache=cache)
                         _d_res[i] = np.fft.ifft(d_r)
                         if deconv_linear_foregrounds:
                             if fg_deconv_method == 'clean':
@@ -331,8 +333,8 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         else:
             assert filt2d_mode == "plus", "2d linear deconvolution only supports filt2d_mode == 'plus'."
 
-            d_r, info = linear_delay_filter(data * wgts * win, wgts * win, df=[real_delta[0],real_delta[1]], filter_centers=fc, filter_widths=fw,
-                                         filter_factors=ff, cache=cache, filter_dimensions=[True, True])
+            d_r, info = linear_filter(data * wgts * win, wgts * win, delta_data=[real_delta[0],real_delta[1]], filter_centers=fc, filter_widths=fw,
+                                         filter_factors=ff, cache=cache, filter_dimensions=[0, 1])
             _d_res = np.fft.ifft2(d_r)
             if deconv_linear_foregrounds:
                 if fg_deconv_method == 'clean':
@@ -372,32 +374,41 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
 
     return d_mdl, d_res, info
 
-def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_factors, cache = {},
-                        filter_dimensions = [False, True]):
+def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, filter_widths, filter_factors, cache = {}):
     '''Apply a linear delay filter to waterfall data.
         Due to performance reasons, linear cleaning only supports separable delay-rate filters.
     Arguments:
         data: 1D or 2D (real or complex) numpy array where last dimension is frequency.
         Does not assume that weights have already been multiplied!
         wgts: real numpy array of linear multiplicative weights with the same shape as the data.
+        delta_data: float, list
+                    the width of data bins. Typically Hz: float. if 2d clean, should be 2-tuple or 2-list
+        filter_dimensions: list
+                        list of integers indicating data dimensions to filter. Must be 0, 1, or -1
         filter_centers: float, list, or 1d numpy array of delays at which to center filter windows
-                        Provide in units of (seconds)
+                        Typically in units of (seconds)
         filter_widths: float, list, or 1d numpy array of widths of each delay filtere window
                         with centers specified by filter_centers.
-                        Provide in units of (seconds)
+                        Typically in units of (seconds)
         filter_factors: float, list, or 1d numpy array of factors by which filtering should be
                         applied within each filter window specified in filter_centers and
                         filter_widths. If a float or length-1 list/ndarray is provided,
                         the same filter factor will be used in every filter window.
-        df: the width of the frequency bins in Hz: float. if 2d clean, should be 2-tuple or 2-list
         cache: optional dictionary for storing pre-computed delay filter matrices.
-        filter_dimensions: list, 2-list of bools specifying on which dimension cleaning is supposed
-                          to be applied.
+
     Returns:
         data: array, 2d clean residual with data filtered along the frequency direction.
         info: dictionary with filtering parameters and a list of skipped_times and skipped_channels
 
     '''
+    assert isinstance(filter_dimensions, (list,tuple,int)), "filter_dimensions must be a list or tuple"
+    if isinstance(filter_dimensions, int):
+        filter_dimensions = [filter_dimensions]
+    assert len(filter_dimensions) in [1, 2], "length of filter_dimensions cannot exceed 2"
+    for dim in filter_dimensions:
+        assert isinstance(dim,int), "only integers are valid filter dimensions"
+    assert np.all(np.abs(np.asarray(filter_dimensions)) <=1), "invalid filter dimensions provided, must be 0 or 1/-1"
+    filter_dimensions=list(np.unique(np.asarray(filter_dimensions)).astype(int))#will only filter each dim a single time.
     check_vars = [filter_centers, filter_widths, filter_factors]
     check_names = ['filter_centers', 'filter_widths', 'filter_factors']
     for anum,avar in enumerate(check_vars):
@@ -406,7 +417,7 @@ def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_fa
         elif isinstance(avar, np.float):
             check_vars[anum] = [avar]
     filter_centers,filter_widths,filter_factors = check_vars
-    if filter_dimensions[0] and filter_dimensions[1]:
+    if 0 in filter_dimensions and 1 in filter_dimensions:
         for avar,aname in zip(check_vars,check_names):
             err_msg = "2d clean specified! %s must be a length-2 list of lists for 2d clean"%aname
             if len(avar) == 2:
@@ -420,24 +431,23 @@ def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_fa
     else:
         if len(filter_factors) == 1:
             filter_factors = [filter_factors[0] for m in range(len(filter_centers))]
-        if filter_dimensions[0]:
+        if 0 in filter_dimensions:
             filter_factors = [filter_factors,[]]
             filter_centers = [filter_centers,[]]
             filter_widths = [filter_widths,[]]
-            df = [df,0.]
-        else:
+            delta_data = [delta_data,0.]
+        elif 1 in filter_dimensions:
             filter_factors = [[],filter_factors]
             filter_centers = [[],filter_centers]
             filter_widths = [[],filter_widths]
-            df = [0., df]
+            delta_data = [0., delta_data]
     check_vars = [filter_centers, filter_widths, filter_factors]
-    for dim_num, clean_dim in zip([0,1],filter_dimensions):
-        if clean_dim:
-            for aname1,avar1 in zip(check_names,check_vars):
-                for aname2,avar2 in zip(check_names,check_vars):
-                    if not len(avar1[dim_num]) == len(avar2[dim_num]):
-                        raise ValueError("Number of elements in %s-%d must equal the"
-                                         " number of elements %s-%d!"%(aname1, clean_dim, aname2, clean_dim))
+    for fs in filter_dimensions:
+        for aname1,avar1 in zip(check_names,check_vars):
+            for aname2,avar2 in zip(check_names,check_vars):
+                if not len(avar1[fs]) == len(avar2[fs]):
+                    raise ValueError("Number of elements in %s-%d must equal the"
+                                     " number of elements %s-%d!"%(aname1, fs, aname2, fs))
 
 
     d_shape = data.shape
@@ -471,7 +481,7 @@ def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_fa
     nchan = data.shape[1]
     ntimes = data.shape[0]
     info = {'filter_centers':filter_centers, 'filter_widths':filter_widths, 'filter_factors': filter_factors,
-            'df':df, 'data_shape':data.shape, 'filter_dimensions': filter_dimensions}
+            'delta_data':delta_data, 'data_shape':data.shape, 'filter_dimensions': filter_dimensions}
     skipped = [[],[]]
     #in the lines below, we iterate over the time dimension. For each time, we
     #compute a lazy covariance matrix (filter_mat) from the weights (wght) and
@@ -481,41 +491,40 @@ def linear_delay_filter(data, wgts, df, filter_centers, filter_widths, filter_fa
     output = copy.deepcopy(data)
     #this loop iterates through dimensions to iterate over (fs is the non-filter)
     #axis.
-    for fs in range(2):
-        if filter_dimensions[fs-1]:
-            if fs == 1:
-                _d, _w = output.T, wgts.T
+    for fs in filter_dimensions:
+        if fs == 0:
+            _d, _w = output.T, wgts.T
+        else:
+            _d, _w = output, wgts
+        #if the axis orthogonal to the iteration axis is to be filtered, then
+        #filter it!.
+        for sample_num, sample, wght in zip(range(data.shape[fs-1]), _d, _w):
+            filter_key = (data.shape[fs], delta_data[fs], ) + tuple(filter_centers[fs]) + \
+            tuple(filter_widths[fs]) + tuple(filter_factors[fs]) + tuple(wght.tolist()) + ('inverse',)
+            if not filter_key in cache:
+                #only calculate filter matrix and psuedo-inverse explicitly if they are not already cached
+                #(saves calculation time).
+                wght_mat = np.outer(wght.T, wght)
+                filter_mat = sinc_downweight_mat_inv(data.shape[fs], delta_data[fs], filter_centers[fs], filter_widths[fs], filter_factors[fs], cache) * wght_mat
+                try:
+                    #Try taking psuedo-inverse. Occasionally I've encountered SVD errors
+                    #when a lot of channels are flagged. Interestingly enough, I haven't
+                    #I'm not sure what the precise conditions for the error are but
+                    #I'm catching it here.
+                    cache[filter_key] = np.linalg.pinv(filter_mat)
+                except np.linalg.LinAlgError:
+                    #if SVD fails to converge, set filter matrix to to lots of 9e99s and skip it
+                    #during multiplication.
+                    cache[filter_key] = np.ones((data.shape[fs], data.shape[fs]), dtype=complex) * 9e99
+            #if matrix is already cached,
+            filter_mat = cache[filter_key]
+            if not np.all(filter_mat == 9e99):
+                if fs == 0:
+                    output[:, sample_num] = np.dot(filter_mat, sample)
+                elif fs == 1:
+                    output[sample_num] = np.dot(filter_mat, sample)
             else:
-                _d, _w = output, wgts
-            #if the axis orthogonal to the iteration axis is to be filtered, then
-            #filter it!.
-            for sample_num, sample, wght in zip(range(data.shape[fs]), _d, _w):
-                filter_key = (data.shape[fs-1], df[fs-1], ) + tuple(filter_centers[fs-1]) + \
-                tuple(filter_widths[fs-1]) + tuple(filter_factors[fs-1]) + tuple(wght.tolist()) + ('inverse',)
-                if not filter_key in cache:
-                    #only calculate filter matrix and psuedo-inverse explicitly if they are not already cached
-                    #(saves calculation time).
-                    wght_mat = np.outer(wght.T, wght)
-                    filter_mat = sinc_downweight_mat_inv(data.shape[fs-1], df[fs-1], filter_centers[fs-1], filter_widths[fs-1], filter_factors[fs-1], cache) * wght_mat
-                    try:
-                        #Try taking psuedo-inverse. Occasionally I've encountered SVD errors
-                        #when a lot of channels are flagged. Interestingly enough, I haven't
-                        #I'm not sure what the precise conditions for the error are but
-                        #I'm catching it here.
-                        cache[filter_key] = np.linalg.pinv(filter_mat)
-                    except np.linalg.LinAlgError:
-                        #if SVD fails to converge, set filter matrix to to lots of 9e99s and skip it
-                        #during multiplication.
-                        cache[filter_key] = np.ones((data.shape[fs-1], data.shape[fs-1]), dtype=complex) * 9e99
-                #if matrix is already cached,
-                filter_mat = cache[filter_key]
-                if not np.all(filter_mat == 9e99):
-                    if fs == 1:
-                        output[:, sample_num] = np.dot(filter_mat, sample)
-                    elif fs == 0:
-                        output[sample_num] = np.dot(filter_mat, sample)
-                else:
-                    skipped[fs].append(sample_num)
+                skipped[fs-1].append(sample_num)
 
     if data_1d and ntimes == 1:
         output = output[0]
