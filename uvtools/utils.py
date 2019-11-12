@@ -1,3 +1,4 @@
+from numpy.fft import fft, fftshift
 import numpy as np
 import glob
 
@@ -99,3 +100,51 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
         datapols = [item for sublist in datapols for item in sublist]
 
     return datafiles, datapols
+
+def FFT(data, axis):
+    """Convenient function for performing a FFT along an axis.
+
+    Parameters
+    ----------
+    data : np.ndarray
+       An array of data, assumed to not be ordered in the numpy FFT convention.
+       Typically the data_array of a UVData object.
+
+    axis : int
+        The axis to perform the FFT over.
+
+    Returns
+    -------
+    data_fft : np.ndarray
+        The Fourier transform of the data along the specified axis. The array
+        has the same shape as the original data, with the same ordering.
+    """
+
+    return fftshift(fft(fftshift(data, axis), axis=axis), axis)
+
+def get_fourier_freqs(times):
+    """A function for generating Fourier frequencies given 'times'.
+
+    Parameters
+    ----------
+    times : np.ndarray, shape=(Ntimes,)
+        An array of parameter values. These are nominally referred to as times,
+        but may be frequencies or other parameters for which a Fourier dual can
+        be defined. This function assumes a uniform sampling rate.
+
+    Returns
+    -------
+    freqs : np.ndarray, shape=(Ntimes,)
+        An array of coordinates dual to the input coordinates. Similar to the
+        output of np.fft.fftfreq, but ordered so that the zero frequency is in
+        the center of the array.
+    """
+    # get the number of samples and the sample rate
+    N = len(times)
+    dt = np.mean(np.diff(times))
+
+    # get the Nyquist frequency
+    f_nyq = 1.0 / (2 * dt)
+
+    # return the frequency array
+    return np.linspace(-f_nyq, f_nyq, N, endpoint=False)
