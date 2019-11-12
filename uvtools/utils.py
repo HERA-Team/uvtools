@@ -148,3 +148,31 @@ def get_fourier_freqs(times):
 
     # return the frequency array
     return np.linspace(-f_nyq, f_nyq, N, endpoint=False)
+
+def check_uvd_pair_metadata(uvd1, uvd2):
+    """Check that the relevant metadata agrees for `uvd1` and `uvd2`.
+
+    Parameters
+    ----------
+    uvd1, uvd2 : pyuvdata.UVData
+        UVData objects containing the visibilities that are being compared
+        have sufficiently similar metadata.
+    
+    """
+    # helper function; mean separation in array values for two arrays x1, x2
+    dx = lambda x1, x2 : 0.5 * (np.mean(np.diff(x1)) + np.mean(np.diff(x2)))
+
+    t1vals = np.unique(uvd1.time_array)
+    t2vals = np.unique(uvd2.time_array)
+    assert np.all(np.isclose(t1vals, t2vals, atol=dx(t1vals, t2vals))), \
+            "Time values disagree more than the mean integration time."
+
+    f1vals = uvd1.freq_array[0]
+    f2vals = uvd2.freq_array[0]
+    assert np.all(np.isclose(f1vals, f2vals, atol=dx(f1vals, f2vals))), \
+            "Frequency values disagree more than the mean channel width."
+
+    bls1 = np.unique(uvd1.baseline_array)
+    bls2 = np.unique(uvd2.baseline_array)
+    assert np.all(bls1 == bls2), \
+            "Baseline arrays do not agree."

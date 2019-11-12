@@ -1,6 +1,8 @@
 import aipy
 import numpy as np
 
+from . import utils
+
 def data_mode(data, mode='abs'):
     """
     Apply filter to data according to a chosen plotting mode.
@@ -466,3 +468,133 @@ def omni_view_gif(filenames, name='omni_movie.gif'):
         images.append(imageio.imread(filename))
     imageio.mimsave(name, images)
     
+def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all", 
+                        skip_check=False, save_path=None):
+    """Produce waterfall plot(s) of differenced visibilities.
+
+    Parameters
+    ----------
+    uvd1, uvd2 : pyuvdata.UVData
+        UVData objects which store visibilities to be differenced and their
+        associated metadata. They should have the same number of frequencies,
+        same baselines, and same times as each other.
+
+    antpairpol : tuple
+        Tuple specifying which baseline and polarization to use to compare 
+        visibility waterfalls. See pyuvdata.UVData.get_data method docstring 
+        for information on accepted tuples.
+    
+    plot_type : str, tuple of str, or list of str, optional
+        Which spaces to use for investigating differences. Available options 
+        are as follows: time and frequency ('time_vs_freq'); time and delay 
+        ('time_vs_dly'); fringe rate and frequency ('fr_vs_freq'); fringe 
+        rate and delay ('fr_vs_dly'). Default is to use all plot types.
+    
+    save_path : str, optional
+        Path specifying where to save the figure. Can be absolute or relative. 
+        Default behavior does not save the figure.
+
+    """
+    # check that metadata agrees, unless specified otherwise
+    if not skip_check:
+        utils.check_uvd_pair_metadata(uvd1, uvd2)
+
+    # get visibility data
+    vis1 = uvd1.get_data(antpairpol)
+    vis2 = uvd2.get_data(antpairpol)
+
+    # get important metadata
+    times = np.unique(uvd1.time_array) # days
+    lsts = np.unique(uvd1.lst_array) # radians
+    freqs = uvd1.freq_array[0] # choose 0th spectral window; Hz
+
+    # import astropy.units for conversion from days to seconds
+    import astropy.units as u
+    frs = utils.get_fourier_freqs(times * u.day.to('s')) # Hz
+    dlys = utils.get_fourier_freqs(freqs) # s
+
+    # make dictionary of plotting parameters; keys chosen for ease-of-use
+    plot_params = {"time" : lsts, 
+                   "freq" : freqs / 1e6, # MHz
+                   "fr" : frs * 1e3, # mHz
+                   "dly" : dlys * 1e9, # ns
+                   }
+
+    # make some axis labels; use LST instead of time b/c time is clunky
+    labels = {"time" : "LST [radians]",
+              "freq" : "Frequency [MHz]",
+              "fr" : "Fringe Rate [mHz]",
+              "dly" : "Delay [ns]",
+              }
+
+    # map plot types to transforms needed
+    plot_types = {"time_vs_freq" : lambda data : data, # do nothing
+                  "time_vs_dly" : lambda data : utils.FFT(data, 1), # FFT in freq
+                  "fr_vs_freq" : lambda data : utils.FFT(data, 0), # FFT in time
+                  "fr_vs_dly" : lambda data : utils.FFT(utils.FFT(data, 0), 1), # both
+                  }
+
+    # convert plot type to tuple
+    if isinstance(plot_type, str):
+        plot_type = tuple(plot_types.keys()) if plot_type == "all" else (plot_type,)
+
+    # check that chosen plot type(s) OK
+    assert all([plot in plot_types.keys() for plot in plot_type]), \
+            "Please ensure the plot type chosen is supported. The supported " \
+            "types are : {types}".format(types=list(plot_types.keys()))
+
+    # now make a dictionary of the transformed visibilities
+    visibilities = {plot : {label : xform(vis)
+                            for label, vis in zip(("vis1", "vis2"), (vis1, vis2))}
+                            for plot, xform in plot_types.items()
+                            if plot in plot_type} # but only use desired transforms
+
+
+    # import matplotlib, setup the figure
+    import matplotlib.pyplot as plt
+    figsize = (4 * 2, 3 * len(plot_type)) # (4,3) figsize for each plot
+    fig = plt.figure(figsize=figsize)
+    axes = fig.subplots(len(plot_type), 2) # stack of amp & phase difference plots
+    axes = [axes,] if len(axes.shape) == 1 else axes # avoid bug for single row
+    axes[0][0].set_title("Amplitude Difference", fontsize=12)
+    axes[0][1].set_title("Phase Difference", fontsize=12)
+
+    # helper function for getting the extent of axes
+    extent = lambda xvals, yvals : (xvals[0], xvals[-1], yvals[-1], yvals[0])
+
+    # helper functions for taking difference of abs and phase
+    absdiff = lambda vis1, vis2 : np.abs(vis1) - np.abs(vis2)
+    phsdiff = lambda vis1, vis2 : np.angle(vis1) - np.angle(vis2)
+
+    # loop over items in visibilities and plot them
+    for i, item in enumerate(visibilities.items()):
+        # extract visibilities, get diffs
+        visA, visB = item[1].values()
+        diffs = (absdiff(visA, visB), phsdiff(visA, visB))
+
+        # extract parameters
+        ykey, xkey = item[0].split("_vs_") # keys for choosing parameters
+        xvals, yvals = plot_params[xkey], plot_params[ykey]
+
+        # get labels
+        xlabel, ylabel = labels[xkey], labels[ykey]
+
+        # plot stuff
+        for ax, diff in zip(axes[i], diffs):
+            # set labels
+            ax.set_xlabel(xlabel, fontsize=12)
+            ax.set_ylabel(ylabel, fontsize=12)
+
+            # plot waterfall and add a colorbar
+            fig.sca(ax)
+            cax = waterfall(diff, mode="real", 
+                            cmap="viridis", extent=extent(xvals, yvals))
+            fig.colorbar(cax)
+
+    # display the figure
+    plt.tight_layout()
+    plt.show()
+
+    # save if desired
+    if save_path is not None:
+        fig.savefig(save_path)
