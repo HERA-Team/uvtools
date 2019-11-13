@@ -172,7 +172,7 @@ def check_uvd_pair_metadata(uvd1, uvd2):
     assert np.all(np.isclose(f1vals, f2vals, atol=dx(f1vals, f2vals))), \
             "Frequency values disagree more than the mean channel width."
 
-    bls1 = np.unique(uvd1.baseline_array)
-    bls2 = np.unique(uvd2.baseline_array)
-    assert np.all(bls1 == bls2), \
+    bls1 = uvd1.uvw_array
+    bls2 = uvd2.uvw_array
+    assert np.all(np.isclose(bls1, bls2)), \
             "Baseline arrays do not agree."
