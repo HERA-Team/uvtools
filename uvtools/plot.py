@@ -601,7 +601,7 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
 
     # save if desired
     if save_path is not None:
-        fig.savefig(save_path)
+        utils.savefig(fig, save_path)
 
 def plot_diff_uv(uvd1, uvd2, pol=None, speedup=True,
                  skip_check=False, save_path=None):
@@ -743,4 +743,4 @@ def plot_diff_uv(uvd1, uvd2, pol=None, speedup=True,
 
     # save if desired
     if save_path is not None:
-        fig.savefig(save_path)
+        utils.savefig(fig, save_path)

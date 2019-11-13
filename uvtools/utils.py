@@ -176,3 +176,21 @@ def check_uvd_pair_metadata(uvd1, uvd2):
     bls2 = uvd2.uvw_array
     assert np.all(np.isclose(bls1, bls2)), \
             "Baseline arrays do not agree."
+
+def savefig(fig, save_path):
+    """Convenient interface for saving a matplotlib.pyplot.figure object.
+
+    Parameters
+    ----------
+    fig : matplotlib.pyplot.figure
+        Figure instance to be saved.
+
+    save_path : str, list or tuple of str
+        Path(s) specifying where to save the figure.
+
+    """
+    if isinstance(save_path, (list, tuple)):
+        for path in save_path:
+            fig.savefig(path)
+    else:
+        fig.savefig(path)
