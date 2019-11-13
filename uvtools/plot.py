@@ -603,7 +603,8 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
     if save_path is not None:
         fig.savefig(save_path)
 
-def plot_diff_uv(uvd1, uvd2, pol=None, skip_check=False, save_path=None):
+def plot_diff_uv(uvd1, uvd2, pol=None, speedup=True,
+                 skip_check=False, save_path=None):
     """Summary plot for difference between visibilities.
 
     Parameters
@@ -616,6 +617,13 @@ def plot_diff_uv(uvd1, uvd2, pol=None, skip_check=False, save_path=None):
         String specifying which polarization to be used. Must be one of the
         polarizations listed in the UVData.get_pols() method for both
         `uvd1` and `uvd2`. Default is to use the 0th polarization.
+
+    speedup : bool, optional
+        Whether to use the fast implementation of this plotting tool or the
+        slower implementation. The faster implementation does not produce
+        figures as nice as the slower implementation, but the slower
+        implementation is only really usable for small sets of data.
+        Default is to use the fast implementation.
 
     skip_check : bool, optional
         Whether to check that the metadata for `uvd1` and `uvd2` match.
@@ -651,6 +659,10 @@ def plot_diff_uv(uvd1, uvd2, pol=None, skip_check=False, save_path=None):
     absdiff = np.abs(uvd1.data_array) - np.abs(uvd2.data_array)
     phsdiff = np.angle(uvd1.data_array) - np.angle(uvd2.data_array)
 
+    # change shape to (Nblts, Nfreq)
+    absdiff = absdiff[:,0,:,pol]
+    phsdiff = phsdiff[:,0,:,pol]
+
     # import matplotlib to  set things up and make the plot
     import matplotlib.pyplot as plt
     
@@ -658,19 +670,48 @@ def plot_diff_uv(uvd1, uvd2, pol=None, skip_check=False, save_path=None):
     absnorm = plt.cm.colors.SymLogNorm(100, vmin=absdiff.min(), vmax=absdiff.max())
     phsnorm = plt.cm.colors.Normalize(vmin=-2*np.pi, vmax=2*np.pi)
 
-    # get scalar maps for generating colorbars
-    abs_sm = plt.cm.ScalarMappable(norm=absnorm, cmap="viridis")
-    phs_sm = plt.cm.ScalarMappable(norm=phsnorm, cmap="viridis")
+    if not speedup:
+        # get scalar maps for generating colorbars
+        abs_sm = plt.cm.ScalarMappable(norm=absnorm, cmap="viridis")
+        phs_sm = plt.cm.ScalarMappable(norm=phsnorm, cmap="viridis")
 
-    # get colormaps with shape (Nblts, Nfreq, 4)
-    abscmap = plt.cm.viridis(absnorm(absdiff[:,0,:,pol]))
-    phscmap = plt.cm.viridis(phsnorm(phsdiff[:,0,:,pol]))
+        # get colormaps with shape (Nblts, Nfreq, 4)
+        abscmap = plt.cm.viridis(absnorm(absdiff))
+        phscmap = plt.cm.viridis(phsnorm(phsdiff))
 
-    # get the flattened u, v, and colormap arrays
-    uvals = uvw_vecs[:,:,0].flatten()
-    vvals = uvw_vecs[:,:,1].flatten()
-    abscmap = np.array([abscmap[:,:,j].flatten() for j in range(4)]).T
-    phscmap = np.array([phscmap[:,:,j].flatten() for j in range(4)]).T
+        # get the flattened u, v, and colormap arrays
+        uvals = uvw_vecs[:,:,0].flatten()
+        vvals = uvw_vecs[:,:,1].flatten()
+        abscmap = np.array([abscmap[:,:,j].flatten() for j in range(4)]).T
+        phscmap = np.array([phscmap[:,:,j].flatten() for j in range(4)]).T
+    else:
+        # get regridded uv-plane
+        uvals = np.linspace(uvw_vecs[:,:,0].min(), uvw_vecs[:,:,0].max(), 50)
+        vvals = np.linspace(uvw_vecs[:,:,1].min(), uvw_vecs[:,:,1].max(), 50)
+        u_regrid, v_regrid = np.meshgrid(uvals, vvals)
+
+        # regrid the difference arrays
+        absdiff_r = np.zeros(u_regrid.shape)
+        phsdiff_r = np.zeros(u_regrid.shape)
+        for i in range(absdiff.shape[0]):
+            for j in range(absdiff.shape[1]):
+                # get the (u,v) values for the blt/freq
+                u, v = uvw_vecs[i,j,0], uvw_vecs[i,j,1]
+                # get the distance from (u,v) to the regridded uv-plane coords
+                du, dv = np.abs(u_regrid - u), np.abs(v_regrid - v)
+                # find the nearest regridded (u,v) bin
+                u_key = np.where(du == du.min(), True, False)
+                v_key = np.where(dv == dv.min(), True, False)
+                diff_key = np.logical_and(u_key, v_key)
+                # regrid the difference arrays
+                absdiff_r[diff_key] = absdiff[i,j]
+                phsdiff_r[diff_key] = phsdiff[i,j]
+
+        # now make them into masked arrays
+        abs_mask = np.where(absdiff_r==0, True, False)
+        phs_mask = np.where(phsdiff_r==0, True, False)
+        absdiff_ma = np.ma.MaskedArray(absdiff_r, abs_mask)
+        phsdiff_ma = np.ma.MaskedArray(phsdiff_r, phs_mask)
 
     # setup the figure
     fig = plt.figure(figsize=(12,5))
@@ -682,13 +723,19 @@ def plot_diff_uv(uvd1, uvd2, pol=None, skip_check=False, save_path=None):
         ax.set_ylabel(r'$v$', fontsize=12)
         ax.set_title(" ".join([label, "Difference"]), fontsize=12)
 
-    for ax, cmap in zip((ax1, ax2), (abscmap, phscmap)):
-        for u, v, color in zip(uvals, vvals, cmap):
-            ax.plot(u, v, color=color, marker='o', ms=5, alpha=0.7)
-        
-    # add some colorbars
-    fig.colorbar(abs_sm, ax=ax1)
-    fig.colorbar(phs_sm, ax=ax2)
+    if not speedup:
+        for ax, cmap in zip((ax1, ax2), (abscmap, phscmap)):
+            for u, v, color in zip(uvals, vvals, cmap):
+                ax.plot(u, v, color=color, marker='o', ms=5, alpha=0.7)
+        # add some colorbars
+        fig.colorbar(abs_sm, ax=ax1)
+        fig.colorbar(phs_sm, ax=ax2)
+    else:
+        extent = (uvals.min(), uvals.max(), vvals.max(), vvals.min())
+        for ax, diff, norm in zip((ax1, ax2), (absdiff_ma, phsdiff_ma), (absnorm, phsnorm)):
+            cax = ax.imshow(diff, norm=norm, aspect="auto", cmap="viridis", extent=extent)
+            fig.sca(ax)
+            fig.colorbar(cax)
 
     # tidy up and display
     plt.tight_layout()
