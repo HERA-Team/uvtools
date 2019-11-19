@@ -106,26 +106,24 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             in fourier space to the CLEAN model. Note that the residual actually returned is
             not the CLEAN residual, but the residual in input data space.
         linear : bool,
-                 use aipy.deconv.clean if linear == False
-                 if True, perform linear delay filtering.
+             use aipy.deconv.clean if linear == False
+             if True, perform linear delay filtering.
         cache : dict, optional dictionary for storing pre-computed filtering matrices in linear
             cleaning.
         deconv_linear_foregrounds : bool, if True, then apply clean to data - residual where
-                                          res is the data-vector after applying a linear clean filter.
-                                          This allows for in-painting flagged foregrounds without introducing
-                                          clean artifacts into EoR window. If False, mdl will still just be the
-                                          difference between the original data vector and the residuals after
-                                          applying the linear filter.
+            res is the data-vector after applying a linear clean filter.
+            This allows for in-painting flagged foregrounds without introducing
+            clean artifacts into EoR window. If False, mdl will still just be the
+            difference between the original data vector and the residuals after
+            applying the linear filter.
         fg_deconv_method : string, can be 'leastsq' or 'clean'. If 'leastsq', deconvolve difference between data and linear residual
-                                   by performing linear least squares fitting of data - linear resid to dft modes in filter window.
-                                   If 'clean', obtain deconv fg model using perform a hogboem clean of difference between data and linear residual.
+            by performing linear least squares fitting of data - linear resid to dft modes in filter window.
+            If 'clean', obtain deconv fg model using perform a hogboem clean of difference between data and linear residual.
         fg_restore_size: float, optional, allow user to only restore foregrounds subtracted by linear filter
-                             within a region of this size. If None, set to filter_size.
-                             This allows us to avoid the problem that if we have RFI flagging and apply a linear filter
-                             that is larger then the horizon then the foregrounds that we fit might actually include super
-                             -horizon flagging side-lobes and restoring them will introduce spurious structure.
-
-
+             within a region of this size. If None, set to filter_size.
+             This allows us to avoid the problem that if we have RFI flagging and apply a linear filter
+             that is larger then the horizon then the foregrounds that we fit might actually include super
+             -horizon flagging side-lobes and restoring them will introduce spurious structure.
 
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
@@ -354,9 +352,6 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             else:
                 _d_cl = _d - _d_res
 
-
-
-
     # add resid to model in CLEAN bounds
     if add_clean_residual:
         _d_cl += _d_res * area
@@ -376,24 +371,24 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
 
 def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, filter_widths, filter_factors, cache = {}):
     '''Apply a linear delay filter to waterfall data.
-        Due to performance reasons, linear cleaning only supports separable delay-rate filters.
+        Due to performance reasons, linear filtering only supports separable delay/fringe-rate filters.
     Arguments:
         data: 1D or 2D (real or complex) numpy array where last dimension is frequency.
         Does not assume that weights have already been multiplied!
         wgts: real numpy array of linear multiplicative weights with the same shape as the data.
         delta_data: float, list
-                    the width of data bins. Typically Hz: float. if 2d clean, should be 2-tuple or 2-list
+            the width of data bins. Typically Hz: float. if 2d clean, should be 2-tuple or 2-list
         filter_dimensions: list
-                        list of integers indicating data dimensions to filter. Must be 0, 1, or -1
+            list of integers indicating data dimensions to filter. Must be 0, 1, or -1
         filter_centers: float, list, or 1d numpy array of delays at which to center filter windows
-                        Typically in units of (seconds)
+            Typically in units of (seconds)
         filter_widths: float, list, or 1d numpy array of widths of each delay filtere window
-                        with centers specified by filter_centers.
-                        Typically in units of (seconds)
+            with centers specified by filter_centers.
+            Typically in units of (seconds)
         filter_factors: float, list, or 1d numpy array of factors by which filtering should be
-                        applied within each filter window specified in filter_centers and
-                        filter_widths. If a float or length-1 list/ndarray is provided,
-                        the same filter factor will be used in every filter window.
+            applied within each filter window specified in filter_centers and
+            filter_widths. If a float or length-1 list/ndarray is provided,
+            the same filter factor will be used in every filter window.
         cache: optional dictionary for storing pre-computed delay filter matrices.
 
     Returns:
@@ -401,47 +396,74 @@ def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, fil
         info: dictionary with filtering parameters and a list of skipped_times and skipped_channels
 
     '''
+    # Check that inputs are tiples or lists
     assert isinstance(filter_dimensions, (list,tuple,int)), "filter_dimensions must be a list or tuple"
+    # if filter_dimensions are supplied as a single integer, convert to list (core code assumes lists).
     if isinstance(filter_dimensions, int):
         filter_dimensions = [filter_dimensions]
+    # check that filter_dimensions is no longer then 2 elements
     assert len(filter_dimensions) in [1, 2], "length of filter_dimensions cannot exceed 2"
+    # make sure filter_dimensions are 0 or 1.
     for dim in filter_dimensions:
         assert isinstance(dim,int), "only integers are valid filter dimensions"
-    assert np.all(np.abs(np.asarray(filter_dimensions)) <=1), "invalid filter dimensions provided, must be 0 or 1/-1"
-    filter_dimensions=list(np.unique(np.asarray(filter_dimensions)).astype(int))#will only filter each dim a single time.
+    # make sure that all filter dimensions are valid for the supplied data.
+    assert np.all(np.abs(np.asarray(filter_dimensions)) < data.ndim), "invalid filter dimensions provided, must be 0 or 1/-1"
+    # convert filter dimensions to a list of integers (incase the dimensions were supplied as floats)
+    filter_dimensions=list(np.unique(np.asarray(filter_dimensions)).astype(int))
+    # will only filter each dim a single time.
+    # now check validity of other inputs. We perform the same check over multiple
+    # inputs by iterating over a list with their names.
     check_vars = [filter_centers, filter_widths, filter_factors]
     check_names = ['filter_centers', 'filter_widths', 'filter_factors']
     for anum,avar in enumerate(check_vars):
+        # If any of these inputs is a float or numpy array, convert to a list.
         if isinstance(avar, np.ndarray):
             check_vars[anum] = list(avar)
         elif isinstance(avar, np.float):
             check_vars[anum] = [avar]
     filter_centers,filter_widths,filter_factors = check_vars
+    # Next, perform some checks that depend on the filtering dimensions provided.
     if 0 in filter_dimensions and 1 in filter_dimensions:
         for avar,aname in zip(check_vars,check_names):
             err_msg = "2d clean specified! %s must be a length-2 list of lists for 2d clean"%aname
+            # if we are going to filter in dimension 1 and 0, make sure that each input
+            # listed in check_vars is a length-2 list of lists.
             if len(avar) == 2:
                 if not (isinstance(avar[0], list) and isinstance(avar[1], list)):
                     raise ValueError(err_msg)
             else:
                 raise ValueError(err_msg)
+
         for ff_num,ff_list in zip([0,1],filter_factors):
+            # we allow the user to provide a single filter factor for multiple
+            # filtering windows on a single dimension. This code
+            # iterates through each dimension and if a single filter_factor is provided
+            # it converts the filter_factor list to a list of filter_factors with the same
+            # length as filter_centers.
             if len(ff_list) == 1:
                 ff_list = [ff_list[0] for m in range(len(filter_centers[ff_num]))]
     else:
+        # If we are going to filter along a single dimensions.
         if len(filter_factors) == 1:
+            # extend filter factor list of user supplied a float or len-1 list.
             filter_factors = [filter_factors[0] for m in range(len(filter_centers))]
         if 0 in filter_dimensions:
+            # convert 1d input-lists to
+            # a list of lists for core-code to operate on.
             filter_factors = [filter_factors,[]]
             filter_centers = [filter_centers,[]]
             filter_widths = [filter_widths,[]]
             delta_data = [delta_data,0.]
         elif 1 in filter_dimensions:
+            # convert 1d input-lists to
+            # a list of lists for core-code to operate on.
             filter_factors = [[],filter_factors]
             filter_centers = [[],filter_centers]
             filter_widths = [[],filter_widths]
             delta_data = [0., delta_data]
     check_vars = [filter_centers, filter_widths, filter_factors]
+    # Now check that the number of filter factors = number of filter widths
+    # = number of filter centers for each dimension.
     for fs in filter_dimensions:
         for aname1,avar1 in zip(check_names,check_vars):
             for aname2,avar2 in zip(check_names,check_vars):
@@ -483,11 +505,11 @@ def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, fil
     info = {'filter_centers':filter_centers, 'filter_widths':filter_widths, 'filter_factors': filter_factors,
             'delta_data':delta_data, 'data_shape':data.shape, 'filter_dimensions': filter_dimensions}
     skipped = [[],[]]
-    #in the lines below, we iterate over the time dimension. For each time, we
-    #compute a lazy covariance matrix (filter_mat) from the weights (wght) and
-    #a sinc downweight matrix. (sinc_downweight_mat_inv). We then attempt to
-    #take the psuedo inverse to get a filtering matrix that removes foregrounds.
-    #we do this for the zeroth and first filter dimension.
+    # in the lines below, we iterate over the time dimension. For each time, we
+    # compute a lazy covariance matrix (filter_mat) from the weights (wght) and
+    # a sinc downweight matrix. (sinc_downweight_mat_inv). We then attempt to
+    # take the psuedo inverse to get a filtering matrix that removes foregrounds.
+    # we do this for the zeroth and first filter dimension.
     output = copy.deepcopy(data)
     #this loop iterates through dimensions to iterate over (fs is the non-filter)
     #axis.
@@ -573,24 +595,24 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
             This is more in-line with a standard filtering operation, rather than a CLEAN operation.
             If False, residual is not added to the CLEAN model.
         linear : bool,
-                 use aipy.deconv.clean if linear == False
-                 if True, perform linear delay filtering.
+            use aipy.deconv.clean if linear == False
+            if True, perform linear delay filtering.
         cache : dict, optional dictionary for storing pre-computed filtering matrices in linear
             cleaning.
         deconv_linear_foregrounds : bool, if True, then apply clean to data - residual where
-                                          res is the data-vector after applying a linear clean filter.
-                                          This allows for in-painting flagged foregrounds without introducing
-                                          clean artifacts into EoR window. If False, mdl will still just be the
-                                          difference between the original data vector and the residuals after
-                                          applying the linear filter.
+            res is the data-vector after applying a linear clean filter.
+            This allows for in-painting flagged foregrounds without introducing
+            clean artifacts into EoR window. If False, mdl will still just be the
+            difference between the original data vector and the residuals after
+            applying the linear filter.
         fg_deconv_method : string, can be 'leastsq' or 'clean'. If 'leastsq', deconvolve difference between data and linear residual
-                                   by performing linear least squares fitting of data - linear resid to dft modes in filter window.
-                                   If 'clean', obtain deconv fg model using perform a hogboem clean of difference between data and linear residual.
+            by performing linear least squares fitting of data - linear resid to dft modes in filter window.
+            If 'clean', obtain deconv fg model using perform a hogboem clean of difference between data and linear residual.
         fg_restore_size: float, optional, allow user to only restore foregrounds subtracted by linear filter
-                             within a region of this size. If None, set to filter_size.
-                             This allows us to avoid the problem that if we have RFI flagging and apply a linear filter
-                             that is larger then the horizon then the foregrounds that we fit might actually include super
-                             -horizon flagging side-lobes and restoring them will introduce spurious structure.
+            within a region of this size. If None, set to filter_size.
+            This allows us to avoid the problem that if we have RFI flagging and apply a linear filter
+            that is larger then the horizon then the foregrounds that we fit might actually include super
+            -horizon flagging side-lobes and restoring them will introduce spurious structure.
 
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
@@ -649,26 +671,27 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
         cache : dict, optional dictionary for storing pre-computed filtering matrices in linear
             cleaning.
         deconv_linear_foregrounds : bool, if True, then apply clean to data - residual where
-                                          res is the data-vector after applying a linear clean filter.
-                                          This allows for in-painting flagged foregrounds without introducing
-                                          clean artifacts into EoR window. If False, mdl will still just be the
-                                          difference between the original data vector and the residuals after
-                                          applying the linear filter.        cache : dict, optional dictionary for storing pre-computed filtering matrices in linear
+            res is the data-vector after applying a linear clean filter.
+            This allows for in-painting flagged foregrounds without introducing
+            clean artifacts into EoR window. If False, mdl will still just be the
+            difference between the original data vector and the residuals after
+            applying the linear filter.
+        cache : dict, optional dictionary for storing pre-computed filtering matrices in linear
             cleaning.
         deconv_linear_foregrounds : bool, if True, then apply clean to data - residual where
-                                          res is the data-vector after applying a linear clean filter.
-                                          This allows for in-painting flagged foregrounds without introducing
-                                          clean artifacts into EoR window. If False, mdl will still just be the
-                                          difference between the original data vector and the residuals after
-                                          applying the linear filter.
+            res is the data-vector after applying a linear clean filter.
+            This allows for in-painting flagged foregrounds without introducing
+            clean artifacts into EoR window. If False, mdl will still just be the
+            difference between the original data vector and the residuals after
+            applying the linear filter.
         fg_deconv_method : string, can be 'leastsq' or 'clean'. If 'leastsq', deconvolve difference between data and linear residual
-                                   by performing linear least squares fitting of data - linear resid to dft modes in filter window.
-                                   If 'clean', obtain deconv fg model using perform a hogboem clean of difference between data and linear residual.
+            by performing linear least squares fitting of data - linear resid to dft modes in filter window.
+            If 'clean', obtain deconv fg model using perform a hogboem clean of difference between data and linear residual.
         fg_restore_size: float, optional, allow user to only restore foregrounds subtracted by linear filter
-                             within a region of this size. If None, set to filter_size.
-                             This allows us to avoid the problem that if we have RFI flagging and apply a linear filter
-                             that is larger then the horizon then the foregrounds that we fit might actually include super
-                             -horizon flagging side-lobes and restoring them will introduce spurious structure.
+            within a region of this size. If None, set to filter_size.
+            This allows us to avoid the problem that if we have RFI flagging and apply a linear filter
+            that is larger then the horizon then the foregrounds that we fit might actually include super
+            -horizon flagging side-lobes and restoring them will introduce spurious structure.
 
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
@@ -734,19 +757,19 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
         cache : dict, optional dictionary for storing pre-computed filtering matrices in linear
             cleaning.
         deconv_linear_foregrounds : bool, if True, then apply clean to data - residual where
-                                          res is the data-vector after applying a linear clean filter.
-                                          This allows for in-painting flagged foregrounds without introducing
-                                          clean artifacts into EoR window. If False, mdl will still just be the
-                                          difference between the original data vector and the residuals after
-                                          applying the linear filter.
+            res is the data-vector after applying a linear clean filter.
+            This allows for in-painting flagged foregrounds without introducing
+            clean artifacts into EoR window. If False, mdl will still just be the
+            difference between the original data vector and the residuals after
+            applying the linear filter.
         fg_deconv_method : string, can be 'leastsq' or 'clean'. If 'leastsq', deconvolve difference between data and linear residual
-                                   by performing linear least squares fitting of data - linear resid to dft modes in filter window.
-                                   If 'clean', obtain deconv fg model using perform a hogboem clean of difference between data and linear residual.
+            by performing linear least squares fitting of data - linear resid to dft modes in filter window.
+            If 'clean', obtain deconv fg model using perform a hogboem clean of difference between data and linear residual.
         fg_restore_size: float, optional, allow user to only restore foregrounds subtracted by linear filter
-                             within a region of this size. If None, set to filter_size.
-                             This allows us to avoid the problem that if we have RFI flagging and apply a linear filter
-                             that is larger then the horizon then the foregrounds that we fit might actually include super
-                             -horizon flagging side-lobes and restoring them will introduce spurious structure.
+            within a region of this size. If None, set to filter_size.
+            This allows us to avoid the problem that if we have RFI flagging and apply a linear filter
+            that is larger then the horizon then the foregrounds that we fit might actually include super
+            -horizon flagging side-lobes and restoring them will introduce spurious structure.
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
         d_res: CLEAN residual -- difference of data and d_mdl, nulled at flagged channels
