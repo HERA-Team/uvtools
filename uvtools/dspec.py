@@ -1235,9 +1235,45 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
     return mdl_array, cn_array, inp_data
 
 
+def delay_interpolation_matrix(nchan, ndelay, wgts, cache={}):
+    '''
+    Computes a foreground interpolation matrix that, when applied to data,
+    interpolates over flagged channels with delays between -ndelays//2 and ndelays//2.
+
+    Parameters
+    ----------
+    nchan: integer
+        Number of frequency channels to interpolate over
+    ndelay,
+        number of delays to use in interpolation
+    wgts: float array
+        wgts to be applied to each frequency channel.
+
+    Returns
+    ----------
+    (nchan, nchan) numpy array
+        that can be used to interpolate over channel gaps. 
+    '''
+    assert len(wgts) == nchan, "nchan must equal length of wgts"
+    matkey = (nchan, ndelay) + tuple(wgts)
+    assert np.sum((np.abs(wgts) > 0.).astype(float)) >= ndelay, "number of unflagged channels must be greater then or equal to number of delays"
+    if not matkey in cache:
+        f, d = np.meshgrid(np.arange(-nchan//2, nchan//2), np.arange(-ndelay//2, ndelay//2), indexing='ij')
+        d = d / nchan
+        a_mat = 1. / nchan * np.exp(2j * d * f * np.pi)
+        a_mat_w = (a_mat.T * wgts).T
+        # a_mat_w fits mode amplitudes
+        a_mat_w = np.linalg.inv(a_mat_w.T @ a_mat_w) @ a_mat_w.T
+        # apply a_mat to take inverse FT of modes. This is the interpolation matrix
+        a_mat = a_mat @ a_mat_w
+        cache[matkey] = a_mat
+    a_mat = cache[matkey]
+    return a_mat
+
+
 def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_widths,
-                            filter_factors, cache = {}, wrap = False, wrap_interval=1,
-                            nwraps = 1000, no_regularization = False):
+                            filter_factors, cache={}, wrap=False, wrap_interval=1,
+                            nwraps=1000, no_regularization=False):
     """
     Computes the inverse of sinc weights for a baseline.
     This form of weighting is diagonal in delay-space and down-weights tophat regions.

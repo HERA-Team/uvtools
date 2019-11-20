@@ -434,6 +434,20 @@ def test_vis_filter():
     rfft2 = np.fft.ifft2(res2)
     nt.assert_true(np.median(np.abs(rfft2[:15, :23] / rfft[:15, :23])) < 1)
 
+def test_delay_interpolation_matrix():
+    MYCACHE={}
+    fs = np.arange(-10,10)
+    data = np.exp(2j * np.pi * 3/20 * fs) + 5*np.exp(2j * np.pi * 4/20 * fs)
+    data += np.exp(-2j * np.pi * 3/20 * fs) + 5*np.exp(2j * np.pi * 1/20 * fs)
+    wgts = np.ones_like(data)
+    wgts[6] = 0
+    wgts[17] = 0
+    dw = data*wgts
+    #interpolate data and see if it matches true data.
+    data_interp = dspec.delay_interpolation_matrix(20, 10, wgts, MYCACHE) @ dw
+    assert np.all(np.isclose(data_interp, data, atol=1e-6))
+
+
 def test_vis_filter_linear():
     # load file
     uvd = UVData()
