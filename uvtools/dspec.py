@@ -396,6 +396,37 @@ def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, fil
         info: dictionary with filtering parameters and a list of skipped_times and skipped_channels
 
     '''
+    # check that data and weight shapes are consistent.
+    d_shape = data.shape
+    w_shape = wgts.shape
+    d_dim = data.ndim
+    w_dim = wgts.ndim
+
+    if not (d_dim == 1 or d_dim == 2):
+        raise ValueError("number of dimensions in data array does not "
+                         "equal 1 or 2! data dim = %d"%(d_dim))
+    if not (w_dim == 1 or w_dim == 2):
+        raise ValueError("number of dimensions in wgts array does not "
+                         "equal 1 or 2! wght dim = %d"%(w_dim))
+    if not w_dim == d_dim:
+        raise ValueError("number of dimensions in data array does not equal "
+                         "number of dimensions in weights array."
+                         "data.dim == %d, wgts.dim == %d"%(d_dim, w_dim))
+    for dim in range(d_dim):
+        if not d_shape[dim] == w_shape[dim]:
+            raise ValueError("number of elements along data dimension %d, nel=%d"
+                             "does not equal the number of elements along weight"
+                             "dimension %d, nel = %d"%(dim, d_shape[dim], dim, w_shape[dim]))
+    #convert 1d data to 2d data to save lines of code.
+    if d_dim == 1:
+        data = np.asarray([data])
+        wgts = np.asarray([wgts])
+        data_1d = True
+    else:
+        data_1d = False
+    nchan = data.shape[1]
+    ntimes = data.shape[0]
+    
     # Check that inputs are tiples or lists
     assert isinstance(filter_dimensions, (list,tuple,int)), "filter_dimensions must be a list or tuple"
     # if filter_dimensions are supplied as a single integer, convert to list (core code assumes lists).
@@ -471,37 +502,6 @@ def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, fil
                     raise ValueError("Number of elements in %s-%d must equal the"
                                      " number of elements %s-%d!"%(aname1, fs, aname2, fs))
 
-
-    d_shape = data.shape
-    w_shape = wgts.shape
-    d_dim = data.ndim
-    w_dim = wgts.ndim
-
-    if not (d_dim == 1 or d_dim == 2):
-        raise ValueError("number of dimensions in data array does not "
-                         "equal 1 or 2! data dim = %d"%(d_dim))
-    if not (w_dim == 1 or w_dim == 2):
-        raise ValueError("number of dimensions in wgts array does not "
-                         "equal 1 or 2! wght dim = %d"%(w_dim))
-    if not w_dim == d_dim:
-        raise ValueError("number of dimensions in data array does not equal "
-                         "number of dimensions in weights array."
-                         "data.dim == %d, wgts.dim == %d"%(d_dim, w_dim))
-    for dim in range(d_dim):
-        if not d_shape[dim] == w_shape[dim]:
-            raise ValueError("number of elements along data dimension %d, nel=%d"
-                             "does not equal the number of elements along weight"
-                             "dimension %d, nel = %d"%(dim, d_shape[dim], dim, w_shape[dim]))
-    #convert 1d data to 2d data to save lines of code.
-    if d_dim == 1:
-        data = np.asarray([data])
-        wgts = np.asarray([wgts])
-        data_1d = True
-    else:
-        data_1d = False
-
-    nchan = data.shape[1]
-    ntimes = data.shape[0]
     info = {'filter_centers':filter_centers, 'filter_widths':filter_widths, 'filter_factors': filter_factors,
             'delta_data':delta_data, 'data_shape':data.shape, 'filter_dimensions': filter_dimensions}
     skipped = [[],[]]
