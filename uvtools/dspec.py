@@ -1235,7 +1235,7 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
     return mdl_array, cn_array, inp_data
 
 
-def delay_interpolation_matrix(nchan, ndelay, wgts, cache={}):
+def delay_interpolation_matrix(nchan, ndelay, wgts, dres=1., cache={}):
     '''
     Computes a foreground interpolation matrix that, when applied to data,
     interpolates over flagged channels with delays between -ndelays//2 and ndelays//2.
@@ -1248,18 +1248,21 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, cache={}):
         number of delays to use in interpolation
     wgts: float array
         wgts to be applied to each frequency channel.
-
+    dres: float, optional
+        adjustment factor to control pacing between delay modes
+    cache: dict, optional
+        optional cache holding pre-computed matrices
     Returns
     ----------
     (nchan, nchan) numpy array
-        that can be used to interpolate over channel gaps. 
+        that can be used to interpolate over channel gaps.
     '''
     assert len(wgts) == nchan, "nchan must equal length of wgts"
     matkey = (nchan, ndelay) + tuple(wgts)
     assert np.sum((np.abs(wgts) > 0.).astype(float)) >= ndelay, "number of unflagged channels must be greater then or equal to number of delays"
     if not matkey in cache:
         f, d = np.meshgrid(np.arange(-nchan//2, nchan//2), np.arange(-ndelay//2, ndelay//2), indexing='ij')
-        d = d / nchan
+        d = d / nchan * dres
         a_mat = 1. / nchan * np.exp(2j * d * f * np.pi)
         a_mat_w = (a_mat.T * wgts).T
         # a_mat_w fits mode amplitudes
