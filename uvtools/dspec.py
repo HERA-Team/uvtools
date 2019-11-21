@@ -272,7 +272,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         uthresh, lthresh = calc_width(filter_size[1], real_delta[1], data.shape[1])
         a2[uthresh:lthresh] = 0
         area = np.outer(a1, a2)
-
+        # the following lines are only necessary for linear filtering.
         uthresh_fg, lthresh_fg = calc_width(fg_restore_size[0], real_delta[0], data.shape[0])
         a1fg = np.ones(data.shape[0], dtype=np.int)
         a1fg[uthresh_fg:lthresh_fg] = 0
@@ -363,7 +363,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
     else:
         d_mdl = np.fft.fft(_d_cl)
         d_res = np.fft.fft(_d_res)
-
+    # get residual in data space
     if not linear:
         d_res = (data - d_mdl) * ~np.isclose(wgts * win, 0.0)
 
@@ -426,7 +426,7 @@ def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, fil
         data_1d = False
     nchan = data.shape[1]
     ntimes = data.shape[0]
-    
+
     # Check that inputs are tiples or lists
     assert isinstance(filter_dimensions, (list,tuple,int)), "filter_dimensions must be a list or tuple"
     # if filter_dimensions are supplied as a single integer, convert to list (core code assumes lists).
