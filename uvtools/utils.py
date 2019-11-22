@@ -194,3 +194,34 @@ def savefig(fig, save_path):
             fig.savefig(path)
     else:
         fig.savefig(path)
+
+def diff(vis1, vis2, mode):
+    """Calculate a specified type of difference between two visibilities.
+
+    Parameters
+    ----------
+    vis1, vis2 : ndarray of complex
+        Arrays of visibility data to be differenced.
+
+    mode : str
+        Type of difference to take. Possible options are as follows:
+            'abs' : Return the difference of the visibility amplitudes
+            'phs' : Return the difference of the visibility phases
+            'complex' : Return the amplitude of the complex difference
+
+    Returns
+    -------
+    visdiff : ndarray of float
+        Difference of `vis1` and `vis2` calculated according to `mode`.
+
+    """
+    if mode == "abs":
+        return np.abs(vis1) - np.abs(vis2)
+    elif mode == "phs":
+        return np.angle(vis1) - np.angle(vis2)
+    elif mode == "complex":
+        return np.abs(vis1 - vis2)
+    else:
+        raise ValueError("You have not specified an accepted differencing "
+                         "mode. Please see the documentation for the "
+                         "supported differencing modes.")

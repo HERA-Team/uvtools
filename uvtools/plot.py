@@ -1,5 +1,6 @@
 import aipy
 import numpy as np
+from scipy.stats import binned_statistic_2d
 
 from . import utils
 
@@ -556,25 +557,24 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
 
     # import matplotlib, setup the figure
     import matplotlib.pyplot as plt
-    figsize = (4 * 2, 3 * len(plot_type)) # (4,3) figsize for each plot
+    figsize = (4 * 3, 3 * len(plot_type)) # (4,3) figsize for each plot
     fig = plt.figure(figsize=figsize)
-    axes = fig.subplots(len(plot_type), 2) # stack of amp & phase difference plots
+    axes = fig.subplots(len(plot_type), 3)
     axes = [axes,] if len(axes.shape) == 1 else axes # avoid bug for single row
     axes[0][0].set_title("Amplitude Difference", fontsize=12)
     axes[0][1].set_title("Phase Difference", fontsize=12)
+    axes[0][2].set_title("Amplitude of Complex Difference", fontsize=12)
 
     # helper function for getting the extent of axes
     extent = lambda xvals, yvals : (xvals[0], xvals[-1], yvals[-1], yvals[0])
-
-    # helper functions for taking difference of abs and phase
-    absdiff = lambda vis1, vis2 : np.abs(vis1) - np.abs(vis2)
-    phsdiff = lambda vis1, vis2 : np.angle(vis1) - np.angle(vis2)
 
     # loop over items in visibilities and plot them
     for i, item in enumerate(visibilities.items()):
         # extract visibilities, get diffs
         visA, visB = item[1].values()
-        diffs = (absdiff(visA, visB), phsdiff(visA, visB))
+        diffs = (utils.diff(visA, visB, 'abs'), 
+                 utils.diff(visA, visB, 'phs'),
+                 utils.diff(visA, visB, 'complex'))
 
         # extract parameters
         ykey, xkey = item[0].split("_vs_") # keys for choosing parameters
@@ -591,8 +591,8 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
 
             # plot waterfall and add a colorbar
             fig.sca(ax)
-            cax = waterfall(diff, mode="real", 
-                            cmap="viridis", extent=extent(xvals, yvals))
+            cax = waterfall(diff, mode="real", cmap='viridis', 
+                            extent=extent(xvals, yvals))
             fig.colorbar(cax)
 
     # display the figure
@@ -604,7 +604,8 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
         utils.savefig(fig, save_path)
 
 def plot_diff_uv(uvd1, uvd2, pol=None, speedup=True,
-                 skip_check=False, save_path=None):
+                 skip_check=False, save_path=None,
+                 resolution=50):
     """Summary plot for difference between visibilities.
 
     Parameters
@@ -633,6 +634,9 @@ def plot_diff_uv(uvd1, uvd2, pol=None, speedup=True,
         Path to where the figure should be saved; may be absolute or relative.
         Default is to not save the figure.
     
+    resolution : int, optional
+        Number of bins to use for regridding the u and v arrays.
+
     """
     # check the metadata unless instructed otherwise
     if not skip_check:
@@ -655,87 +659,70 @@ def plot_diff_uv(uvd1, uvd2, pol=None, speedup=True,
     # reshape uvw vectors to (Nblts, Nfreq, 3)
     uvw_vecs = np.einsum("ijk->jik", uvw_vecs)
 
-    # get difference of visibility amplitudes and phases
-    absdiff = np.abs(uvd1.data_array) - np.abs(uvd2.data_array)
-    phsdiff = np.angle(uvd1.data_array) - np.angle(uvd2.data_array)
+    # get the u and v arrays, flattened
+    uvals, vvals = uvw_vecs[:,:,0].flatten(), uvw_vecs[:,:,1].flatten()
 
-    # change shape to (Nblts, Nfreq)
-    absdiff = absdiff[:,0,:,pol]
-    phsdiff = phsdiff[:,0,:,pol]
+    # get the regridded u and v arrays' bin edges
+    u_regrid = np.linspace(uvals.min(), uvals.max(), resolution+1)
+    v_regrid = np.linspace(vvals.min(), vvals.max(), resolution+1)
+
+    # make an alias for regridding an array and taking the complex mean
+    # this also takes the transpose so that axis0 is along the v-axis
+    bin_2d = lambda arr : binned_statistic_2d(
+                            uvals, vvals, arr, statistic='mean', 
+                            bins=[u_regrid, v_regrid])[0].T
+
+    # regrid the visibilities
+    # need to do real/imag separately or information is lost
+    vis1 = uvd1.data_array[:,0,:,pol].flatten()
+    vis2 = uvd2.data_array[:,0,:,pol].flatten()
+    vis1 = bin_2d(vis1.real) + 1j*bin_2d(vis1.imag)
+    vis2 = bin_2d(vis2.real) + 1j*bin_2d(vis2.imag)
+
+    # calculate differences of amplitudes and phases as masked arrays
+    absdiff_ma = utils.diff(vis1, vis2, "abs")
+    phsdiff_ma = utils.diff(vis1, vis2, "phs")
+    cabsdiff_ma = utils.diff(vis1, vis2, "complex")
+
+    # make the arrays into proper masked arrays
+    mask = lambda arr : np.ma.MaskedArray(arr, np.isnan(arr))
+    absdiff_ma = mask(absdiff_ma)
+    phsdiff_ma = mask(phsdiff_ma)
+    cabsdiff_ma = mask(cabsdiff_ma)
+
+    # remove nans so that the data can actually be normalized
+    unnan = lambda arr : arr[np.where(np.logical_not(np.isnan(arr)))]
+    absdiff = unnan(absdiff_ma)
+    phsdiff = unnan(phsdiff_ma)
+    cabsdiff = unnan(cabsdiff_ma)
 
     # import matplotlib to  set things up and make the plot
     import matplotlib.pyplot as plt
     
     # get norms for generating colormaps for difference arrays
-    absnorm = plt.cm.colors.SymLogNorm(100, vmin=absdiff.min(), vmax=absdiff.max())
-    phsnorm = plt.cm.colors.Normalize(vmin=-2*np.pi, vmax=2*np.pi)
-
-    if not speedup:
-        # get scalar maps for generating colorbars
-        abs_sm = plt.cm.ScalarMappable(norm=absnorm, cmap="viridis")
-        phs_sm = plt.cm.ScalarMappable(norm=phsnorm, cmap="viridis")
-
-        # get colormaps with shape (Nblts, Nfreq, 4)
-        abscmap = plt.cm.viridis(absnorm(absdiff))
-        phscmap = plt.cm.viridis(phsnorm(phsdiff))
-
-        # get the flattened u, v, and colormap arrays
-        uvals = uvw_vecs[:,:,0].flatten()
-        vvals = uvw_vecs[:,:,1].flatten()
-        abscmap = np.array([abscmap[:,:,j].flatten() for j in range(4)]).T
-        phscmap = np.array([phscmap[:,:,j].flatten() for j in range(4)]).T
-    else:
-        # get regridded uv-plane
-        uvals = np.linspace(uvw_vecs[:,:,0].min(), uvw_vecs[:,:,0].max(), 50)
-        vvals = np.linspace(uvw_vecs[:,:,1].min(), uvw_vecs[:,:,1].max(), 50)
-        u_regrid, v_regrid = np.meshgrid(uvals, vvals)
-
-        # regrid the difference arrays
-        absdiff_r = np.zeros(u_regrid.shape)
-        phsdiff_r = np.zeros(u_regrid.shape)
-        for i in range(absdiff.shape[0]):
-            for j in range(absdiff.shape[1]):
-                # get the (u,v) values for the blt/freq
-                u, v = uvw_vecs[i,j,0], uvw_vecs[i,j,1]
-                # get the distance from (u,v) to the regridded uv-plane coords
-                du, dv = np.abs(u_regrid - u), np.abs(v_regrid - v)
-                # find the nearest regridded (u,v) bin
-                u_key = np.where(du == du.min(), True, False)
-                v_key = np.where(dv == dv.min(), True, False)
-                diff_key = np.logical_and(u_key, v_key)
-                # regrid the difference arrays
-                absdiff_r[diff_key] = absdiff[i,j]
-                phsdiff_r[diff_key] = phsdiff[i,j]
-
-        # now make them into masked arrays
-        abs_mask = np.where(absdiff_r==0, True, False)
-        phs_mask = np.where(phsdiff_r==0, True, False)
-        absdiff_ma = np.ma.MaskedArray(absdiff_r, abs_mask)
-        phsdiff_ma = np.ma.MaskedArray(phsdiff_r, phs_mask)
+    absnorm = plt.cm.colors.SymLogNorm(0.1, vmin=absdiff.min(), vmax=absdiff.max())
+    phsnorm = plt.cm.colors.Normalize(vmin=phsdiff.min(), vmax=phsdiff.max())
+    cabsnorm = plt.cm.colors.LogNorm(vmin=cabsdiff.min(), vmax=cabsdiff.max())
 
     # setup the figure
-    fig = plt.figure(figsize=(12,5))
-    ax1, ax2 = fig.subplots(1,2)
+    fig = plt.figure(figsize=(15,4.5))
+    axes = fig.subplots(1,3)
     
     # add labels
-    for ax, label in zip((ax1, ax2), ("Amplitude", "Phase")):
+    for ax, label in zip(axes, ("Amplitude", "Phase", "Amplitude of Complex")):
         ax.set_xlabel(r'$u$', fontsize=12)
         ax.set_ylabel(r'$v$', fontsize=12)
         ax.set_title(" ".join([label, "Difference"]), fontsize=12)
 
-    if not speedup:
-        for ax, cmap in zip((ax1, ax2), (abscmap, phscmap)):
-            for u, v, color in zip(uvals, vvals, cmap):
-                ax.plot(u, v, color=color, marker='o', ms=5, alpha=0.7)
-        # add some colorbars
-        fig.colorbar(abs_sm, ax=ax1)
-        fig.colorbar(phs_sm, ax=ax2)
-    else:
-        extent = (uvals.min(), uvals.max(), vvals.max(), vvals.min())
-        for ax, diff, norm in zip((ax1, ax2), (absdiff_ma, phsdiff_ma), (absnorm, phsnorm)):
-            cax = ax.imshow(diff, norm=norm, aspect="auto", cmap="viridis", extent=extent)
-            fig.sca(ax)
-            fig.colorbar(cax)
+    extent = (uvals.min(), uvals.max(), vvals.max(), vvals.min())
+    plot_iterable = zip(axes, 
+                        (absdiff_ma, phsdiff_ma, cabsdiff_ma), 
+                        (absnorm, phsnorm, cabsnorm))
+    for ax, diff, norm in plot_iterable:
+        cax = ax.imshow(diff, norm=norm, aspect="auto", 
+                        cmap='viridis', extent=extent)
+        fig.sca(ax)
+        fig.colorbar(cax)
 
     # tidy up and display
     plt.tight_layout()
