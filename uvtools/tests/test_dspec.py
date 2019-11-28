@@ -201,46 +201,46 @@ def test_linear_filter():
     data_1d = fg_ns
     data_2d = np.array([data_1d, data_1d])
     filter_centers = [0.]
-    filter_widths = [200e-9]
+    filter_half_widths = [200e-9]
     filter_factors = [1e-9]
     wghts_1d = np.ones(nf)
     wghts_2d = np.array([wghts_1d, wghts_1d])
     #test functionality for numpy arrays
-    dspec.linear_filter(data_1d, wghts_1d, df, [1], np.array(filter_centers), np.array(filter_widths),
+    dspec.linear_filter(data_1d, wghts_1d, df, [1], np.array(filter_centers), np.array(filter_half_widths),
                         np.array(filter_factors))
     #test functionality on floats
-    dspec.linear_filter(data_1d, wghts_1d, df, 1, filter_centers[0], filter_widths[0],
+    dspec.linear_filter(data_1d, wghts_1d, df, 1, filter_centers[0], filter_half_widths[0],
                         filter_factors[0])
-    filter_widths2 = [200e-9, 200e-9]
+    filter_half_widths2 = [200e-9, 200e-9]
     filter_centers2 = [0., -1400e-9]
     filter_factors2 = [1e-9, 1e-9]
-    #check if throws error when number of filter_widths not equal to len filter_centers
+    #check if throws error when number of filter_half_widths not equal to len filter_centers
     nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_1d, df, [1], filter_centers,
-                    filter_widths2, filter_factors)
-    #check if throws error when number of filter_widths not equal to len filter_factors
+                    filter_half_widths2, filter_factors)
+    #check if throws error when number of filter_half_widths not equal to len filter_factors
     nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_1d, df, 1, filter_centers,
-                    filter_widths, filter_factors2)
+                    filter_half_widths, filter_factors2)
     #check if error thrown when wghts have different length then data
     nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_1d[:-1], df, 1, filter_centers,
-                    filter_widths, filter_factors)
+                    filter_half_widths, filter_factors)
     #check if error thrown when dimension of data does not equal dimension of weights.
     nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_2d, df, 1, filter_centers,
-                    filter_widths, filter_factors)
+                    filter_half_widths, filter_factors)
     #check if error thrown if dimension of data does not equal 2 or 1.
     nt.assert_raises(ValueError, dspec.linear_filter, np.zeros((10,10,10)), wghts_1d, df, 1, filter_centers,
-                    filter_widths, filter_factors)
+                    filter_half_widths, filter_factors)
     #check if error thrown if dimension of weights does not equal 2 or 1.
     nt.assert_raises(ValueError, dspec.linear_filter, wghts_1d, np.zeros((10,10,10)), df, 1, filter_centers,
-                    filter_widths, filter_factors)
+                    filter_half_widths, filter_factors)
     #now filter foregrounds and test that std of residuals are close to std of noise:
-    filtered_noise, _ =  dspec.linear_filter(data_1d, wghts_1d, df, [1], filter_centers, filter_widths,
+    filtered_noise, _ =  dspec.linear_filter(data_1d, wghts_1d, df, [1], filter_centers, filter_half_widths,
                                          filter_factors)
     #print(np.std((data_1d - fg_tone).real)*np.sqrt(2.))
     #print(np.std((filtered_noise).real)*np.sqrt(2.))
     np.testing.assert_almost_equal( np.std(filtered_noise.real)**2. + np.std(filtered_noise.imag)**2.,
                                   np.std(noise.real)**2. + np.std(noise.imag)**2., decimal = 0)
     #now filter foregrounds and signal and test that std of residuals are close to std of signal.
-    filtered_signal, _ =  dspec.linear_filter(fg_sg, wghts_1d, df, [1], filter_centers, filter_widths,
+    filtered_signal, _ =  dspec.linear_filter(fg_sg, wghts_1d, df, [1], filter_centers, filter_half_widths,
                                               filter_factors)
     np.testing.assert_almost_equal( (np.std(filtered_signal.real)**2. + np.std(filtered_signal.imag)**2.)/1e4,
                                   (np.std(sg_tone.real)**2. + np.std(sg_tone.imag)**2.)/1e4, decimal = 0)
@@ -259,7 +259,7 @@ def test_linear_filter():
     #now, only filter fringe-rate domain. The fringe rate for a source
     #overhead should be roughly 0.0036 for this baseline.
     filtered_data_fr, _ = dspec.linear_filter(data_2d, np.ones_like(data_2d), delta_data = dt,
-                        filter_centers = [0.], filter_widths = [0.004], filter_factors = [1e-10],
+                        filter_centers = [0.], filter_half_widths = [0.004], filter_factors = [1e-10],
                         filter_dimensions = [0], cache = TEST_CACHE)
 
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_fr.flatten())**2.)),
@@ -268,7 +268,7 @@ def test_linear_filter():
     #only filter in the delay-domain.
 
     filtered_data_df, _ = dspec.linear_filter(data_2d, np.ones_like(data_2d), delta_data=100e3,
-                        filter_centers = [0.], filter_widths=[100e-9], filter_factors=[1e-10],
+                        filter_centers = [0.], filter_half_widths=[100e-9], filter_factors=[1e-10],
                         filter_dimensions = [1], cache = TEST_CACHE)
 
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df.flatten())**2.)),
@@ -278,7 +278,7 @@ def test_linear_filter():
     #for each domain since they multiply in the target region.
 
     filtered_data_df_fr, _ = dspec.linear_filter(data_2d, np.ones_like(data_2d), delta_data = [dt,100e3],
-                    filter_centers = [[0.002],[0.]], filter_widths = [[0.001],[100e-9]], filter_factors = [[1e-5],[1e-5]],
+                    filter_centers = [[0.002],[0.]], filter_half_widths = [[0.001],[100e-9]], filter_factors = [[1e-5],[1e-5]],
                     filter_dimensions = [0,1],cache = TEST_CACHE)
 
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df_fr.flatten())**2.)),
@@ -294,12 +294,12 @@ def test_linear_filter():
     #np.testing.assert_array_equal(np.array(info_fail['skipped_channels']), np.array([0]))
 
 def test_sinc_downweight_mat_inv():
-    cmat = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = [], filter_widths = [], filter_factors = [])
+    cmat = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = [], filter_half_widths = [], filter_factors = [])
     #verify that the inverse cleaning matrix without cleaning windows is the identity!
     np.testing.assert_array_equal(cmat, np.identity(32).astype(np.complex128))
     #next, test with a single filter window with list and float arguments supplied
-    cmat1 = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = 0., filter_widths = 112e-9, filter_factors = 1e-9)
-    cmat2 = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = [0.], filter_widths = [112e-9], filter_factors = [1e-9])
+    cmat1 = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = 0., filter_half_widths = 112e-9, filter_factors = 1e-9)
+    cmat2 = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = [0.], filter_half_widths = [112e-9], filter_factors = [1e-9])
     x,y = np.meshgrid(np.arange(-16,16), np.arange(-16,16))
     cmata = np.identity(32).astype(np.complex128) + 1e9 * np.sinc( (x-y) * 100e3 * 224e-9 ).astype(np.complex128)
     np.testing.assert_array_equal(cmat1, cmat2)
@@ -307,12 +307,12 @@ def test_sinc_downweight_mat_inv():
     np.testing.assert_almost_equal(cmat1, cmata)
     #now test no_regularization
     cmat1 = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = 0.,
-            filter_widths = 112e-9, filter_factors = 1, no_regularization = True)
+            filter_half_widths = 112e-9, filter_factors = 1, no_regularization = True)
     np.sinc( (x-y) * 100e3 * 224e-9 ).astype(np.complex128)
     np.testing.assert_almost_equal(cmat1, cmata / 1e9)
     #now test wrap!
     cmat1 = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = 0.,
-            filter_widths = 112e-9, filter_factors = 1, wrap = True,
+            filter_half_widths = 112e-9, filter_factors = 1, wrap = True,
              no_regularization = True)
     cmata = np.zeros_like(cmat1)
     for m in range(-500,500):
