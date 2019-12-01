@@ -837,7 +837,7 @@ def _get_bl_dly(bl_len, horizon=1., standoff=0., min_dly=0.):
     return bl_dly
 
 
-def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, normalization='none'', **kwargs):
+def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, normalization='none', **kwargs):
     """
     Generate a 1D window function of length N.
 
