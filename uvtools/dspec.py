@@ -837,7 +837,7 @@ def _get_bl_dly(bl_len, horizon=1., standoff=0., min_dly=0.):
     return bl_dly
 
 
-def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, **kwargs):
+def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, normalize='none'', **kwargs):
     """
     Generate a 1D window function of length N.
 
@@ -849,7 +849,10 @@ def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, **kwargs):
         edgecut_hi : int, number of bins to consider as zero-padded at the high-side
             of the array, such that the window smoothly connects to zero.
         alpha : if window is 'tukey', this is its alpha parameter.
+        normalize : str, optional
+            set to 'rms' to divide by rms and 'mean' to divide by mean.
     """
+    assert normalization in ['none', 'mean', 'rms'], "normalization must be one of ['none', 'rms', 'mean']"
     # parse multiple input window or special windows
     w = np.zeros(N, dtype=np.float)
     Ncut = edgecut_low + edgecut_hi
@@ -890,7 +893,10 @@ def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, **kwargs):
             w[edgecut_low:edgecut_hi] = getattr(windows, window)(N - Ncut)
         except AttributeError:
             raise ValueError("Didn't recognize window {}".format(window))
-
+    if normalize == 'rms':
+        w = w / np.sqrt(np.mean(np.abs(w)**2.))
+    if normalize == 'mean':
+        w = w / w.mean()
     return w
 
 
