@@ -28,6 +28,7 @@ install:
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION coverage coveralls
   - source activate test-environment
   - conda env update -n test-environment -f environment.yml
+  - pip install --user git+https://github.com/matplotlib/basemap.git # workaround
   - pip install .
 
 before_script:
