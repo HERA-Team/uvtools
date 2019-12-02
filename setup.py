@@ -40,7 +40,8 @@ setup_args = {
         'numpy',
         'aipy>=3.0rc2',
         'six',
-        'scipy'
+        'scipy',
+        'basemap'
     ]
 }
 
