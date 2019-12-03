@@ -444,7 +444,7 @@ def test_delay_interpolation_matrix():
     wgts[17] = 0
     dw = data*wgts
     #interpolate data and see if it matches true data.
-    data_interp = np.dot(dspec.delay_interpolation_matrix(20, 10, wgts, cache=MYCACHE), dw)
+    data_interp = np.dot(dspec.delay_interpolation_matrix(20, 5, wgts, cache=MYCACHE), dw)
     assert np.all(np.isclose(data_interp, data, atol=1e-6))
 
 

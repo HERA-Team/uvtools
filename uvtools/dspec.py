@@ -1269,7 +1269,7 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
     matkey = (nchan, ndelay) + tuple(wgts)
     assert np.sum((np.abs(wgts) > 0.).astype(float)) >= ndelay, "number of unflagged channels must be greater then or equal to number of delays"
     if fundamental_period is None:
-        fundamental_period = 2*nchan #this tends to give well conditioned matrices. 
+        fundamental_period = nchan #this tends to give well conditioned matrices. 
     if not matkey in cache or return_diagnostics:
         f, d = np.meshgrid(np.arange(nchan)-nchan/2, np.arange(-ndelay,ndelay), indexing='ij')
         #f = np.asarray([[chan for m in range(ndelay)] for chan in np.arange(-nchan//2,nchan//2)])
