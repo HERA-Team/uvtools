@@ -21,7 +21,7 @@ def package_files(package_dir, subdirectory):
             path = path.replace(package_dir + '/', '')
             paths.append(os.path.join(path, filename))
     return paths
-    
+
 data_files = package_files('uvtools', 'data')
 
 setup_args = {
@@ -41,7 +41,6 @@ setup_args = {
         'aipy>=3.0rc2',
         'six',
         'scipy',
-        'basemap'
     ]
 }
 
