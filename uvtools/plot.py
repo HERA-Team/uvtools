@@ -470,7 +470,7 @@ def omni_view_gif(filenames, name='omni_movie.gif'):
     imageio.mimsave(name, images)
     
 def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all", 
-                        skip_check=False, save_path=None):
+                        skip_check=False):
     """Produce waterfall plot(s) of differenced visibilities.
 
     Parameters
@@ -494,10 +494,6 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
     skip_check : bool, optional
         Whether to check that the metadata in `uvd1` and `uvd2` match.
         Default behavior is to check the metadata.
-
-    save_path : str, optional
-        Path specifying where to save the figure. Can be absolute or relative. 
-        Default behavior does not save the figure.
 
     """
     # check that metadata agrees, unless specified otherwise
@@ -595,17 +591,10 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
                             extent=extent(xvals, yvals))
             fig.colorbar(cax)
 
-    # display the figure
-    plt.tight_layout()
-    plt.show()
-
-    # save if desired
-    if save_path is not None:
-        utils.savefig(fig, save_path)
+    return fig
 
 def plot_diff_uv(uvd1, uvd2, pol=None, speedup=True,
-                 skip_check=False, save_path=None,
-                 resolution=50):
+                 skip_check=False, resolution=50):
     """Summary plot for difference between visibilities.
 
     Parameters
@@ -630,10 +619,6 @@ def plot_diff_uv(uvd1, uvd2, pol=None, speedup=True,
         Whether to check that the metadata for `uvd1` and `uvd2` match.
         Default behavior is to check the metadata.
 
-    save_path : str, optional
-        Path to where the figure should be saved; may be absolute or relative.
-        Default is to not save the figure.
-    
     resolution : int, optional
         Number of bins to use for regridding the u and v arrays.
 
@@ -724,10 +709,4 @@ def plot_diff_uv(uvd1, uvd2, pol=None, speedup=True,
         fig.sca(ax)
         fig.colorbar(cax)
 
-    # tidy up and display
-    plt.tight_layout()
-    plt.show()
-
-    # save if desired
-    if save_path is not None:
-        utils.savefig(fig, save_path)
+    return fig
