@@ -5,6 +5,7 @@ try:
     from mpl_toolkits.basemap import Basemap
 except:
     print("Fringe test requires Basemap! Try running 'pip install --user git+https://github.com/matplotlib/basemap.git'")
+    raise
 import uvtools.fringe as fringe
 
 # XXX these aren't actually unittests.  need real ones.
