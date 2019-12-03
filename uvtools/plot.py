@@ -175,9 +175,8 @@ def plot_hmap_ortho(h, cmap='jet', mode='log', mx=None, drng=None,
     """
     try:
         from mpl_toolkits.basemap import Basemap
-    except:
-        print("plot_hmap_ortho requires Basemap. Try running 'pip install --user git+https://github.com/matplotlib/basemap.git'")
-        raise
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError("plot_hmap_ortho requires Basemap. Try running 'pip install --user git+https://github.com/matplotlib/basemap.git'")
     # Check validity of inputs
     validity_msg = "Must specify either `vmin` and `vmax` *or* `mx` and `drng`."
     if mx is not None or drng is not None:
