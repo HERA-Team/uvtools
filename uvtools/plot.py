@@ -470,7 +470,7 @@ def omni_view_gif(filenames, name='omni_movie.gif'):
     imageio.mimsave(name, images)
     
 def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all", 
-                        skip_check=False):
+                        check_metadata=True):
     """Produce waterfall plot(s) of differenced visibilities.
 
     Parameters
@@ -491,13 +491,19 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
         ('time_vs_dly'); fringe rate and frequency ('fr_vs_freq'); fringe 
         rate and delay ('fr_vs_dly'). Default is to use all plot types.
     
-    skip_check : bool, optional
-        Whether to check that the metadata in `uvd1` and `uvd2` match.
-        Default behavior is to check the metadata.
+    check_metadata : bool, optional
+        Whether to check that the metadata for `uvd1` and `uvd2` match.
+        This check ensures that the time and frquency arrays for `uvd1` 
+        and `uvd2` agree, with the tolerance set by the mean integration 
+        time and channel width, respectively. The check also ensures 
+        that the baseline vectors for `uvd1` and `uvd2` agree on a 
+        per-component level; the tolerance is set to the default for 
+        ``np.isclose``. An ``AssertionError`` is raised if any of these 
+        conditions are not met. Default behavior is to check the metadata.
 
     """
     # check that metadata agrees, unless specified otherwise
-    if not skip_check:
+    if check_metadata:
         utils.check_uvd_pair_metadata(uvd1, uvd2)
 
     # get visibility data
@@ -594,7 +600,7 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
     return fig
 
 def plot_diff_uv(uvd1, uvd2, pol=None, speedup=True,
-                 skip_check=False, resolution=50):
+                 check_metadata=True, resolution=50):
     """Summary plot for difference between visibilities.
 
     Parameters
@@ -615,16 +621,22 @@ def plot_diff_uv(uvd1, uvd2, pol=None, speedup=True,
         implementation is only really usable for small sets of data.
         Default is to use the fast implementation.
 
-    skip_check : bool, optional
+    check_metadata : bool, optional
         Whether to check that the metadata for `uvd1` and `uvd2` match.
-        Default behavior is to check the metadata.
+        This check ensures that the time and frquency arrays for `uvd1` 
+        and `uvd2` agree, with the tolerance set by the mean integration 
+        time and channel width, respectively. The check also ensures 
+        that the baseline vectors for `uvd1` and `uvd2` agree on a 
+        per-component level; the tolerance is set to the default for 
+        ``np.isclose``. An ``AssertionError`` is raised if any of these 
+        conditions are not met. Default behavior is to check the metadata.
 
     resolution : int, optional
         Number of bins to use for regridding the u and v arrays.
 
     """
     # check the metadata unless instructed otherwise
-    if not skip_check:
+    if check_metadata:
         utils.check_uvd_pair_metadata(uvd1, uvd2)
 
     # convert polarization to index
