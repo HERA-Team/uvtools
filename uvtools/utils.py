@@ -180,7 +180,8 @@ def check_uvd_pair_metadata(uvd1, uvd2):
 
     t1vals = np.unique(uvd1.time_array)
     t2vals = np.unique(uvd2.time_array)
-    assert np.all(np.isclose(t1vals, t2vals, atol=dx(t1vals, t2vals))), \
+    assert np.all(np.isclose(t1vals, t2vals, rtol=0, 
+                             atol=dx(t1vals, t2vals))), \
             "Time values disagree more than the mean integration time."
 
     f1vals = uvd1.freq_array[0]

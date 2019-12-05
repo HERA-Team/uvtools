@@ -1,4 +1,5 @@
 import nose.tools as nt
+import matplotlib
 import matplotlib.pyplot as plt
 import unittest
 import uvtools as uvt
@@ -77,8 +78,8 @@ class TestDiffPlotters(unittest.TestCase):
         # first, make an array
         antennas = hera_sim.antpos.hex_array(3)
         # now make a slightly offset array
-        dx = np.ones(3) * 0.01
-        offset_ants = {ant : pos + dx for ant, pos in antennas.items()}
+        dx = lambda : np.random.random(3) * 0.1
+        offset_ants = {ant : pos + dx() for ant, pos in antennas.items()}
         # now make an array with mismatched number of antennas
         bad_ants = hera_sim.antpos.hex_array(3, split_core=False)
         # choose two different integration times
@@ -165,13 +166,16 @@ class TestDiffPlotters(unittest.TestCase):
         self.assertTrue(Nimages == 3)
         self.assertTrue(Ncbars == 3)
 
+        # close the figure
+        plt.close(fig)
+
 
     def test_plot_diff_waterfall(self):
         plot_types = ("time_vs_freq", "time_vs_dly", 
                       "fr_vs_freq", "fr_vs_dly")
         # get all combinations
         plot_types = [list(combinations(plot_types, r)) 
-                      for r in range(len(plot_types))]
+                      for r in range(1, len(plot_types) + 1)]
 
         # unpack the nested list
         plot_types = [item for items in plot_types for item in items]
@@ -186,13 +190,13 @@ class TestDiffPlotters(unittest.TestCase):
             # each plot consists of an image and a colorbar
             # so we need to count the colorbars as well
             Nsubplots = 2 * Nplots
-
             # make the list of objects to search for
             elements = [(plt.Subplot, Nsubplots),]
             
             # actually make the plot
             fig = uvt.plot.plot_diff_waterfall(self.uvd1, self.uvd2, 
-                                               self.antpairpol)
+                                               self.antpairpol,
+                                               plot_type=plot_type)
             
             # check that the correct number of subplots are made
             self.assertTrue(axes_contains(fig, elements))
@@ -221,6 +225,7 @@ class TestDiffPlotters(unittest.TestCase):
         for attr, value in self.__dict__.items():
             if not attr.startswith("uvd_bad"):
                 continue
+            print("testing on: {}".format(attr))
             nt.assert_raises(AssertionError, 
                              uvt.plot.plot_diff_uv,
                              self.uvd1, value,
