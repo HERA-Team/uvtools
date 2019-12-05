@@ -143,8 +143,28 @@ class TestDiffPlotters(unittest.TestCase):
         pass
 
     def test_plot_diff_uv(self):
-        # tests to make sure this function works as expected
-        pass
+        # plot something
+        fig = uvt.plot.plot_diff_uv(self.uvd1, self.uvd2)
+        # check for six instances of subplots, one per image and
+        # one per colorbar
+        elements = [(plt.Subplot, 6),]
+        self.assertTrue(axes_contains(fig, elements))
+        
+        # now check that we get three images and three colorbars
+        Nimages = 0
+        Ncbars = 0
+        for ax in fig.axes:
+            image = [(matplotlib.image.AxesImage, 1),]
+            cbar = [(matplotlib.collections.QuadMesh, 1),]
+            contains_image = axes_contains(ax, image)
+            contains_cbar = axes_contains(ax, cbar)
+            self.assertTrue(contains_image or contains_cbar)
+            Nimages += int(contains_image)
+            Ncbars += int(contains_cbar)
+        
+        self.assertTrue(Nimages == 3)
+        self.assertTrue(Ncbars == 3)
+
 
     def test_plot_diff_waterfall(self):
         plot_types = ("time_vs_freq", "time_vs_dly", 
@@ -184,8 +204,8 @@ class TestDiffPlotters(unittest.TestCase):
                 # AxesImage (from imshow) or a QuadMesh (from colorbar)
                 image = [(matplotlib.image.AxesImage, 1),]
                 cbar = [(matplotlib.collections.QuadMesh, 1),]
-                contains_image = axes_contain(ax, image)
-                contains_cbar = axes_contain(ax, cbar)
+                contains_image = axes_contains(ax, image)
+                contains_cbar = axes_contains(ax, cbar)
                 Nimages += int(contains_image)
                 Ncbars += int(contains_cbar)
                 self.assertTrue(contains_image or contains_cbar)
