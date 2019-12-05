@@ -597,8 +597,7 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
 
     return fig
 
-def plot_diff_uv(uvd1, uvd2, pol=None, speedup=True,
-                 check_metadata=True, resolution=50):
+def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, resolution=50):
     """Summary plot for difference between visibilities.
 
     Parameters
@@ -611,13 +610,6 @@ def plot_diff_uv(uvd1, uvd2, pol=None, speedup=True,
         String specifying which polarization to be used. Must be one of the
         polarizations listed in the UVData.get_pols() method for both
         `uvd1` and `uvd2`. Default is to use the 0th polarization.
-
-    speedup : bool, optional
-        Whether to use the fast implementation of this plotting tool or the
-        slower implementation. The faster implementation does not produce
-        figures as nice as the slower implementation, but the slower
-        implementation is only really usable for small sets of data.
-        Default is to use the fast implementation.
 
     check_metadata : bool, optional
         Whether to check that the metadata for `uvd1` and `uvd2` match.
