@@ -597,7 +597,7 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
 
     return fig
 
-def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, resolution=50):
+def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, bins=50):
     """Summary plot for difference between visibilities.
 
     Parameters
@@ -619,7 +619,7 @@ def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, resolution=50):
         may not error out, depending on how the metadata disagree. 
         Default behavior is to check the metadata.
 
-    resolution : int, optional
+    bins : int, optional
         Number of bins to use for regridding the u and v arrays.
 
     """
@@ -648,8 +648,8 @@ def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, resolution=50):
     uvals, vvals = uvw_vecs[:,:,0].flatten(), uvw_vecs[:,:,1].flatten()
 
     # get the regridded u and v arrays' bin edges
-    u_regrid = np.linspace(uvals.min(), uvals.max(), resolution+1)
-    v_regrid = np.linspace(vvals.min(), vvals.max(), resolution+1)
+    u_regrid = np.linspace(uvals.min(), uvals.max(), bins+1)
+    v_regrid = np.linspace(vvals.min(), vvals.max(), bins+1)
 
     # make an alias for regridding an array and taking the complex mean
     # this also takes the transpose so that axis0 is along the v-axis
