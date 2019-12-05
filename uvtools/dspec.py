@@ -1368,12 +1368,12 @@ def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_half_widths,
         filter_factors = [filter_factors]
     assert user_frequencies is None or isinstance(user_frequencies,(list, np.ndarray)),"user provided frequencies must be ndarray or list"
     if not user_frequencies is None:
-            filter_key = (nchan, df, ) + tuple(filter_centers) + \
-            tuple(filter_half_widths) + tuple(filter_factors) + (wrap, wrap_interval, nwraps, no_regularization)
-    else:
             nchan = len(user_frequencies)
             filter_key = tuple(user_frequencies) + tuple(filter_centers) + \
             tuple(filter_half_widths) + tuple(filter_factors) + (wrap, wrap_interval, nwraps, no_regularization)
+    else:
+        filter_key = (nchan, df, ) + tuple(filter_centers) + \
+        tuple(filter_half_widths) + tuple(filter_factors) + (wrap, wrap_interval, nwraps, no_regularization)
     if not filter_key in cache:
         if user_frequencies is None:
             x = np.arange(-int(nchan/2),int(np.ceil(nchan/2)))
