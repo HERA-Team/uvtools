@@ -122,7 +122,7 @@ def FFT(data, axis):
 
     return fftshift(fft(data, axis=axis), axis)
 
-def get_fourier_freqs(times):
+def fourier_freqs(times):
     """A function for generating Fourier frequencies given 'times'.
 
     Parameters

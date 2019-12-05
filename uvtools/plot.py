@@ -515,8 +515,8 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
 
     # import astropy.units for conversion from days to seconds
     import astropy.units as u
-    frs = utils.get_fourier_freqs(times * u.day.to('s')) # Hz
-    dlys = utils.get_fourier_freqs(freqs) # s
+    frs = utils.fourier_freqs(times * u.day.to('s')) # Hz
+    dlys = utils.fourier_freqs(freqs) # s
 
     # make dictionary of plotting parameters; keys chosen for ease-of-use
     plot_params = {"time" : lsts, 
