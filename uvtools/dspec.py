@@ -369,7 +369,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
 
     return d_mdl, d_res, info
 
-def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, filter_half_widths, filter_factors, cache = {}):
+def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, filter_half_widths, filter_factors, cache = {}, user_frequencies=None):
     '''Apply a linear delay filter to waterfall data.
         Due to performance reasons, linear filtering only supports separable delay/fringe-rate filters.
     Arguments:
@@ -390,7 +390,9 @@ def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, fil
             filter_half_widths. If a float or length-1 list/ndarray is provided,
             the same filter factor will be used in every filter window.
         cache: optional dictionary for storing pre-computed delay filter matrices.
-
+        user_frequencies: optional
+            array-like list of arbitrary frequencies. If this is supplied, evaluate sinc_downweight_mat at these frequencies
+            instead of linear array of nchan.
     Returns:
         data: array, 2d clean residual with data filtered along the frequency direction.
         info: dictionary with filtering parameters and a list of skipped_times and skipped_channels
@@ -530,7 +532,8 @@ def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, fil
                 #only calculate filter matrix and psuedo-inverse explicitly if they are not already cached
                 #(saves calculation time).
                 wght_mat = np.outer(wght.T, wght)
-                filter_mat = sinc_downweight_mat_inv(data.shape[fs], delta_data[fs], filter_centers[fs], filter_half_widths[fs], filter_factors[fs], cache) * wght_mat
+                filter_mat = sinc_downweight_mat_inv(data.shape[fs], delta_data[fs], filter_centers[fs], filter_half_widths[fs], filter_factors[fs], cache=cache,
+                                                     user_frequencies=user_frequencies) * wght_mat
                 try:
                     #Try taking psuedo-inverse. Occasionally I've encountered SVD errors
                     #when a lot of channels are flagged. Interestingly enough, I haven't
@@ -1317,7 +1320,7 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
 
 def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_half_widths,
                             filter_factors, cache={}, wrap=False, wrap_interval=1,
-                            nwraps=1000, no_regularization=False):
+                            nwraps=1000, no_regularization=False, user_frequencies=None):
     """
     Computes the inverse of sinc weights for a baseline.
     This form of weighting is diagonal in delay-space and down-weights tophat regions.
@@ -1337,6 +1340,9 @@ def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_half_widths,
     cache: dictionary, optional dictionary storing filter matrices with keys
     (nchan, df, ) + (filter_centers) + (filter_half_widths) + \
     (filter_factors)
+    user_frequencies: optional
+        array-like list of arbitrary frequencies. If this is supplied, evaluate sinc_downweight_mat at these frequencies
+        instead of linear array of nchan.
 
     !!!-------------
     WARNING: The following parameters are intended for theoretical
@@ -1360,10 +1366,19 @@ def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_half_widths,
         filter_half_widths = [filter_half_widths]
     if isinstance(filter_factors,float) or isinstance(filter_factors, int):
         filter_factors = [filter_factors]
-    filter_key = (nchan, df, ) + tuple(filter_centers) + \
-    tuple(filter_half_widths) + tuple(filter_factors) + (wrap, wrap_interval, nwraps, no_regularization)
+    assert user_frequencies is None or isinstance(user_frequencies,(list, np.ndarray)),"user provided frequencies must be ndarray or list"
+    if not user_frequencies is None:
+            filter_key = (nchan, df, ) + tuple(filter_centers) + \
+            tuple(filter_half_widths) + tuple(filter_factors) + (wrap, wrap_interval, nwraps, no_regularization)
+    else:
+            nchan = len(user_frequencies)
+            filter_key = tuple(user_frequencies) + tuple(filter_centers) + \
+            tuple(filter_half_widths) + tuple(filter_factors) + (wrap, wrap_interval, nwraps, no_regularization)
     if not filter_key in cache:
-        x = np.arange(-int(nchan/2),int(np.ceil(nchan/2)))
+        if user_frequencies is None:
+            x = np.arange(-int(nchan/2),int(np.ceil(nchan/2)))
+        else:
+            x = user_frequencies
         fx, fy = np.meshgrid(x,x)
         sdwi_mat = np.identity(fx.shape[0]).astype(np.complex128)
         if no_regularization:
