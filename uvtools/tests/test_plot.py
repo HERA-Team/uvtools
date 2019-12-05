@@ -70,9 +70,67 @@ class TestMethods(unittest.TestCase):
 class TestDiffPlotters(unittest.TestCase):
 
     def setUp(self):
-
-        # mock up some UVData objects
-        pass
+        # make some mock data
+        import hera_sim
+        import copy
+        # first, make an array
+        antennas = hera_sim.antpos.hex_array(3)
+        # now make a slightly offset array
+        dx = np.ones(3) * 0.01
+        offset_ants = {ant : pos + dx for ant, pos in antennas.items()}
+        # now make an array with mismatched number of antennas
+        bad_ants = hera_sim.antpos.hex_array(3, split_core=False)
+        # choose two different integration times
+        dt1 = 10.7
+        dt2 = 15.3
+        # choose two different channel widths
+        df1 = 1e8 / 1024
+        df2 = 2e8 / 1024
+        # actually mock up the data
+        sim = hera_sim.Simulator(n_freq=10, n_times=10, 
+                                 antennas=antennas,
+                                 integration_time=dt1, 
+                                 channel_width=df1)
+        self.uvd1 = copy.deepcopy(sim.data)
+        sim.add_eor("noiselike_eor")
+        self.uvd2 = copy.deepcopy(sim.data)
+        # now just make some things with metadata that will raise exceptions
+        # mismatched baselines
+        sim = hera_sim.Simulator(n_freq=10, n_times=10, 
+                                 antennas=offset_ants,
+                                 integration_time=dt1,
+                                 channel_width=df1)
+        self.uvd_bad_bls = copy.deepcopy(sim.data)
+        # wrong number of antennas
+        sim = hera_sim.Simulator(n_freq=10, n_times=10, 
+                                 antennas=bad_ants,
+                                 integration_time=dt1, 
+                                 channel_width=df1)
+        self.uvd_bad_ants = copy.deepcopy(sim.data)
+        # bad Nfreq
+        sim = hera_sim.Simulator(n_freq=50, n_times=10,
+                                 antennas=antennas,
+                                 integration_time=dt1,
+                                 channel_width=df1)
+        self.uvd_bad_Nfreq = copy.deepcopy(sim.data)
+        # bad Ntimes
+        sim = hera_sim.Simulator(n_freq=10, n_times=50, 
+                                 antennas=antennas,
+                                 integration_time=dt1, 
+                                 channel_width=df1)
+        self.uvd_bad_Ntimes = copy.deepcopy(sim.data)
+        # bad integration time
+        sim = hera_sim.Simulator(n_freq=10, n_times=10, 
+                                 antennas=antennas,
+                                 integration_time=dt2, 
+                                 channel_width=df1)
+        self.uvd_bad_int_time = copy.deepcopy(sim.data)
+        # bad channel width
+        sim = hera_sim.Simulator(n_freq=10, n_times=10, 
+                                 antennas=antennas,
+                                 integration_time=dt1, 
+                                 channel_width=df2)
+        self.uvd_bad_chan_width = copy.deepcopy(sim.data)
 
     def tearDown(self):
         pass
