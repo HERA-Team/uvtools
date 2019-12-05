@@ -499,7 +499,10 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
         that the baseline vectors for `uvd1` and `uvd2` agree on a 
         per-component level; the tolerance is set to the default for 
         ``np.isclose``. An ``AssertionError`` is raised if any of these 
-        conditions are not met. Default behavior is to check the metadata.
+        conditions are not met. If `check_metadata` is set to False, but 
+        the metadata don't agree, then the plotter may or may not error 
+        out, depending on how the metadata disagree. 
+        Default behavior is to check the metadata.
 
     """
     # check that metadata agrees, unless specified otherwise
@@ -629,7 +632,10 @@ def plot_diff_uv(uvd1, uvd2, pol=None, speedup=True,
         that the baseline vectors for `uvd1` and `uvd2` agree on a 
         per-component level; the tolerance is set to the default for 
         ``np.isclose``. An ``AssertionError`` is raised if any of these 
-        conditions are not met. Default behavior is to check the metadata.
+        conditions are not met. If `check_metadata` is set to False, but 
+        the metadata don't agree, then the plotter may or may not error 
+        out, depending on how the metadata disagree. 
+        Default behavior is to check the metadata.
 
     resolution : int, optional
         Number of bins to use for regridding the u and v arrays.
