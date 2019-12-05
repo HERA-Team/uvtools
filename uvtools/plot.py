@@ -600,6 +600,17 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
 def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, bins=50):
     """Summary plot for difference between visibilities.
 
+    This function produces three plots which summarize the differences 
+    between the data arrays in `uvd1` and `uvd2`. Each summary plot is 
+    shown in a regridded uv-plane, with a resolution set by the `bins` 
+    parameter. This function uses ``scipy.stats.binned_statistic_2d`` 
+    to perform a complex average in the uv-plane for each visibility 
+    array before performing any further operations. After taking the 
+    complex average in the uv-plane, the following plots are produced: 
+    first, the difference of the amplitudes of each array; second, the 
+    difference of the phases of each array; third, the amplitude of the 
+    complex difference of the visibility arrays.
+
     Parameters
     ----------
     uvd1, uvd2 : pyuvdata.UVData
