@@ -157,7 +157,9 @@ def check_uvd_pair_metadata(uvd1, uvd2):
     and frequency arrays agree to within the mean integration time and 
     channel width, respectively. Finally, the check ensures that both 
     ``UVData`` objects have the same baseline vectors, currently set 
-    to the default tolerance for ``np.isclose``.
+    to the default tolerance for ``np.isclose``. Note that this check 
+    does not ensure that both ``UVData`` objects have the same 
+    polarization arrays.
 
     Parameters
     ----------
