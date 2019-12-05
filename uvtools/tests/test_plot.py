@@ -1,3 +1,4 @@
+import nose.tools as nt
 import matplotlib.pyplot as plt
 import unittest
 import uvtools as uvt
@@ -132,6 +133,9 @@ class TestDiffPlotters(unittest.TestCase):
                                  channel_width=df2)
         self.uvd_bad_chan_width = copy.deepcopy(sim.data)
 
+        # choose an antenna pair and polarization for later
+        self.antpairpol = (0, 1, "xx")
+
     def tearDown(self):
         pass
 
@@ -194,14 +198,14 @@ class TestDiffPlotters(unittest.TestCase):
             plt.close(fig)
 
     def test_bad_metadata(self):
-        # test for freq arrays not matching
-        # test for time arrays not matching
-        # test for baseline arrays not matching
-        # anything else?
-        pass
+        for attr, value in self.__dict__.items():
+            if not attr.startswith("uvd_bad"):
+                continue
+            nt.assert_raises(AssertionError, 
+                             uvt.plot.plot_diff_uv,
+                             self.uvd1, value,
+                             check_metadata=True)
 
-
-    pass
 
 
 if __name__ == '__main__':
