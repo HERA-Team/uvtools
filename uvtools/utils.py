@@ -218,6 +218,7 @@ def diff(vis1, vis2, mode):
     elif mode == "complex":
         return np.abs(vis1 - vis2)
     else:
-        raise ValueError("You have not specified an accepted differencing "
-                         "mode. Please see the documentation for the "
-                         "supported differencing modes.")
+        raise ValueError("You have not specified an accepted differencing " \
+                         "mode. The accepted modes are 'abs', 'phs', and " \
+                         "'complex'. See the ``utils.diff`` docstring for " \
+                         "details on what each mode does.")
