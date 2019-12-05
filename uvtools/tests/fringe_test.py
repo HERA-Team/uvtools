@@ -1,7 +1,10 @@
 import unittest
 import aipy as a, numpy as n
 import pylab as p
-from mpl_toolkits.basemap import Basemap
+try:
+    from mpl_toolkits.basemap import Basemap
+except ModuleNotFoundError:
+    raise ModuleNotFoundError("Fringe test requires Basemap! Try running 'pip install --user git+https://github.com/matplotlib/basemap.git'")
 import uvtools.fringe as fringe
 
 # XXX these aren't actually unittests.  need real ones.
