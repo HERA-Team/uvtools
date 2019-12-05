@@ -152,6 +152,13 @@ def get_fourier_freqs(times):
 def check_uvd_pair_metadata(uvd1, uvd2):
     """Check that the relevant metadata agrees for `uvd1` and `uvd2`.
 
+    This check ensures that both ``UVData`` objects have the same number 
+    of blts and frequencies. It also checks to make sure that the time 
+    and frequency arrays agree to within the mean integration time and 
+    channel width, respectively. Finally, the check ensures that both 
+    ``UVData`` objects have the same baseline vectors, currently set 
+    to the default tolerance for ``np.isclose``.
+
     Parameters
     ----------
     uvd1, uvd2 : pyuvdata.UVData
@@ -159,6 +166,13 @@ def check_uvd_pair_metadata(uvd1, uvd2):
         have sufficiently similar metadata.
     
     """
+    # make sure that both UVData objects have the same number of blts/freqs
+    assert uvd1.time_array.size == uvd2.time_array.size, \
+            "The number of baseline-times disagree."
+
+    assert uvd1.freq_array.size == uvd2.freq_array.size, \
+            "The number of frequencies disagree."
+
     # helper function; mean separation in array values for two arrays x1, x2
     dx = lambda x1, x2 : 0.5 * (np.mean(np.diff(x1)) + np.mean(np.diff(x2)))
 
