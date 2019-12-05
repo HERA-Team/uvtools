@@ -642,7 +642,7 @@ def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, resolution=50):
     uvw_vecs = np.array([bl_vecs / wavelength for wavelength in wavelengths])
     
     # reshape uvw vectors to (Nblts, Nfreq, 3)
-    uvw_vecs = np.einsum("ijk->jik", uvw_vecs)
+    uvw_vecs = np.swapaxes(uvw_vecs, 0, 1)
 
     # get the u and v arrays, flattened
     uvals, vvals = uvw_vecs[:,:,0].flatten(), uvw_vecs[:,:,1].flatten()
