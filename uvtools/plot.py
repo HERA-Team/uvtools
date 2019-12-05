@@ -493,15 +493,10 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
     
     check_metadata : bool, optional
         Whether to check that the metadata for `uvd1` and `uvd2` match.
-        This check ensures that the time and frquency arrays for `uvd1` 
-        and `uvd2` agree, with the tolerance set by the mean integration 
-        time and channel width, respectively. The check also ensures 
-        that the baseline vectors for `uvd1` and `uvd2` agree on a 
-        per-component level; the tolerance is set to the default for 
-        ``np.isclose``. An ``AssertionError`` is raised if any of these 
-        conditions are not met. If `check_metadata` is set to False, but 
-        the metadata don't agree, then the plotter may or may not error 
-        out, depending on how the metadata disagree. 
+        See ``utils.check_uvd_pair_metadata`` docstring for details on 
+        how the metadata are compared. If `check_metadata` is set to 
+        False, but the metadata don't agree, then the plotter may or 
+        may not error out, depending on how the metadata disagree. 
         Default behavior is to check the metadata.
 
     """
@@ -626,15 +621,10 @@ def plot_diff_uv(uvd1, uvd2, pol=None, speedup=True,
 
     check_metadata : bool, optional
         Whether to check that the metadata for `uvd1` and `uvd2` match.
-        This check ensures that the time and frquency arrays for `uvd1` 
-        and `uvd2` agree, with the tolerance set by the mean integration 
-        time and channel width, respectively. The check also ensures 
-        that the baseline vectors for `uvd1` and `uvd2` agree on a 
-        per-component level; the tolerance is set to the default for 
-        ``np.isclose``. An ``AssertionError`` is raised if any of these 
-        conditions are not met. If `check_metadata` is set to False, but 
-        the metadata don't agree, then the plotter may or may not error 
-        out, depending on how the metadata disagree. 
+        See ``utils.check_uvd_pair_metadata`` docstring for details on 
+        how the metadata are compared. If `check_metadata` is set to 
+        False, but the metadata don't agree, then the plotter may or 
+        may not error out, depending on how the metadata disagree. 
         Default behavior is to check the metadata.
 
     resolution : int, optional
