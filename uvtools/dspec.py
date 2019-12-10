@@ -450,7 +450,7 @@ def linear_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
     # inputs by iterating over a list with their names.
     check_vars = [filter_centers, filter_half_widths, filter_factors, user_frequencies]
     check_names = ['filter_centers', 'filter_half_widths', 'filter_factors', 'user_frequencies']
-    for anum,avar, aname in zip(range(len(check_vars),check_names,check_vars):
+    for anum,avar, aname in zip(range(len(check_vars)),check_names,check_vars):
         # If any of these inputs is a float or numpy array, convert to a list.
         if isinstance(avar, np.ndarray)
                 check_vars[anum] = list(avar)
