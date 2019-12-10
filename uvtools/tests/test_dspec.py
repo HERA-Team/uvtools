@@ -217,39 +217,39 @@ def test_linear_filter():
     dspec.linear_filter(data_1d, wghts_1d, df, 1, np.array(filter_centers), np.array(filter_half_widths),
                         np.array(filter_factors))
     #test functionality on floats
-    dspec.linear_filter(data_1d, wghts_1d, df, 1, filter_centers[0], filter_half_widths[0],
-                        filter_factors[0])
+    dspec.linear_filter(data_1d, wghts_1d,  1, filter_centers[0], filter_half_widths[0],
+                        filter_factors[0],delta_data=df)
     filter_half_widths2 = [200e-9, 200e-9]
     filter_centers2 = [0., -1400e-9]
     filter_factors2 = [1e-9, 1e-9]
     #check if throws error when number of filter_half_widths not equal to len filter_centers
-    nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_1d, df, [1], filter_centers,
-                    filter_half_widths2, filter_factors)
+    nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_1d, [1], filter_centers,
+                    filter_half_widths2, filter_factors, delta_data=df)
     #check if throws error when number of filter_half_widths not equal to len filter_factors
-    nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_1d, df, 1, filter_centers,
-                    filter_half_widths, filter_factors2)
+    nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_1d, 1, filter_centers,
+                    filter_half_widths, filter_factors2, delta_data=df)
     #check if error thrown when wghts have different length then data
-    nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_1d[:-1], df, 1, filter_centers,
-                    filter_half_widths, filter_factors)
+    nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_1d[:-1], 1, filter_centers,
+                    filter_half_widths, filter_factors, delta_data=df)
     #check if error thrown when dimension of data does not equal dimension of weights.
-    nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_2d, df, 1, filter_centers,
-                    filter_half_widths, filter_factors)
+    nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_2d, 1, filter_centers,
+                    filter_half_widths, filter_factors, delta_data=df)
     #check if error thrown if dimension of data does not equal 2 or 1.
-    nt.assert_raises(ValueError, dspec.linear_filter, np.zeros((10,10,10)), wghts_1d, df, 1, filter_centers,
-                    filter_half_widths, filter_factors)
+    nt.assert_raises(ValueError, dspec.linear_filter, np.zeros((10,10,10)), wghts_1d, 1, filter_centers,
+                    filter_half_widths, filter_factors, delta_data=df)
     #check if error thrown if dimension of weights does not equal 2 or 1.
-    nt.assert_raises(ValueError, dspec.linear_filter, wghts_1d, np.zeros((10,10,10)), df, 1, filter_centers,
-                    filter_half_widths, filter_factors)
+    nt.assert_raises(ValueError, dspec.linear_filter, wghts_1d, np.zeros((10,10,10)), 1, filter_centers,
+                    filter_half_widths, filter_factors, delta_data=df)
     #now filter foregrounds and test that std of residuals are close to std of noise:
-    filtered_noise, _ =  dspec.linear_filter(data_1d, wghts_1d, df, [1], filter_centers, filter_half_widths,
-                                         filter_factors)
+    filtered_noise, _ =  dspec.linear_filter(data_1d, wghts_1d, [1], filter_centers, filter_half_widths,
+                                         filter_factors, delta_data=df)
     #print(np.std((data_1d - fg_tone).real)*np.sqrt(2.))
     #print(np.std((filtered_noise).real)*np.sqrt(2.))
     np.testing.assert_almost_equal( np.std(filtered_noise.real)**2. + np.std(filtered_noise.imag)**2.,
                                   np.std(noise.real)**2. + np.std(noise.imag)**2., decimal = 0)
     #now filter foregrounds and signal and test that std of residuals are close to std of signal.
-    filtered_signal, _ =  dspec.linear_filter(fg_sg, wghts_1d, df, [1], filter_centers, filter_half_widths,
-                                              filter_factors)
+    filtered_signal, _ =  dspec.linear_filter(fg_sg, wghts_1d, [1], filter_centers, filter_half_widths,
+                                              filter_factors, delta_data=df)
     np.testing.assert_almost_equal( (np.std(filtered_signal.real)**2. + np.std(filtered_signal.imag)**2.)/1e4,
                                   (np.std(sg_tone.real)**2. + np.std(sg_tone.imag)**2.)/1e4, decimal = 0)
     #Next, we test performing a fringe-rate clean. Generate a 50-meter EW baseline with a single
