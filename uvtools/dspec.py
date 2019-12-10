@@ -392,7 +392,7 @@ def linear_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
         cache: optional dictionary for storing pre-computed delay filter matrices.
         user_frequencies: optional
             array-like list of arbitrary frequencies. If this is supplied, evaluate sinc_downweight_mat at these frequencies
-            instead of linear array of nchan.
+            instead of linear array of nchan. For 2d clean, should be supplied as a 2-tuple or 2-list.
     Returns:
         data: array, 2d clean residual with data filtered along the frequency direction.
         info: dictionary with filtering parameters and a list of skipped_times and skipped_channels
@@ -448,16 +448,16 @@ def linear_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
     # will only filter each dim a single time.
     # now check validity of other inputs. We perform the same check over multiple
     # inputs by iterating over a list with their names.
-    check_vars = [filter_centers, filter_half_widths, filter_factors, user_frequencies]
-    check_names = ['filter_centers', 'filter_half_widths', 'filter_factors', 'user_frequencies']
-    for anum,avar, aname in zip(range(len(check_vars)),check_names,check_vars):
+    check_vars = [filter_centers, filter_half_widths, filter_factors]
+    check_names = ['filter_centers', 'filter_half_widths', 'filter_factors']
+    for anum, aname, avar in zip(range(len(check_vars)),check_names,check_vars):
         # If any of these inputs is a float or numpy array, convert to a list.
-        if isinstance(avar, np.ndarray)
-                check_vars[anum] = list(avar)
+        if isinstance(avar, np.ndarray):
+            check_vars[anum] = list(avar)
         elif isinstance(avar, np.float):
             check_vars[anum] = [avar]
 
-    filter_centers,filter_half_widths,filter_factors, user_frequencies = check_vars
+    filter_centers,filter_half_widths,filter_factors = check_vars
     # Next, perform some checks that depend on the filtering dimensions provided.
     if 0 in filter_dimensions and 1 in filter_dimensions:
         for avar,aname in zip(check_vars,check_names):
@@ -469,7 +469,12 @@ def linear_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
                     raise ValueError(err_msg)
             else:
                 raise ValueError(err_msg)
-
+            assert (isinstance(delta_data,(tuple,list,np.ndarray)) and len(delta_data) == 2) or delta_data is None, "For 2d filtering, delta_data must be a 2d long list or tuple or ndarray"
+            assert (isinstance(user_frequencies,(tuple,list,np.ndarray)) and len(user_frequencies) == 2) or user_frequencies is None, "For 2d filtering, user_frequencies must be 2d long list or tuple or ndarray"
+            if user_frequencies is None:
+                user_frequencies = [None, None]
+            if delta_data is None:
+                delta_data = [None, None]
         for ff_num,ff_list in zip([0,1],filter_factors):
             # we allow the user to provide a single filter factor for multiple
             # filtering windows on a single dimension. This code
@@ -479,6 +484,8 @@ def linear_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
             if len(ff_list) == 1:
                 ff_list = [ff_list[0] for m in range(len(filter_centers[ff_num]))]
     else:
+        assert isinstance(user_frequencies,(list,np.ndarray)) or user_frequencies is None, "for 1d clean, provide a list or numpy array for user_frequencies"
+        assert isinstance(delta_data, (float,np.float, int, np.int)), "for 1d clean, provide a float or integer for delta_data"
         # If we are going to filter along a single dimensions.
         if len(filter_factors) == 1:
             # extend filter factor list of user supplied a float or len-1 list.
@@ -489,7 +496,7 @@ def linear_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
             filter_factors = [filter_factors,[]]
             filter_centers = [filter_centers,[]]
             filter_half_widths = [filter_half_widths,[]]
-            user_frequencies = [user_frequencies,0.]
+            user_frequencies = [user_frequencies,None]
             delta_data = [delta_data,0.]
         elif 1 in filter_dimensions:
             # convert 1d input-lists to
@@ -498,7 +505,7 @@ def linear_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
             filter_centers = [[],filter_centers]
             filter_half_widths = [[],filter_half_widths]
             delta_data = [0., delta_data]
-            user_frequencies = [0., user_frequencies]
+            user_frequencies = [None, user_frequencies]
     check_vars = [filter_centers, filter_half_widths, filter_factors]
     # Now check that the number of filter factors = number of filter widths
     # = number of filter centers for each dimension.
@@ -528,18 +535,24 @@ def linear_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
         #if the axis orthogonal to the iteration axis is to be filtered, then
         #filter it!.
         for sample_num, sample, wght in zip(range(data.shape[fs-1]), _d, _w):
-            if user_frequencies is None:
+            if user_frequencies[fs] is None:
                 filter_key = (data.shape[fs], delta_data[fs], ) + tuple(filter_centers[fs]) + \
                 tuple(filter_half_widths[fs]) + tuple(filter_factors[fs]) + tuple(wght.tolist()) + ('inverse',)
             else:
-                filter_key = (data.shape[fs], ) + tuple(user_frequencies) + tuple(filter_centers[fs]) + \
+                filter_key = (data.shape[fs], ) + tuple(user_frequencies[fs]) + tuple(filter_centers[fs]) + \
                 tuple(filter_half_widths[fs]) + tuple(filter_factors[fs]) + tuple(wght.tolist()) + ('inverse',)
             if not filter_key in cache:
                 #only calculate filter matrix and psuedo-inverse explicitly if they are not already cached
                 #(saves calculation time).
                 wght_mat = np.outer(wght.T, wght)
-                filter_mat = sinc_downweight_mat_inv(data.shape[fs], filter_centers[fs], filter_half_widths[fs], filter_factors[fs], cache=cache,
-                                                     user_frequencies=user_frequencies[fs],delta_data=delta_data[fs]) * wght_mat
+                if not user_frequencies[fs] is None:
+                    df=1.
+                else:
+                    df=delta_data[fs]
+                filter_mat = sinc_downweight_mat_inv(nchan=data.shape[fs], df=df, filter_centers=filter_centers[fs],
+                                                     filter_half_widths=filter_half_widths[fs],
+                                                     filter_factors=filter_factors[fs], cache=cache,
+                                                     user_frequencies=user_frequencies[fs]) * wght_mat
                 try:
                     #Try taking psuedo-inverse. Occasionally I've encountered SVD errors
                     #when a lot of channels are flagged. Interestingly enough, I haven't
@@ -547,9 +560,9 @@ def linear_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
                     #I'm catching it here.
                     cache[filter_key] = np.linalg.pinv(filter_mat)
                 except np.linalg.LinAlgError:
-                    #if SVD fails to converge, set filter matrix to to lots of 9e99s and skip it
+                    #if SVD fails to converge, set filter matrix to to lots of nans and skip it
                     #during multiplication.
-                    cache[filter_key] = np.ones((data.shape[fs], data.shape[fs]), dtype=complex) * 9e99
+                    cache[filter_key] = np.ones((data.shape[fs], data.shape[fs]), dtype=complex) * np.nan
             #if matrix is already cached,
             filter_mat = cache[filter_key]
             if not np.all(filter_mat == 9e99):
