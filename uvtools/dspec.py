@@ -382,7 +382,7 @@ def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, fil
             list of integers indicating data dimensions to filter. Must be 0, 1, or -1
         filter_centers: float, list, or 1d numpy array of delays at which to center filter windows
             Typically in units of (seconds)
-        filter_half_widths: float, list, or 1d numpy array of widths of each delay filtere window
+        filter_half_widths: float, list, or 1d numpy array of half-widths of each delay filtere window
             with centers specified by filter_centers.
             Typically in units of (seconds)
         filter_factors: float, list, or 1d numpy array of factors by which filtering should be
@@ -837,7 +837,7 @@ def _get_bl_dly(bl_len, horizon=1., standoff=0., min_dly=0.):
     return bl_dly
 
 
-def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, normalization='none', **kwargs):
+def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, normalization=None, **kwargs):
     """
     Generate a 1D window function of length N.
 
@@ -849,10 +849,12 @@ def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, normalization=
         edgecut_hi : int, number of bins to consider as zero-padded at the high-side
             of the array, such that the window smoothly connects to zero.
         alpha : if window is 'tukey', this is its alpha parameter.
-        normalize : str, optional
+        normalization : str, optional
             set to 'rms' to divide by rms and 'mean' to divide by mean.
     """
-    assert normalization in ['none', 'mean', 'rms'], "normalization must be one of ['none', 'rms', 'mean']"
+    if normalization is not None:
+        if normalization not in ["mean", "rms"]:
+            raise ValueError("normalization must be one of ['rms', 'mean']")
     # parse multiple input window or special windows
     w = np.zeros(N, dtype=np.float)
     Ncut = edgecut_low + edgecut_hi
@@ -894,9 +896,9 @@ def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, normalization=
         except AttributeError:
             raise ValueError("Didn't recognize window {}".format(window))
     if normalization == 'rms':
-        w = w / np.sqrt(np.mean(np.abs(w)**2.))
+        w /= np.sqrt(np.mean(np.abs(w)**2.))
     if normalization == 'mean':
-        w = w / w.mean()
+        w /= w.mean()
     return w
 
 
@@ -1242,20 +1244,39 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
 
 
 def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cache={}, taper='none', return_diagnostics=False):
-    '''
+    """
+    Copute a foreground interpolation matrix.
+
     Computes a foreground interpolation matrix that, when applied to data,
-    interpolates over flagged channels with delays between -ndelays//2 and ndelays//2.
+    interpolates over flagged channels with delays between
+    -ndelay / fundamental_period, ndelay / fundamental_period
+
+    The computed Matrix is equal to F = A @ [ A^T @ W @ A]^{-1} @ A^T W
+    where A is an nchan \times 2ndelay  design matrix
+    y = A \tilde{y}
+    y is the frequency representation of data and \tilde{y} is
+    a 2xndelay vector holding the data's fourier coefficients. W is a diagonal
+    matrix of frequency-data weights. The net effect of F, when applied to flagged
+    data, is to solve for the fourier coefficients fitting unflagged channels
+    ([ A^T @ W @ A]^{-1} @ A^T W solves the linear least squares problem) and then return
+    the unflagged Fourier transform by apply A @ to the fitted coefficients, resulting
+    in data that is linearly interpolated.
 
     Parameters
     ----------
-    nchan: integer
-        Number of frequency channels to interpolate over
+    nchan: int
+        Number of frequency channels to interpolate over.
     ndelay,
-        number of delays to use in interpolation
+        number of delays to use in interpolation.
     wgts: float array
         wgts to be applied to each frequency channel.
+        must have length equal to nchan.
+        in addition, wgts should have more nonezero values then there are
+        degrees of freedom (delay modes) to solve for.
     fundamental_period: float, optional
-        the fundamental period of reconstructed delays. Default: nchan
+        the fundamental period of reconstructed delays. Default: nchan,
+        tends to give well conditioned matrices.
+        I find that 2 x nchan gives the best results (AEW).
     cache: dict, optional
         optional cache holding pre-computed matrices
     taper: string, optional
@@ -1264,27 +1285,25 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
     ----------
     (nchan, nchan) numpy array
         that can be used to interpolate over channel gaps.
-    '''
-    assert len(wgts) == nchan, "nchan must equal length of wgts"
-    matkey = (nchan, ndelay) + tuple(wgts)
-    assert np.sum((np.abs(wgts) > 0.).astype(float)) >= ndelay, "number of unflagged channels must be greater then or equal to number of delays"
-    if fundamental_period is None:
-        fundamental_period = nchan #this tends to give well conditioned matrices. 
-    if not matkey in cache or return_diagnostics:
-        f, d = np.meshgrid(np.arange(nchan)-nchan/2, np.arange(-ndelay,ndelay), indexing='ij')
-        #f = np.asarray([[chan for m in range(ndelay)] for chan in np.arange(-nchan//2,nchan//2)])
-        #d = np.asarray([np.arange(-ndelay//2, ndelay//2) for m in range(nchan)])
-        d = d / fundamental_period
-        a_mat = np.exp(2j * d * f * np.pi) / fundamental_period
+    """
+    if not len(wgts) == nchan:
+        raise ValueError("nchan must equal length of wgts")
+    if fundamental_period is None: #recommend 2 x nchan or nchan.
+        fundamental_period = 2*nchan #this tends to give well conditioned matrices.
+    if not np.sum((np.abs(wgts) > 0.).astype(float)) >= 2*ndelay:
+        raise ValueError("number of unflagged channels must be greater then or equal to number of delays")
+    matkey = (nchan, ndelay, fundamental_period) + tuple(wgts)
+    if matkey not in cache or return_diagnostics:
+        frequencies, delays = np.meshgrid(np.arange(nchan)-nchan/2, np.arange(-ndelay,ndelay), indexing='ij')
+        delays = delays / fundamental_period
+        a_mat = np.exp(2j * delays * frequencies * np.pi) / fundamental_period
         wmat = np.diag(wgts * gen_window(taper, nchan)).astype(complex)
-        cmat=np.dot(a_mat.T, (a_mat.T * wgts).T)
+        cmat = np.dot(a_mat.T, (a_mat.T * wgts).T)
         if np.linalg.cond(cmat)>=1e9:
             print('Warning!!!!: Poorly conditioned matrix! Your linear inpainting IS WRONG!'
                   'Fix this by adjusting fundamental tones!')
         cmati = np.linalg.inv(cmat)
         tmat = np.dot(cmati,(a_mat.T * wgts))
-        #a_mat[:,0]=0.#for some reason edge coefficients are messed up
-        #a_mat[:,-1]=0.# add buffer and trim at the end.
         a_mat = np.dot(a_mat, tmat)
         cache[matkey] = a_mat
     a_mat = cache[matkey]
@@ -1310,7 +1329,7 @@ def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_half_widths,
     filter_centers: float or list
         float or list of floats of centers of delay filter windows in nanosec
     filter_half_widths: float or list
-        float or list of floats of widths of delay filter windows in nanosec
+        float or list of floats of half-widths of delay filter windows in nanosec
     filter_factors: float or list
         float or list of floats of filtering factors.
     cache: dictionary, optional dictionary storing filter matrices with keys

@@ -184,6 +184,11 @@ class TestMethods(unittest.TestCase):
             nt.assert_true(isinstance(win, np.ndarray))
             nt.assert_true(win.min() >= 0.0)
             nt.assert_true(win.max() <= 1.0)
+            nt.assert_raises(ValueError, dspec.gen_window, w, 100, normalization='foo')
+            win2 = dspec.gen_window(w, 100,normalization='mean')
+            nt.assert_true(np.all(np.isclose(win, win2*np.mean(win),atol=1e-6)))
+            win3 = dspec.gen_window(w, 100,normalization='rms')
+            nt.assert_true(np.all(np.isclose(win, win3*np.sqrt(np.mean(win**2.)),atol=1e-6)))
 
         nt.assert_raises(ValueError, dspec.gen_window, 'foo', 200)
 
@@ -435,17 +440,33 @@ def test_vis_filter():
     nt.assert_true(np.median(np.abs(rfft2[:15, :23] / rfft[:15, :23])) < 1)
 
 def test_delay_interpolation_matrix():
+    """
+    Test inerpolation matrix.
+
+    Test creates some simple data with a few underlying delays.
+    Flagged data is generated from underlying data.
+    The flagged channels are interpolated over using the delay_interpolation_matrix
+    and the interpolation is compared to the original.
+
+    """
     MYCACHE={}
     fs = np.arange(-10,10)
-    data = np.exp(2j * np.pi * 3/20 * fs) + 5*np.exp(2j * np.pi * 4/20 * fs)
-    data += np.exp(-2j * np.pi * 3/20 * fs) + 5*np.exp(2j * np.pi * 1/20 * fs)
+    #here is some underlying data
+    data = np.exp(2j * np.pi * 3/20. * fs) + 5*np.exp(2j * np.pi * 4./20 * fs)
+    data += np.exp(-2j * np.pi * 3/20. * fs) + 5*np.exp(2j * np.pi * -4/20. * fs)
+    #here are some weights with flags
     wgts = np.ones_like(data)
     wgts[6] = 0
     wgts[17] = 0
     dw = data*wgts
+    #here is some flagged data.
     #interpolate data and see if it matches true data.
-    data_interp = np.dot(dspec.delay_interpolation_matrix(20, 5, wgts, cache=MYCACHE), dw)
-    assert np.all(np.isclose(data_interp, data, atol=1e-6))
+    data_interp = np.dot(dspec.delay_interpolation_matrix(nchan=20, ndelay=5, wgts=wgts, fundamental_period=20, cache=MYCACHE), dw)
+    #check that interpolated data agrees with original data.
+    nt.assert_true( np.all(np.isclose(data_interp, data, atol=1e-6)))
+    #test error raising.
+    nt.assert_raises(ValueError, dspec.delay_interpolation_matrix, 10, 2, np.ones(5))
+    nt.assert_raises(ValueError, dspec.delay_interpolation_matrix, 5, 2, np.asarray([0., 0., 0., 0., 0.]))
 
 
 def test_vis_filter_linear():
