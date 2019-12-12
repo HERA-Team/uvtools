@@ -422,6 +422,9 @@ def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, fil
         data = np.asarray([data])
         wgts = np.asarray([wgts])
         data_1d = True
+        # 1d data will result in nonsensical filtering along zeroth axis.
+        filter_dimensions=[1]
+
     else:
         data_1d = False
     nchan = data.shape[1]
@@ -1300,7 +1303,7 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
         wmat = np.diag(wgts * gen_window(taper, nchan)).astype(complex)
         cmat = np.dot(a_mat.T, (a_mat.T * wgts).T)
         if np.linalg.cond(cmat)>=1e9:
-            print('Warning!!!!: Poorly conditioned matrix! Your linear inpainting IS WRONG!'
+            warn('Warning!!!!: Poorly conditioned matrix! Your linear inpainting IS WRONG!'
                   'Fix this by adjusting fundamental tones!')
         cmati = np.linalg.inv(cmat)
         tmat = np.dot(cmati,(a_mat.T * wgts))
