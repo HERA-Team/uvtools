@@ -1,3 +1,4 @@
+from numpy.fft import fft, fftshift
 import numpy as np
 import glob
 
@@ -99,3 +100,128 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
         datapols = [item for sublist in datapols for item in sublist]
 
     return datafiles, datapols
+
+def FFT(data, axis):
+    """Convenient function for performing a FFT along an axis.
+
+    Parameters
+    ----------
+    data : np.ndarray
+       An array of data, assumed to not be ordered in the numpy FFT convention.
+       Typically the data_array of a UVData object.
+
+    axis : int
+        The axis to perform the FFT over.
+
+    Returns
+    -------
+    data_fft : np.ndarray
+        The Fourier transform of the data along the specified axis. The array
+        has the same shape as the original data, with the same ordering.
+    """
+
+    return fftshift(fft(data, axis=axis), axis)
+
+def fourier_freqs(times):
+    """A function for generating Fourier frequencies given 'times'.
+
+    Parameters
+    ----------
+    times : np.ndarray, shape=(Ntimes,)
+        An array of parameter values. These are nominally referred to as times,
+        but may be frequencies or other parameters for which a Fourier dual can
+        be defined. This function assumes a uniform sampling rate.
+
+    Returns
+    -------
+    freqs : np.ndarray, shape=(Ntimes,)
+        An array of coordinates dual to the input coordinates. Similar to the
+        output of np.fft.fftfreq, but ordered so that the zero frequency is in
+        the center of the array.
+    """
+    # get the number of samples and the sample rate
+    N = len(times)
+    dt = np.mean(np.diff(times))
+
+    # get the Nyquist frequency
+    f_nyq = 1.0 / (2 * dt)
+
+    # return the frequency array
+    return np.linspace(-f_nyq, f_nyq, N, endpoint=False)
+
+def check_uvd_pair_metadata(uvd1, uvd2):
+    """Check that the relevant metadata agrees for `uvd1` and `uvd2`.
+
+    This check ensures that both ``UVData`` objects have the same number 
+    of blts and frequencies. It also checks to make sure that the time 
+    and frequency arrays agree to within the mean integration time and 
+    channel width, respectively. Finally, the check ensures that both 
+    ``UVData`` objects have the same baseline vectors, currently set 
+    to the default tolerance for ``np.isclose``. Note that this check 
+    does not ensure that both ``UVData`` objects have the same 
+    polarization arrays.
+
+    Parameters
+    ----------
+    uvd1, uvd2 : pyuvdata.UVData
+        UVData objects containing the visibilities that are being compared
+        have sufficiently similar metadata.
+    
+    """
+    # make sure that both UVData objects have the same number of blts/freqs
+    assert uvd1.time_array.size == uvd2.time_array.size, \
+            "The number of baseline-times disagree."
+
+    assert uvd1.freq_array.size == uvd2.freq_array.size, \
+            "The number of frequencies disagree."
+
+    # helper function; mean separation in array values for two arrays x1, x2
+    dx = lambda x1, x2 : 0.5 * (np.mean(np.diff(x1)) + np.mean(np.diff(x2)))
+
+    t1vals = np.unique(uvd1.time_array)
+    t2vals = np.unique(uvd2.time_array)
+    assert np.all(np.isclose(t1vals, t2vals, rtol=0, 
+                             atol=dx(t1vals, t2vals))), \
+            "Time values disagree more than the mean integration time."
+
+    f1vals = uvd1.freq_array[0]
+    f2vals = uvd2.freq_array[0]
+    assert np.all(np.isclose(f1vals, f2vals, atol=dx(f1vals, f2vals))), \
+            "Frequency values disagree more than the mean channel width."
+
+    bls1 = uvd1.uvw_array
+    bls2 = uvd2.uvw_array
+    assert np.all(np.isclose(bls1, bls2)), \
+            "Baseline arrays do not agree."
+
+def diff(vis1, vis2, mode):
+    """Calculate a specified type of difference between two visibilities.
+
+    Parameters
+    ----------
+    vis1, vis2 : ndarray of complex
+        Arrays of visibility data to be differenced.
+
+    mode : str
+        Type of difference to take. Possible options are as follows:
+            'abs' : Return the difference of the visibility amplitudes
+            'phs' : Return the difference of the visibility phases
+            'complex' : Return the amplitude of the complex difference
+
+    Returns
+    -------
+    visdiff : ndarray of float
+        Difference of `vis1` and `vis2` calculated according to `mode`.
+
+    """
+    if mode == "abs":
+        return np.abs(vis1) - np.abs(vis2)
+    elif mode == "phs":
+        return np.angle(vis1) - np.angle(vis2)
+    elif mode == "complex":
+        return np.abs(vis1 - vis2)
+    else:
+        raise ValueError("You have not specified an accepted differencing " \
+                         "mode. The accepted modes are 'abs', 'phs', and " \
+                         "'complex'. See the ``utils.diff`` docstring for " \
+                         "details on what each mode does.")
