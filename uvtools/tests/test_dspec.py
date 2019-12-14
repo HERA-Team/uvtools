@@ -5,7 +5,7 @@ import nose.tools as nt
 from pyuvdata import UVData
 from uvtools.data import DATA_PATH
 import os
-
+import warnings
 random.seed(0)
 
 class TestMethods(unittest.TestCase):
@@ -213,6 +213,9 @@ def test_linear_filter():
     #test functionality for numpy arrays
     dspec.linear_filter(data_1d, wghts_1d, df, [1], np.array(filter_centers), np.array(filter_half_widths),
                         np.array(filter_factors))
+    #provide filter_dimensions as an integer.
+    dspec.linear_filter(data_1d, wghts_1d, df, 1, np.array(filter_centers), np.array(filter_half_widths),
+                        np.array(filter_factors))
     #test functionality on floats
     dspec.linear_filter(data_1d, wghts_1d, df, 1, filter_centers[0], filter_half_widths[0],
                         filter_factors[0])
@@ -288,6 +291,15 @@ def test_linear_filter():
 
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df_fr.flatten())**2.)),
                                     1., decimal = 1)
+
+    #test error messages if we do not provide lists of lists.
+    nt.assert_raises(ValueError,dspec.linear_filter,data_2d, np.ones_like(data_2d),
+                        delta_data = [dt,100e3],
+                        filter_centers = [[0.002],0.],
+                        filter_half_widths = [[0.001],[100e-9]],
+                        filter_factors = [1e-5,[1e-5]],
+                        filter_dimensions = [0,1],cache = {})
+
 
 
     #test linear algebra error
@@ -467,7 +479,19 @@ def test_delay_interpolation_matrix():
     #test error raising.
     nt.assert_raises(ValueError, dspec.delay_interpolation_matrix, 10, 2, np.ones(5))
     nt.assert_raises(ValueError, dspec.delay_interpolation_matrix, 5, 2, np.asarray([0., 0., 0., 0., 0.]))
-
+    #test diagnostic mode.
+    data_interp1, _, _, _ = dspec.delay_interpolation_matrix(nchan=20, ndelay=5, wgts=wgts,
+     fundamental_period=20, cache={}, return_diagnostics=True)
+    data_interp1 = np.dot(data_interp1, dw)
+    nt.assert_true(np.all(np.isclose(data_interp, data_interp1, atol=1e-6)))
+     #test warning
+    with warnings.catch_warnings(record=True) as w:
+        wgtpc = np.ones(100)
+        randflags = np.asarray([29, 49,  6, 47, 68, 98, 69, 70, 32,  3]).astype(int)
+        wgtpc[randflags]=0.
+        amat_pc = dspec.delay_interpolation_matrix(nchan=100, ndelay=25, wgts=wgtpc, fundamental_period=200)
+        print(len(w))
+        nt.assert_true(len(w) > 0)
 
 def test_vis_filter_linear():
     # load file

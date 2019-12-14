@@ -551,10 +551,9 @@ def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, fil
             else:
                 skipped[fs-1].append(sample_num)
 
+    #1d data will only be filtered across "channels". 
     if data_1d and ntimes == 1:
         output = output[0]
-    if data_1d and nchan == 1:
-        output = output[:, 0]
     info['skipped_time_steps'] = skipped[0]
     info['skipped_channels'] = skipped[1]
     return output, info
