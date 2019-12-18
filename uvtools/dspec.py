@@ -196,7 +196,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                 del info['res']
             else:
                 d_r, info = linear_filter(data * wgts * win, wgts * win, delta_data=real_delta,
-                                                filter_dimensions = [1], filter_centers=fc, filter_widths=fw, filter_factors=ff, cache=cache)
+                                                filter_dimensions = [1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache)
                 _d_res = np.fft.ifft(d_r)
                 if deconv_linear_foregrounds:
                     if fg_deconv_method == 'clean':
@@ -234,7 +234,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                         info.append(info_here)
                     else:
                         d_r, info_here = linear_filter(data[i] * wgts[i] * win, wgts[i] * win, delta_data=real_delta,
-                                                            filter_dimensions=[1], filter_centers=fc, filter_widths=fw, filter_factors=ff, cache=cache)
+                                                            filter_dimensions=[1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache)
                         _d_res[i] = np.fft.ifft(d_r)
                         if deconv_linear_foregrounds:
                             if fg_deconv_method == 'clean':
@@ -331,7 +331,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         else:
             assert filt2d_mode == "plus", "2d linear deconvolution only supports filt2d_mode == 'plus'."
 
-            d_r, info = linear_filter(data * wgts * win, wgts * win, delta_data=[real_delta[0],real_delta[1]], filter_centers=fc, filter_widths=fw,
+            d_r, info = linear_filter(data * wgts * win, wgts * win, delta_data=[real_delta[0],real_delta[1]], filter_centers=fc, filter_half_widths=fw,
                                          filter_factors=ff, cache=cache, filter_dimensions=[0, 1])
             _d_res = np.fft.ifft2(d_r)
             if deconv_linear_foregrounds:
@@ -369,7 +369,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
 
     return d_mdl, d_res, info
 
-def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, filter_widths, filter_factors, cache = {}):
+def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, filter_half_widths, filter_factors, cache = {}):
     '''Apply a linear delay filter to waterfall data.
         Due to performance reasons, linear filtering only supports separable delay/fringe-rate filters.
     Arguments:
@@ -382,12 +382,12 @@ def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, fil
             list of integers indicating data dimensions to filter. Must be 0, 1, or -1
         filter_centers: float, list, or 1d numpy array of delays at which to center filter windows
             Typically in units of (seconds)
-        filter_widths: float, list, or 1d numpy array of widths of each delay filtere window
+        filter_half_widths: float, list, or 1d numpy array of half-widths of each delay filtere window
             with centers specified by filter_centers.
             Typically in units of (seconds)
         filter_factors: float, list, or 1d numpy array of factors by which filtering should be
             applied within each filter window specified in filter_centers and
-            filter_widths. If a float or length-1 list/ndarray is provided,
+            filter_half_widths. If a float or length-1 list/ndarray is provided,
             the same filter factor will be used in every filter window.
         cache: optional dictionary for storing pre-computed delay filter matrices.
 
@@ -422,6 +422,9 @@ def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, fil
         data = np.asarray([data])
         wgts = np.asarray([wgts])
         data_1d = True
+        # 1d data will result in nonsensical filtering along zeroth axis.
+        filter_dimensions=[1]
+
     else:
         data_1d = False
     nchan = data.shape[1]
@@ -444,15 +447,15 @@ def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, fil
     # will only filter each dim a single time.
     # now check validity of other inputs. We perform the same check over multiple
     # inputs by iterating over a list with their names.
-    check_vars = [filter_centers, filter_widths, filter_factors]
-    check_names = ['filter_centers', 'filter_widths', 'filter_factors']
+    check_vars = [filter_centers, filter_half_widths, filter_factors]
+    check_names = ['filter_centers', 'filter_half_widths', 'filter_factors']
     for anum,avar in enumerate(check_vars):
         # If any of these inputs is a float or numpy array, convert to a list.
         if isinstance(avar, np.ndarray):
             check_vars[anum] = list(avar)
         elif isinstance(avar, np.float):
             check_vars[anum] = [avar]
-    filter_centers,filter_widths,filter_factors = check_vars
+    filter_centers,filter_half_widths,filter_factors = check_vars
     # Next, perform some checks that depend on the filtering dimensions provided.
     if 0 in filter_dimensions and 1 in filter_dimensions:
         for avar,aname in zip(check_vars,check_names):
@@ -483,16 +486,16 @@ def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, fil
             # a list of lists for core-code to operate on.
             filter_factors = [filter_factors,[]]
             filter_centers = [filter_centers,[]]
-            filter_widths = [filter_widths,[]]
+            filter_half_widths = [filter_half_widths,[]]
             delta_data = [delta_data,0.]
         elif 1 in filter_dimensions:
             # convert 1d input-lists to
             # a list of lists for core-code to operate on.
             filter_factors = [[],filter_factors]
             filter_centers = [[],filter_centers]
-            filter_widths = [[],filter_widths]
+            filter_half_widths = [[],filter_half_widths]
             delta_data = [0., delta_data]
-    check_vars = [filter_centers, filter_widths, filter_factors]
+    check_vars = [filter_centers, filter_half_widths, filter_factors]
     # Now check that the number of filter factors = number of filter widths
     # = number of filter centers for each dimension.
     for fs in filter_dimensions:
@@ -502,7 +505,7 @@ def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, fil
                     raise ValueError("Number of elements in %s-%d must equal the"
                                      " number of elements %s-%d!"%(aname1, fs, aname2, fs))
 
-    info = {'filter_centers':filter_centers, 'filter_widths':filter_widths, 'filter_factors': filter_factors,
+    info = {'filter_centers':filter_centers, 'filter_half_widths':filter_half_widths, 'filter_factors': filter_factors,
             'delta_data':delta_data, 'data_shape':data.shape, 'filter_dimensions': filter_dimensions}
     skipped = [[],[]]
     # in the lines below, we iterate over the time dimension. For each time, we
@@ -522,12 +525,12 @@ def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, fil
         #filter it!.
         for sample_num, sample, wght in zip(range(data.shape[fs-1]), _d, _w):
             filter_key = (data.shape[fs], delta_data[fs], ) + tuple(filter_centers[fs]) + \
-            tuple(filter_widths[fs]) + tuple(filter_factors[fs]) + tuple(wght.tolist()) + ('inverse',)
+            tuple(filter_half_widths[fs]) + tuple(filter_factors[fs]) + tuple(wght.tolist()) + ('inverse',)
             if not filter_key in cache:
                 #only calculate filter matrix and psuedo-inverse explicitly if they are not already cached
                 #(saves calculation time).
                 wght_mat = np.outer(wght.T, wght)
-                filter_mat = sinc_downweight_mat_inv(data.shape[fs], delta_data[fs], filter_centers[fs], filter_widths[fs], filter_factors[fs], cache) * wght_mat
+                filter_mat = sinc_downweight_mat_inv(data.shape[fs], delta_data[fs], filter_centers[fs], filter_half_widths[fs], filter_factors[fs], cache) * wght_mat
                 try:
                     #Try taking psuedo-inverse. Occasionally I've encountered SVD errors
                     #when a lot of channels are flagged. Interestingly enough, I haven't
@@ -548,10 +551,9 @@ def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, fil
             else:
                 skipped[fs-1].append(sample_num)
 
+    #1d data will only be filtered across "channels".
     if data_1d and ntimes == 1:
         output = output[0]
-    if data_1d and nchan == 1:
-        output = output[:, 0]
     info['skipped_time_steps'] = skipped[0]
     info['skipped_channels'] = skipped[1]
     return output, info
@@ -837,7 +839,7 @@ def _get_bl_dly(bl_len, horizon=1., standoff=0., min_dly=0.):
     return bl_dly
 
 
-def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, **kwargs):
+def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, normalization=None, **kwargs):
     """
     Generate a 1D window function of length N.
 
@@ -849,7 +851,12 @@ def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, **kwargs):
         edgecut_hi : int, number of bins to consider as zero-padded at the high-side
             of the array, such that the window smoothly connects to zero.
         alpha : if window is 'tukey', this is its alpha parameter.
+        normalization : str, optional
+            set to 'rms' to divide by rms and 'mean' to divide by mean.
     """
+    if normalization is not None:
+        if normalization not in ["mean", "rms"]:
+            raise ValueError("normalization must be one of ['rms', 'mean']")
     # parse multiple input window or special windows
     w = np.zeros(N, dtype=np.float)
     Ncut = edgecut_low + edgecut_hi
@@ -890,7 +897,10 @@ def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, **kwargs):
             w[edgecut_low:edgecut_hi] = getattr(windows, window)(N - Ncut)
         except AttributeError:
             raise ValueError("Didn't recognize window {}".format(window))
-
+    if normalization == 'rms':
+        w /= np.sqrt(np.mean(np.abs(w)**2.))
+    if normalization == 'mean':
+        w /= w.mean()
     return w
 
 
@@ -1235,9 +1245,79 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
     return mdl_array, cn_array, inp_data
 
 
-def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_widths,
-                            filter_factors, cache = {}, wrap = False, wrap_interval=1,
-                            nwraps = 1000, no_regularization = False):
+def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cache={}, taper='none', return_diagnostics=False):
+    """
+    Compute a foreground interpolation matrix.
+
+    Computes a foreground interpolation matrix that, when applied to data,
+    interpolates over flagged channels with delays between
+    -ndelay / fundamental_period, ndelay / fundamental_period
+
+    The computed Matrix is equal to F = A @ [ A^T @ W @ A]^{-1} @ A^T W
+    where A is an nchan \times 2ndelay  design matrix
+    y = A \tilde{y}
+    y is the frequency representation of data and \tilde{y} is
+    a 2xndelay vector holding the data's fourier coefficients. W is a diagonal
+    matrix of frequency-data weights. The net effect of F, when applied to flagged
+    data, is to solve for the fourier coefficients fitting unflagged channels
+    ([ A^T @ W @ A]^{-1} @ A^T W solves the linear least squares problem) and then return
+    the unflagged Fourier transform by apply A @ to the fitted coefficients, resulting
+    in data that is linearly interpolated.
+
+    Parameters
+    ----------
+    nchan: int
+        Number of frequency channels to interpolate over.
+    ndelay: int
+        number of delays to use in interpolation.
+    wgts: float array
+        wgts to be applied to each frequency channel.
+        must have length equal to nchan.
+        in addition, wgts should have more nonezero values then there are
+        degrees of freedom (delay modes) to solve for.
+    fundamental_period: float, optional
+        the fundamental period of reconstructed delays. Default: nchan,
+        tends to give well conditioned matrices.
+        I find that 2 x nchan gives the best results (AEW).
+    cache: dict, optional
+        optional cache holding pre-computed matrices
+    taper: string, optional
+        use a taper to fit.
+    Returns
+    ----------
+    (nchan, nchan) numpy array
+        that can be used to interpolate over channel gaps.
+    """
+    if not len(wgts) == nchan:
+        raise ValueError("nchan must equal length of wgts")
+    if fundamental_period is None: #recommend 2 x nchan or nchan.
+        fundamental_period = 2*nchan #this tends to give well conditioned matrices.
+    if not np.sum((np.abs(wgts) > 0.).astype(float)) >= 2*ndelay:
+        raise ValueError("number of unflagged channels must be greater then or equal to number of delays")
+    matkey = (nchan, ndelay, fundamental_period) + tuple(wgts)
+    if matkey not in cache or return_diagnostics:
+        frequencies, delays = np.meshgrid(np.arange(nchan)-nchan/2, np.arange(-ndelay,ndelay), indexing='ij')
+        delays = delays / fundamental_period
+        a_mat = np.exp(2j * delays * frequencies * np.pi) / fundamental_period
+        wmat = np.diag(wgts * gen_window(taper, nchan)).astype(complex)
+        cmat = np.dot(a_mat.T, (a_mat.T * wgts).T)
+        if np.linalg.cond(cmat)>=1e9:
+            warn('Warning!!!!: Poorly conditioned matrix! Your linear inpainting IS WRONG!'
+                  'Fix this by adjusting fundamental tones!')
+        cmati = np.linalg.inv(cmat)
+        tmat = np.dot(cmati,(a_mat.T * wgts))
+        a_mat = np.dot(a_mat, tmat)
+        cache[matkey] = a_mat
+    a_mat = cache[matkey]
+    if not return_diagnostics:
+        return a_mat
+    else:
+        return a_mat, cmat, cmati, tmat
+
+
+def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_half_widths,
+                            filter_factors, cache={}, wrap=False, wrap_interval=1,
+                            nwraps=1000, no_regularization=False):
     """
     Computes the inverse of sinc weights for a baseline.
     This form of weighting is diagonal in delay-space and down-weights tophat regions.
@@ -1250,12 +1330,12 @@ def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_widths,
         channel width (Hz)
     filter_centers: float or list
         float or list of floats of centers of delay filter windows in nanosec
-    filter_widths: float or list
-        float or list of floats of widths of delay filter windows in nanosec
+    filter_half_widths: float or list
+        float or list of floats of half-widths of delay filter windows in nanosec
     filter_factors: float or list
         float or list of floats of filtering factors.
     cache: dictionary, optional dictionary storing filter matrices with keys
-    (nchan, df, ) + (filter_centers) + (filter_widths) + \
+    (nchan, df, ) + (filter_centers) + (filter_half_widths) + \
     (filter_factors)
 
     !!!-------------
@@ -1276,19 +1356,19 @@ def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_widths,
     """
     if isinstance(filter_centers, float) or isinstance(filter_factors, int):
         filter_centers = [filter_centers]
-    if isinstance(filter_widths, float) or isinstance(filter_factors, int):
-        filter_widths = [filter_widths]
+    if isinstance(filter_half_widths, float) or isinstance(filter_factors, int):
+        filter_half_widths = [filter_half_widths]
     if isinstance(filter_factors,float) or isinstance(filter_factors, int):
         filter_factors = [filter_factors]
     filter_key = (nchan, df, ) + tuple(filter_centers) + \
-    tuple(filter_widths) + tuple(filter_factors) + (wrap, wrap_interval, nwraps, no_regularization)
+    tuple(filter_half_widths) + tuple(filter_factors) + (wrap, wrap_interval, nwraps, no_regularization)
     if not filter_key in cache:
         x = np.arange(-int(nchan/2),int(np.ceil(nchan/2)))
         fx, fy = np.meshgrid(x,x)
         sdwi_mat = np.identity(fx.shape[0]).astype(np.complex128)
         if no_regularization:
             sdwi_mat *= 0.
-        for fc, fw, ff in zip(filter_centers, filter_widths, filter_factors):
+        for fc, fw, ff in zip(filter_centers, filter_half_widths, filter_factors):
             if not ff == 0:
                 if not wrap:
                     sdwi_mat = sdwi_mat + np.sinc( 2. * (fx-fy) * df * fw ).astype(np.complex128)\
