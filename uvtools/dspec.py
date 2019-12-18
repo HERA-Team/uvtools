@@ -551,7 +551,7 @@ def linear_filter(data, wgts, delta_data, filter_dimensions, filter_centers, fil
             else:
                 skipped[fs-1].append(sample_num)
 
-    #1d data will only be filtered across "channels". 
+    #1d data will only be filtered across "channels".
     if data_1d and ntimes == 1:
         output = output[0]
     info['skipped_time_steps'] = skipped[0]
@@ -1247,7 +1247,7 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
 
 def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cache={}, taper='none', return_diagnostics=False):
     """
-    Copute a foreground interpolation matrix.
+    Compute a foreground interpolation matrix.
 
     Computes a foreground interpolation matrix that, when applied to data,
     interpolates over flagged channels with delays between
@@ -1268,7 +1268,7 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
     ----------
     nchan: int
         Number of frequency channels to interpolate over.
-    ndelay,
+    ndelay: int
         number of delays to use in interpolation.
     wgts: float array
         wgts to be applied to each frequency channel.
