@@ -211,11 +211,12 @@ def test_linear_filter():
     wghts_1d = np.ones(nf)
     wghts_2d = np.array([wghts_1d, wghts_1d])
     #test functionality for numpy arrays
-    dspec.linear_filter(data_1d, wghts_1d, df, [1], np.array(filter_centers), np.array(filter_half_widths),
-                        np.array(filter_factors))
+    dspec.linear_filter(data_1d, wghts_1d, [1], np.array(filter_centers), np.array(filter_half_widths),
+                        np.array(filter_factors), delta_data=df)
     #provide filter_dimensions as an integer.
-    dspec.linear_filter(data_1d, wghts_1d, df, 1, np.array(filter_centers), np.array(filter_half_widths),
-                        np.array(filter_factors))
+    dspec.linear_filter(data_1d, wghts_1d, 1, np.array(filter_centers), np.array(filter_half_widths),
+                        np.array(filter_factors), delta_data=df)
+
     #test functionality on floats
     dspec.linear_filter(data_1d, wghts_1d,  1, filter_centers[0], filter_half_widths[0],
                         filter_factors[0],delta_data=df)
