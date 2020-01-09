@@ -723,3 +723,6 @@ def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, bins=50):
         fig.colorbar(cax)
 
     return fig
+
+def plot_diff_1d(uvd1, uvd2, **kwargs):
+    pass
