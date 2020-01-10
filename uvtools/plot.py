@@ -725,10 +725,59 @@ def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, bins=50):
     return fig
 
 def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both", 
-                 check_metadata=True, dimension="time"):
+                 check_metadata=True, dimension=None):
     # TODO: docstring
-    """
+    """Produce plots of visibility differences along a single axis.
 
+    Parameters
+    ----------
+    uvd1, uvd2 : pyuvdata.UVData
+        UVData objects which store visibilities to be differenced and their
+        associated metadata. They should have the same number of frequencies,
+        same baselines, and same times as each other.
+
+    antpairpol : tuple
+        Tuple specifying which baseline and polarization to use to compare 
+        visibility waterfalls. See pyuvdata.UVData.get_data method docstring 
+        for information on accepted tuples.
+    
+    plot_type : str, optional
+        A string identifying which quantities to plot. Accepted values are 
+        as follows:
+            - base
+                - Single row of plots in the usual basis (time or frequency).
+            - dual
+                - Single row of plots in Fourier space (fringe rate or delay).
+            - both
+                - Two rows of plots in the usual and Fourier domains.
+        Default behavior is to use the 'both' setting.
+
+    check_metadata : bool, optional
+        Whether to check that the metadata for `uvd1` and `uvd2` match.
+        See ``utils.check_uvd_pair_metadata`` docstring for details on 
+        how the metadata are compared. If `check_metadata` is set to 
+        False, but the metadata don't agree, then the plotter may or 
+        may not error out, depending on how the metadata disagree. 
+        Default behavior is to check the metadata.
+    
+    dimension : str, optional
+        String specifying which dimension is used for the base domain. This 
+        may be either 'time' or 'freq'. Default is to determine which axis has
+        more entries and to use that axis.
+
+    Returns
+    -------
+    fig : matplotlib.pyplot.Figure
+        Figure object containing the plots. The plots have their axes and 
+        titles automatically set depending on what quantities are being 
+        plotted.
+
+    Notes
+    -----
+    This function extracts the visibility waterfall corresponding to the 
+    provided antpairpol and flattens it by taking the mean along the axis 
+    not being used. For true 1d arrays this just modifies the shape, but it 
+    might not exactly be the desired behavior--so be warned.
     """
     if check_metadata:
         utils.check_uvd_pair_metadata(uvd1, uvd2)
@@ -745,6 +794,16 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
         )
 
     dimensions_to_duals = {"time" : "fr", "freq" : "dly"} 
+
+    if dimension is None:
+        dimension = "time" if uvd1.Ntimes > uvd1.Nfreqs else "freq"
+        if uvd1.Ntimes == uvd1.Nfreqs:
+            warnings.warn(
+                "The UVData objects passed have the same number of " \
+                "times as they do frequencies. You did not specify " \
+                "which dimension to use, so the difference plots " \
+                "will be made along the time axis."
+            )
 
     if dimension not in ("time", "freq"):
         raise ValueError(
