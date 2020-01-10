@@ -726,7 +726,6 @@ def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, bins=50):
 
 def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both", 
                  check_metadata=True, dimension=None):
-    # TODO: docstring
     """Produce plots of visibility differences along a single axis.
 
     Parameters
