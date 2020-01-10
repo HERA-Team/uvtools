@@ -137,8 +137,12 @@ class TestDiffPlotters(unittest.TestCase):
         # choose an antenna pair and polarization for later
         self.antpairpol = (0, 1, "xx")
 
-        # make a copy of the antenna array for the plot_diff_1d test
-        self.antennas = antennas
+        # make a simulation for the plot_diff_1d test
+        sim = hera_sim.Simulator(
+            n_freq=100, n_times=2, antennas=antennas
+        )
+        sim.add_eor("noiselike_eor")
+        self.sim = sim
 
     def tearDown(self):
         pass
@@ -187,16 +191,10 @@ class TestDiffPlotters(unittest.TestCase):
         plt.close(fig)
 
         # now test the auto-dimension-choosing feature
-        # first, mock up some data; need at least 2 times for fringe filter
-        sim = hera_sim.Simulator(
-            n_freq=100, n_times=2, antennas=self.antennas
-        )
-
-        sim.add_eor("noiselike_eor")
 
         # make just one row of plots
         fig = uvt.plot.plot_diff_1d(
-            sim.data, sim.data, self.antpairpol, plot_type="base"
+            self.sim.data, self.sim.data, self.antpairpol, plot_type="base"
         )
 
         # make sure that it's plotting in frequency space
