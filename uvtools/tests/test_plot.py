@@ -175,8 +175,12 @@ class TestDiffPlotters(unittest.TestCase):
                     elif plot_type == "dual":
                         dim = duals[dimension]
                     else:
-                        dim = duals[dimension] if i // 3 else dimension
+                        dim = dimension if i // 3 == 0 else duals[dimension]
                     
+                    # account for the fact that it plots against lst if
+                    # plotting along the time axis
+                    dim = "lst" if dim == "time" else dim
+
                     # make sure that the label is correct
                     self.assertTrue(xlabel.startswith(dim))
 
