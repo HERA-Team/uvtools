@@ -724,5 +724,125 @@ def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, bins=50):
 
     return fig
 
-def plot_diff_1d(uvd1, uvd2, **kwargs):
-    pass
+def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both", 
+                 check_metadata=True, dimension="time"):
+    # TODO: docstring
+    """
+
+    """
+    if check_metadata:
+        utils.check_uvd_pair_metadata(uvd1, uvd2)
+
+    if plot_type not in ("base", "dual", "both"):
+        raise ValueError(
+            "You must specify whether to make one or two plots with "
+            "the ``plot_type`` parameter. You may choose to plot the "
+            "visibility difference as a function of frequency/time by "
+            "setting ``plot_type`` to 'base', or you can choose to "
+            "plot the difference in Fourier space by setting "
+            "``plot_type`` to 'dual'. If you would like to plot both, "
+            "then set ``plot_type`` to 'both'."
+        )
+
+    dimensions_to_duals = {"time" : "fr", "freq" : "dly"} 
+
+    if dimension not in ("time", "freq"):
+        raise ValueError(
+            "You must specify whether the visibilities are a function "
+            "of time or frequency by setting the ``dimension`` "
+            "parameter to 'time' or 'freq', respectively."
+        )
+    
+    dual = dimensions_to_duals[dimension]
+
+    use_axis = 0 if dimension == "time" else 1
+    proj_axis = (use_axis + 1) % 2
+
+    # get visibility data
+    vis1 = uvd1.get_data(antpairpol).mean(axis=proj_axis)
+    vis2 = uvd2.get_data(antpairpol).mean(axis=proj_axis)
+
+    # use same approach as in plot_diff_waterfall
+    # get important metadata
+    times = np.unique(uvd1.time_array) # days
+    lsts = np.unique(uvd1.lst_array) # radians
+    freqs = np.unique(uvd1.freq_array) # Hz
+
+    # import astropy for unit conversions
+    import astropy.units as u
+    frs = utils.fourier_freqs(times * u.day.to('s')) # Hz
+    dlys = utils.fourier_freqs(freqs) # s
+
+    # make dictionary of plotting parameters
+    plot_params = {"time" : lsts, # radians
+                   "freq" : freqs / 1e6, # MHz
+                   "fr" : frs * 1e3, # mHz
+                   "dly" : dlys * 1e9 # ns
+                   }
+
+    # now do the same for abscissa labels
+    labels = {"time" : "LST [radians]",
+              "freq" : "Frequency [MHz]",
+              "fr" : "Fringe Rate [mHz]",
+              "dly" : "Delay [ns]"
+              }
+
+    # and now for ordinate labels
+    vis_labels = {"time" : r"$V(t)$ [Jy]",
+                  "freq" : r"$V(\nu)$ [Jy]",
+                  "fr" : r"$\tilde{V}(f)$ [Jy$\cdot$s]",
+                  "dly" : r"$\tilde{V}(\tau)$ [Jy$\cdot$Hz]"
+                  }
+
+    # make some mappings for plot types
+    plot_types = {dimension : lambda data : data, # no fft
+                  dual : lambda data : utils.FFT(data, 0)
+                  }
+
+    # update the plot_type parameter to something useful
+    if plot_type == "base":
+        plot_type = (dimension,)
+    elif plot_type == "dual":
+        plot_type = (dual,)
+    else:
+        plot_type = (dimension, dual)
+
+    # make a dictionary of visibilities to plot
+    visibilities = {
+        plot : [xform(vis) for vis in (vis1, vis2)]
+        for plot, xform in plot_types.items()
+        if plot in plot_type
+    }
+
+    # XXX make a helper function for this
+    # now setup the figure
+    import matplotlib.pyplot as plt
+    figsize = (4 * 3, 3 * len(plot_type))
+    fig = plt.figure(figsize=figsize)
+    axes = fig.subplots(len(plot_type), 3)
+    axes = [axes,] if axes.ndim == 1 else axes
+    axes[0][0].set_title("Amplitude Difference", fontsize=12)
+    axes[0][1].set_title("Phase Difference", fontsize=12)
+    axes[0][2].set_title("Amplitude of Complex Difference", fontsize=12)
+
+    # plot the visibilities
+    for i, item in enumerate(visibilities.items()):
+        # get the differences
+        visA, visB = item[1]
+        diffs = (
+            utils.diff(visA, visB, 'abs'),
+            utils.diff(visA, visB, 'phs'),
+            utils.diff(visA, visB, 'complex')
+        )
+
+        xdim = item[0]
+        xlabel, ylabel = labels[xdim], vis_labels[xdim]
+
+        # actually plot it
+        for ax, diff in zip(axes[i], diffs):
+            ax.set_xlabel(xlabel, fontsize=12)
+            ax.set_ylabel(ylabel, fontsize=12)
+
+            ax.plot(plot_params[xdim], diff, marker='o', color='k', lw=0)
+
+    return fig
