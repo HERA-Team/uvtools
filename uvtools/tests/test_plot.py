@@ -137,11 +137,68 @@ class TestDiffPlotters(unittest.TestCase):
         # choose an antenna pair and polarization for later
         self.antpairpol = (0, 1, "xx")
 
+        # make a copy of the antenna array for the plot_diff_1d test
+        self.antennas = antennas
+
     def tearDown(self):
         pass
 
     def runTest(self):
         pass
+
+    def test_plot_diff_1d(self):
+        # list possible plot types and dimensions
+        plot_types = ("base", "dual", "both")
+        dimensions = ("time", "freq")
+        duals = {"time" : "fringe rate", "freq" : "delay"}
+
+        # loop over all the choices
+        for plot_type in plot_types:
+            Nplots = 6 if plot_types == "both" else 3
+            elements = [(plt.Subplot, Nplots),]
+            for dimension in dimensions:
+                fig = uvt.plot.plot_diff_1d(
+                    self.uvd1, self.uvd2, self.antpairpol, 
+                    plot_type=plot_type, dimension=dimension
+                )
+
+                # check the number of plots is correct
+                self.assertTrue(axes_contains(fig, elements))
+
+                # check that the plots are labeled correctly
+                for i, ax in enumerate(fig.axes):
+                    xlabel = ax.get_xlabel().lower()
+
+                    # find out what the dimension should be
+                    if plot_type == "base":
+                        dim = dimension
+                    elif plot_type == "dual":
+                        dim = duals[dimension]
+                    else:
+                        dim = duals[dimension] if i // 3 else dimension
+                    
+                    # make sure that the label is correct
+                    self.assertTrue(xlabel.startswith(dim))
+
+        plt.close(fig)
+
+        # now test the auto-dimension-choosing feature
+        # first, mock up some data; need at least 2 times for fringe filter
+        sim = hera_sim.Simulator(
+            n_freq=100, n_times=2, antennas=self.antennas
+        )
+
+        sim.add_eor("noiselike_eor")
+
+        # make just one row of plots
+        fig = uvt.plot.plot_diff_1d(
+            sim.data, sim.data, self.antpairpol, plot_type="base"
+        )
+
+        # make sure that it's plotting in frequency space
+        ax = fig.axes[0]
+        xlabel = ax.get_xlabel().lower()
+        self.assertTrue(xlabel.startswith('freq'))
 
     def test_plot_diff_uv(self):
         # plot something
