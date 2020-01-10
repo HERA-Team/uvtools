@@ -154,7 +154,7 @@ class TestDiffPlotters(unittest.TestCase):
 
         # loop over all the choices
         for plot_type in plot_types:
-            Nplots = 6 if plot_types == "both" else 3
+            Nplots = 6 if plot_type == "both" else 3
             elements = [(plt.Subplot, Nplots),]
             for dimension in dimensions:
                 fig = uvt.plot.plot_diff_1d(
