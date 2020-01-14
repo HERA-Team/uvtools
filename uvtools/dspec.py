@@ -64,7 +64,8 @@ def calc_width(filter_size, real_delta, nsamples):
 def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False, tol=1e-9, window='none',
                              skip_wgt=0.1, maxiter=100, gain=0.1, filt2d_mode='rect', alpha=0.5,
                              edgecut_low=0, edgecut_hi=0, add_clean_residual=False, mode='clean', cache={},
-                             fg_deconv_method='clean', deconv_dayenu_foregrounds=False, fg_restore_size=None):
+                             fg_deconv_method='clean', deconv_dayenu_foregrounds=False, fg_restore_size=None,
+                             fg_deconv_fundamental_period=None):
     '''Apply a highpass fourier filter to data. Uses aipy.deconv.clean. Default is a 1D clean
     on the last axis of data.
 
@@ -126,6 +127,9 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
              This allows us to avoid the problem that if we have RFI flagging and apply a linear filter
              that is larger then the horizon then the foregrounds that we fit might actually include super
              -horizon flagging side-lobes and restoring them will introduce spurious structure.
+        fg_deconv_fundamental_period: int, optional
+            fundamental period of Fourier modes to fit too.
+            if none, default to length of data vector.
 
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
@@ -136,6 +140,9 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
     dndim = data.ndim
     if fg_restore_size is None:
         fg_restore_size = filter_size
+    if fg_deconv_fundamental_period is None:
+        fg_deconv_fundamental_period = data.shape
+
     assert dndim == 1 or dndim == 2, "data must be a 1D or 2D ndarray"
 
     if not mode in ['clean', 'dayenu', 'dft_interp']:
@@ -212,20 +219,20 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                         info_fg['gain'] = gain
                         info['fg_deconv'] = info_fg
                     elif fg_deconv_method == 'leastsq':
-                        nmin = int((fcfg[0] - fwfg[0]) * real_delta * data.shape[-1])
-                        nmax = int((fcfg[0] + fwfg[0]) * real_delta * data.shape[-1])
+                        nmin = int((fcfg[0] - fwfg[0]) * real_delta * fg_deconv_fundamental_period[-1])
+                        nmax = int((fcfg[0] + fwfg[0]) * real_delta * fg_deconv_fundamental_period[-1])
                         info['fg_deconv'] = {'method':'leastsq','nmin':nmin, 'nmax':nmax}
                         d_cl, _, _ = delay_filter_leastsq_1d( (data * wgts * win - d_r).squeeze(), flags=(wgts==0.).squeeze(), sigma=1.,
-                                                            nmax=(nmin, nmax), freq_units=True, even_modes=True)
+                                                            nmax=(nmin, nmax), freq_units=True, even_modes=True, fundamental_period=fg_deconv_fundamental_period[-1])
                         _d_cl = np.fft.ifft(d_cl)
                 else:
                     _d_cl = _d - _d_res
             elif mode=='dft_interp':
-                nmin = int((fcfg[0] - fwfg[0]) * real_delta * data.shape[-1])
-                nmax = int((fcfg[0] + fwfg[0]) * real_delta * data.shape[-1])
+                nmin = int((fcfg[0] - fwfg[0]) * real_delta * fg_deconv_fundamental_period[-1])
+                nmax = int((fcfg[0] + fwfg[0]) * real_delta * fg_deconv_fundamental_period[-1])
                 info['fg_deconv'] = {'method':'dft_interp','nmin':nmin, 'nmax':nmax}
                 d_cl, _, _ = delay_filter_leastsq_1d( (data * wgts * win ).squeeze(), flags=(wgts==0.).squeeze(), sigma=1.,
-                                                    nmax=(nmin, nmax), freq_units=True, even_modes=True)
+                                                    nmax=(nmin, nmax), freq_units=True, even_modes=True, fundamental_period=fg_deconv_fundamental_period[-1])
                 _d_cl = np.fft.ifft(d_cl)
                 _d_res = _d * wgts * win - _d_cl
 
@@ -258,11 +265,11 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                                 info_fg['gain'] = gain
                                 info_here['fg_deconv'] = info_fg
                             elif fg_deconv_method == 'leastsq':
-                                nmin = int((fcfg[0] - fwfg[0]) * real_delta * data.shape[-1])
-                                nmax = int((fcfg[0] + fwfg[0]) * real_delta * data.shape[-1])
+                                nmin = int((fcfg[0] - fwfg[0]) * real_delta * fg_deconv_fundamental_period[-1])
+                                nmax = int((fcfg[0] + fwfg[0]) * real_delta * fg_deconv_fundamental_period[-1])
                                 info_here['fg_deconv'] = {'method':'leastsq','nmin':nmin, 'nmax':nmax}
                                 d_cl, _, _ = delay_filter_leastsq_1d( (data[i] * wgts[i] * win - d_r).squeeze(), flags=(wgts[i]==0.).squeeze(), sigma=1.,
-                                                                    nmax=(nmin, nmax), freq_units=True, even_modes=True)
+                                                                    nmax=(nmin, nmax), freq_units=True, even_modes=True, fundamental_period=fg_deconv_fundamental_period[-1])
                                 _d_cl[i] = np.fft.ifft(d_cl)
                         else:
                             _d_cl[i] = _d[i] - _d_res[i]
@@ -270,11 +277,11 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
 
                     elif mode=='dft_interp':
                         info_here = {}
-                        nmin = int((fcfg[0] - fwfg[0]) * real_delta * data.shape[-1])
-                        nmax = int((fcfg[0] + fwfg[0]) * real_delta * data.shape[-1])
+                        nmin = int((fcfg[0] - fwfg[0]) * real_delta * fg_deconv_fundamental_period[-1])
+                        nmax = int((fcfg[0] + fwfg[0]) * real_delta * fg_deconv_fundamental_period[-1])
                         info_here['fg_deconv'] = {'method':'dft_interp','nmin':nmin, 'nmax':nmax}
                         d_cl, _, _ = delay_filter_leastsq_1d( (data[i] * wgts[i] * win ).squeeze(), flags=(wgts[i]==0.).squeeze(), sigma=1.,
-                                                            nmax=(nmin, nmax), freq_units=True, even_modes=True)
+                                                            nmax=(nmin, nmax), freq_units=True, even_modes=True, fundamental_period=fg_deconv_fundamental_period[-1])
                         _d_cl[i] = np.fft.ifft(d_cl)
                         _d_res[i] = _d[i] - _d_cl[i]
                         info.append(info_here)
@@ -960,7 +967,7 @@ def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, normalization=
     return w
 
 
-def fourier_operator(dsize, nmax, nmin=None, freq_units=False, even_modes=False):
+def fourier_operator(dsize, nmax, nmin=None, freq_units=False, even_modes=False, L=None):
     """
     Return a complex Fourier analysis operator for a given data dimension and number of Fourier modes.
 
@@ -978,21 +985,27 @@ def fourier_operator(dsize, nmax, nmin=None, freq_units=False, even_modes=False)
     freq_units : bool,
         if False, then fourier modes are given by e^(-m * n * j / N)
         if True, then fourier modes are given by e^(-m * n * j / N * 2 * pi)
+        where N is fundamental period.
     even_modes : bool, optional, default = False
         instead of 2n + 1 modes, use 2n modes from -n, n-1 as per usual.
+    L : int, optional, default = None
+        fundamental period of Fourier modes to fit too.
+        if none, default to ndata.
     Returns
     -------
     F : array_like
         Fourier matrix operator, of shape (Nmodes, Ndata)
     """
+    if L is None:
+        if not even_modes:
+            L = nu[-1] - nu[0]
+        else:
+            L = dsize
     if nmin is None:
         nmin = -nmax
     # Construct frequency array (*not* in physical frequency units)
     nu = np.arange(dsize)
-    if not even_modes:
-        L = nu[-1] - nu[0]
-    else:
-        L = dsize
+
     if freq_units:
         L  = L / (2. * np.pi)
     # Build matrix operator for complex Fourier basis
@@ -1040,7 +1053,7 @@ def fourier_model(cn, Nfreqs):
 
 
 def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False, freq_units = False,
-                            cn_guess=None, use_linear=True, operator=None, even_modes=False):
+                            cn_guess=None, use_linear=True, operator=None, even_modes=False, fundamental_period=None):
     """
     Fit a smooth model to 1D complex-valued data with flags, using a linear
     least-squares solver. The model is a Fourier series up to a specified
@@ -1099,6 +1112,10 @@ def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False, freq_unit
     even_modes : bool, optional, default = False
         instead of 2n + 1 modes, use 2n modes from -n, n-1 as per usual.
 
+    fundamental_period : int, optional, default = None
+        fundamental period of Fourier modes to fit too.
+        if none, default to ndata.
+
     Returns
     -------
     model : array_like
@@ -1118,7 +1135,7 @@ def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False, freq_unit
     elif isinstance(nmax, int):
         nmin = -nmax
     if operator is None:
-        F = fourier_operator(dsize=data.size, nmin = nmin, nmax=nmax, freq_units=freq_units, even_modes=even_modes)
+        F = fourier_operator(dsize=data.size, nmin = nmin, nmax=nmax, freq_units=freq_units, even_modes=even_modes, L=fundamental_period)
     else:
         F = operator
         if even_modes:
@@ -1195,7 +1212,7 @@ def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False, freq_unit
 
 
 def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units = False,
-                         cn_guess=None, use_linear=True, operator=None, even_modes=False):
+                         cn_guess=None, use_linear=True, operator=None, even_modes=False, fundamental_period=None):
     """
     Fit a smooth model to each 1D slice of 2D complex-valued data with flags,
     using a linear least-squares solver. The model is a Fourier series up to a
@@ -1254,6 +1271,9 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
         if True, then fourier modes are given by e^(-m * n * j / N * 2 * pi)
     even_modes : bool, optional, default False
         instead of 2n + 1 modes, use 2n modes from -n, n-1 as per usual.
+    fundamental_period : int, optional, default = None
+        fundamental period of Fourier modes to fit too.
+        if none, default to ndata.
 
     Returns
     -------
@@ -1275,7 +1295,7 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
         nmin = -nmax
     # Construct and cache Fourier basis operator (for speed)
     if operator is None:
-        F = fourier_operator(dsize=data.shape[1], nmax=nmax, nmin=nmin, freq_units=freq_units, even_modes=even_modes)
+        F = fourier_operator(dsize=data.shape[1], nmax=nmax, nmin=nmin, freq_units=freq_units, even_modes=even_modes, L=fundamental_period)
     else:
         # delay_filter_leastsq_1d will check for correct dimensions
         F = operator
@@ -1293,7 +1313,7 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
     for i in range(data.shape[0]):
         bf_model, cn_out, data_out = delay_filter_leastsq_1d(
             data[i], flags[i], sigma=sigma, nmax=(nmin, nmax), add_noise=add_noise, even_modes=even_modes,
-            use_linear=use_linear, cn_guess=cn_out, operator=F, freq_units=freq_units)
+            use_linear=use_linear, cn_guess=cn_out, operator=F, freq_units=freq_units, fundamental_period=fundamental_period)
         inp_data[i, :] = data_out
         cn_array[i, :] = cn_out
         mdl_array[i, :] = bf_model
