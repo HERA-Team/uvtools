@@ -63,8 +63,8 @@ def calc_width(filter_size, real_delta, nsamples):
 
 def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False, tol=1e-9, window='none',
                              skip_wgt=0.1, maxiter=100, gain=0.1, filt2d_mode='rect', alpha=0.5,
-                             edgecut_low=0, edgecut_hi=0, add_clean_residual=False, linear = False, cache={},
-                             fg_deconv_method='clean', deconv_linear_foregrounds=False, fg_restore_size=None):
+                             edgecut_low=0, edgecut_hi=0, add_clean_residual=False, mode='clean', cache={},
+                             fg_deconv_method='clean', deconv_dayenu_foregrounds=False, fg_restore_size=None):
     '''Apply a highpass fourier filter to data. Uses aipy.deconv.clean. Default is a 1D clean
     on the last axis of data.
 
@@ -105,12 +105,14 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         add_clean_residual : bool, if True, adds the CLEAN residual within the CLEAN bounds
             in fourier space to the CLEAN model. Note that the residual actually returned is
             not the CLEAN residual, but the residual in input data space.
-        linear : bool,
-             use aipy.deconv.clean if linear == False
-             if True, perform linear delay filtering.
+        mode : string,
+             choose from ['clean','dayenu','dft_interp']
+             use aipy.deconv.clean if 'clean'
+             use 'dayenu' if 'dayenu'
+             if 'dft_interp', then interpolates flagged channels with DFT modes.
         cache : dict, optional dictionary for storing pre-computed filtering matrices in linear
             cleaning.
-        deconv_linear_foregrounds : bool, if True, then apply clean to data - residual where
+        deconv_dayenu_foregrounds : bool, if True, then apply clean to data - residual where
             res is the data-vector after applying a linear clean filter.
             This allows for in-painting flagged foregrounds without introducing
             clean artifacts into EoR window. If False, mdl will still just be the
@@ -135,6 +137,10 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
     if fg_restore_size is None:
         fg_restore_size = filter_size
     assert dndim == 1 or dndim == 2, "data must be a 1D or 2D ndarray"
+
+    if not mode.lower in ['clean', 'dayenu', 'dft_interp']:
+        raise ValueError("mode must be in ['clean', 'dayenu', 'dft_interp']")
+
     if clean2d:
         assert dndim == 2, "data must be 2D for 2D clean"
         assert isinstance(filter_size, (tuple, list)), "filter_size must be list or tuple for 2D clean"
@@ -190,15 +196,15 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         # run clean
         if dndim == 1:
             # For 1D data array run once
-            if not linear:
+            if mode.lower()=='clean':
                 _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
                 _d_res = info['res']
                 del info['res']
-            else:
-                d_r, info = linear_filter(data * wgts * win, wgts * win, delta_data=real_delta,
+            elif mode.lower()=='dayenu':
+                d_r, info = dayenu_filter(data * wgts * win, wgts * win, delta_data=real_delta,
                                                 filter_dimensions = [1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache)
                 _d_res = np.fft.ifft(d_r)
-                if deconv_linear_foregrounds:
+                if deconv_dayenu_foregrounds:
                     if fg_deconv_method == 'clean':
                         _d_cl, info_fg = aipy.deconv.clean(_d - _d_res, _w, area=area_fg, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
                         del info_fg['res']
@@ -214,6 +220,11 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                         _d_cl = np.fft.ifft(d_cl)
                 else:
                     _d_cl = _d - _d_res
+            elif mode.lower()=='dft_interp':
+                d_cl, _, _ = delay_filter_leastsq( (data * wgts * win).squeeze(), flags=(wgts==0.).squeeze(), sigma=1.,
+                                                    nmax=(nmin, nmax), freq_units=True, even_modes=True)
+                _d_cl = np.fft.ifft(d_cl)
+                _d_res = _d * wgts * win - _d_cl
 
         elif data.ndim == 2:
             # For 2D data array, iterate
@@ -226,17 +237,17 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                     _d_res[i] = _d[i]
                     info.append({'skipped': True})
                 else:
-                    if not linear:
+                    if mode.lower=='clean':
                         _cl, info_here = aipy.deconv.clean(_d[i], _w[i], area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
                         _d_cl[i] = _cl
                         _d_res[i] = info_here['res']
                         del info_here['res']
                         info.append(info_here)
-                    else:
-                        d_r, info_here = linear_filter(data[i] * wgts[i] * win, wgts[i] * win, delta_data=real_delta,
+                    elif mode.lower=='dayenu':
+                        d_r, info_here = dayenu_filter(data[i] * wgts[i] * win, wgts[i] * win, delta_data=real_delta,
                                                             filter_dimensions=[1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache)
                         _d_res[i] = np.fft.ifft(d_r)
-                        if deconv_linear_foregrounds:
+                        if deconv_dayenu_foregrounds:
                             if fg_deconv_method == 'clean':
                                 _d_cl[i], info_fg = aipy.deconv.clean(_d[i] - _d_res[i], _w[i], area=area_fg, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
                                 del info_fg['res']
@@ -254,6 +265,11 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                             _d_cl[i] = _d[i] - _d_res[i]
                         info.append(info_here)
 
+                    elif mode.lower()=='dft_interp':
+                        d_cl, _, _ = delay_filter_leastsq( (data[i] * wgts[i] * win).squeeze(), flags=(wgts==0.).squeeze(), sigma=1.,
+                                                            nmax=(nmin, nmax), freq_units=True, even_modes=True)
+                        _d_cl[i] = np.fft.ifft(d_cl)
+                        _d_res[i] = _d[i] * wgts[i] * win - _d_cl[i]
 
     # 2D clean on 2D data
     else:
@@ -324,17 +340,17 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             raise ValueError("Didn't recognize filt2d_mode {}".format(filt2d_mode))
 
         # run clean
-        if not linear:
+        if mode == 'clean':
             _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
             _d_res = info['res']
             del info['res']
-        else:
+        elif mode == 'dayenu':
             assert filt2d_mode == "plus", "2d linear deconvolution only supports filt2d_mode == 'plus'."
 
-            d_r, info = linear_filter(data * wgts * win, wgts * win, delta_data=[real_delta[0],real_delta[1]], filter_centers=fc, filter_half_widths=fw,
+            d_r, info = dayenu_filter(data * wgts * win, wgts * win, delta_data=[real_delta[0],real_delta[1]], filter_centers=fc, filter_half_widths=fw,
                                          filter_factors=ff, cache=cache, filter_dimensions=[0, 1])
             _d_res = np.fft.ifft2(d_r)
-            if deconv_linear_foregrounds:
+            if deconv_dayenu_foregrounds:
                 if fg_deconv_method == 'clean':
                     _d_cl, info_fg = aipy.deconv.clean(_d - _d_res, _w, area=area_fg, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
                     del info_fg['res']
@@ -351,6 +367,9 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
 
             else:
                 _d_cl = _d - _d_res
+        elif mode == 'dft_interp':
+            raise ValueError("2d clean not yet supported for dft interpolation.")
+
 
     # add resid to model in CLEAN bounds
     if add_clean_residual:
@@ -364,12 +383,12 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         d_mdl = np.fft.fft(_d_cl)
         d_res = np.fft.fft(_d_res)
     # get residual in data space
-    if not linear:
+    if mode =='dayenu':
         d_res = (data - d_mdl) * ~np.isclose(wgts * win, 0.0)
 
     return d_mdl, d_res, info
 
-def linear_filter(data, wgts, filter_dimensions, filter_centers, filter_half_widths, filter_factors, delta_data=None, cache = {}, user_frequencies=None):
+def dayenu_filter(data, wgts, filter_dimensions, filter_centers, filter_half_widths, filter_factors, delta_data=None, cache = {}, user_frequencies=None):
     '''Apply a linear delay filter to waterfall data.
         Due to performance reasons, linear filtering only supports separable delay/fringe-rate filters.
     Arguments:
@@ -521,7 +540,7 @@ def linear_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
     skipped = [[],[]]
     # in the lines below, we iterate over the time dimension. For each time, we
     # compute a lazy covariance matrix (filter_mat) from the weights (wght) and
-    # a sinc downweight matrix. (sinc_downweight_mat_inv). We then attempt to
+    # a sinc downweight matrix. (dayenu_mat_inv). We then attempt to
     # take the psuedo inverse to get a filtering matrix that removes foregrounds.
     # we do this for the zeroth and first filter dimension.
     output = copy.deepcopy(data)
@@ -549,7 +568,7 @@ def linear_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
                     df=1.
                 else:
                     df=delta_data[fs]
-                filter_mat = sinc_downweight_mat_inv(nchan=data.shape[fs], df=df, filter_centers=filter_centers[fs],
+                filter_mat = dayenu_mat_inv(nchan=data.shape[fs], df=df, filter_centers=filter_centers[fs],
                                                      filter_half_widths=filter_half_widths[fs],
                                                      filter_factors=filter_factors[fs], cache=cache,
                                                      user_frequencies=user_frequencies[fs]) * wght_mat
@@ -583,8 +602,8 @@ def linear_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
 
 def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, tol=1e-4,
                  window='none', skip_wgt=0.5, maxiter=100, gain=0.1, edgecut_low=0, edgecut_hi=0,
-                 alpha=0.5, add_clean_residual=False, linear=False, cache={},
-                 deconv_linear_foregrounds=False, fg_deconv_method='clean', fg_restore_size=None):
+                 alpha=0.5, add_clean_residual=False, mode='clean', cache={},
+                 deconv_dayenu_foregrounds=False, fg_deconv_method='clean', fg_restore_size=None):
     '''Apply a wideband delay filter to data. Variable names preserved for
         backward compatability with capo/PAPER analysis.
 
@@ -618,12 +637,14 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
             in fourier space to the CLEAN model (and sets residual within CLEAN bounds to zero).
             This is more in-line with a standard filtering operation, rather than a CLEAN operation.
             If False, residual is not added to the CLEAN model.
-        linear : bool,
-            use aipy.deconv.clean if linear == False
-            if True, perform linear delay filtering.
+        mode : string,
+             choose from ['clean','dayenu','dft_interp']
+             use aipy.deconv.clean if 'clean'
+             use 'dayenu' if 'dayenu'
+             if 'dft_interp', then interpolates flagged channels with DFT modes.
         cache : dict, optional dictionary for storing pre-computed filtering matrices in linear
             cleaning.
-        deconv_linear_foregrounds : bool, if True, then apply clean to data - residual where
+        deconv_dayenu_foregrounds : bool, if True, then apply clean to data - residual where
             res is the data-vector after applying a linear clean filter.
             This allows for in-painting flagged foregrounds without introducing
             clean artifacts into EoR window. If False, mdl will still just be the
@@ -653,14 +674,14 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
     return high_pass_fourier_filter(data, wgts, bl_dly, sdf, tol=tol, window=window, edgecut_low=edgecut_low,
                                     edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain,
                                     fg_deconv_method=fg_deconv_method, alpha=alpha,
-                                    add_clean_residual=add_clean_residual, linear=linear,
-                                    cache=cache, deconv_linear_foregrounds=deconv_linear_foregrounds,
+                                    add_clean_residual=add_clean_residual, mode=mode,
+                                    cache=cache, deconv_dayenu_foregrounds=deconv_dayenu_foregrounds,
                                     fg_restore_size=fg_restore_size)
 
 
 def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100, gain=0.1,
                   window='none', edgecut_low=0, edgecut_hi=0, alpha=0.5, add_clean_residual=False,
-                  linear=False, cache = {}, deconv_linear_foregrounds=False, fg_deconv_method='clean', fg_restore_size=None):
+                  mode='clean', cache = {}, deconv_dayenu_foregrounds=False, fg_deconv_method='clean', fg_restore_size=None):
     """
     Run a CLEAN deconvolution along the time axis.
 
@@ -689,12 +710,14 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
             in fourier space to the CLEAN model (and sets residual within CLEAN bounds to zero).
             This is more in-line with a standard filtering operation, rather than a CLEAN operation.
             If False, residual is not added to the CLEAN model.
-        linear : bool,
-                 use aipy.deconv.clean if linear == False
-                 if True, perform linear delay filtering.
+        mode : string,
+             choose from ['clean','dayenu','dft_interp']
+             use aipy.deconv.clean if 'clean'
+             use 'dayenu' if 'dayenu'
+             if 'dft_interp', then interpolates flagged channels with DFT modes.
         cache : dict, optional dictionary for storing pre-computed filtering matrices in linear
             cleaning.
-        deconv_linear_foregrounds : bool, if True, then apply clean to data - residual where
+        deconv_dayenu_foregrounds : bool, if True, then apply clean to data - residual where
             res is the data-vector after applying a linear clean filter.
             This allows for in-painting flagged foregrounds without introducing
             clean artifacts into EoR window. If False, mdl will still just be the
@@ -702,7 +725,7 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
             applying the linear filter.
         cache : dict, optional dictionary for storing pre-computed filtering matrices in linear
             cleaning.
-        deconv_linear_foregrounds : bool, if True, then apply clean to data - residual where
+        deconv_dayenu_foregrounds : bool, if True, then apply clean to data - residual where
             res is the data-vector after applying a linear clean filter.
             This allows for in-painting flagged foregrounds without introducing
             clean artifacts into EoR window. If False, mdl will still just be the
@@ -728,15 +751,15 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
 
     # run fourier filter
     mdl, res, info = high_pass_fourier_filter(data.T, wgts.T, max_frate, dt, tol=tol, window=window, edgecut_low=edgecut_low, fg_deconv_method=fg_deconv_method,
-                                              edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, deconv_linear_foregrounds=deconv_linear_foregrounds,
-                                              alpha=alpha, add_clean_residual=add_clean_residual, linear=linear, cache=cache, fg_restore_size=fg_restore_size)
+                                              edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, deconv_dayenu_foregrounds=deconv_dayenu_foregrounds,
+                                              alpha=alpha, add_clean_residual=add_clean_residual, mode=mode, cache=cache, fg_restore_size=fg_restore_size)
     return mdl.T, res.T, info
 
 
 def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, standoff=0.0, horizon=1., min_dly=0.,
                tol=1e-4, window='none', maxiter=100, gain=1e-1, skip_wgt=0.5, filt2d_mode='rect',
-               edgecut_low=0, edgecut_hi=0, alpha=0.5, add_clean_residual=False, linear=False, cache={},
-               deconv_linear_foregrounds=False, fg_deconv_method='clean', fg_restore_size=None):
+               edgecut_low=0, edgecut_hi=0, alpha=0.5, add_clean_residual=False, mode='clean', cache={},
+               deconv_dayenu_foregrounds=False, fg_deconv_method='clean', fg_restore_size=None):
     """
     A generalized interface to delay and/or fringe-rate 1D CLEAN functions, or a full 2D clean
     if both bl_len & sdf and max_frate & dt variables are specified.
@@ -775,12 +798,14 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
             in fourier space to the CLEAN model (and sets residual within CLEAN bounds to zero).
             This is more in-line with a standard filtering operation, rather than a CLEAN operation.
             If False, residual is not added to the CLEAN model.
-        linear : bool,
-                 use aipy.deconv.clean if linear == False
-                 if True, perform linear delay filtering.
+        mode : string,
+             choose from ['clean','dayenu','dft_interp']
+             use aipy.deconv.clean if 'clean'
+             use 'dayenu' if 'dayenu'
+             if 'dft_interp', then interpolates flagged channels with DFT modes.
         cache : dict, optional dictionary for storing pre-computed filtering matrices in linear
             cleaning.
-        deconv_linear_foregrounds : bool, if True, then apply clean to data - residual where
+        deconv_dayenu_foregrounds : bool, if True, then apply clean to data - residual where
             res is the data-vector after applying a linear clean filter.
             This allows for in-painting flagged foregrounds without introducing
             clean artifacts into EoR window. If False, mdl will still just be the
@@ -822,9 +847,9 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
         if timeclean:
             mdl, res, info = high_pass_fourier_filter(data.T, wgts.T, max_frate, dt, tol=tol, window=window, edgecut_low=edgecut_low,
                                                       edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter,
-                                                      gain=gain, linear=linear, fg_deconv_method=fg_deconv_method,
+                                                      gain=gain, mode=mode, fg_deconv_method=fg_deconv_method,
                                                       alpha=alpha, add_clean_residual=add_clean_residual, cache=cache,
-                                                      deconv_linear_foregrounds=deconv_linear_foregrounds, fg_restore_size=fg_restore_size)
+                                                      deconv_dayenu_foregrounds=deconv_dayenu_foregrounds, fg_restore_size=fg_restore_size)
             mdl, res = mdl.T, res.T
 
         # freq clean
@@ -832,9 +857,9 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
             bl_dly = _get_bl_dly(bl_len, horizon=horizon, standoff=standoff, min_dly=min_dly)
             mdl, res, info = high_pass_fourier_filter(data, wgts, bl_dly, sdf, tol=tol, window=window, edgecut_low=edgecut_low,
                                                       edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain,
-                                                      linear=linear, fg_deconv_method=fg_deconv_method,
+                                                      mode=mode, fg_deconv_method=fg_deconv_method,
                                                       alpha=alpha, add_clean_residual=add_clean_residual,
-                                                      cache=cache, deconv_linear_foregrounds=deconv_linear_foregrounds, fg_restore_size=fg_restore_size)
+                                                      cache=cache, deconv_dayenu_foregrounds=deconv_dayenu_foregrounds, fg_restore_size=fg_restore_size)
 
     # 2D clean
     else:
@@ -842,11 +867,12 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
         bl_dly = _get_bl_dly(bl_len, horizon=horizon, standoff=standoff, min_dly=min_dly)
 
         # 2D clean
-        mdl, res, info = high_pass_fourier_filter(data, wgts, (max_frate, bl_dly), (dt, sdf), tol=tol, window=window, edgecut_low=edgecut_low, linear = linear,
-                                                  edgecut_hi=edgecut_hi, maxiter=maxiter, gain=gain, clean2d=True, filt2d_mode=filt2d_mode,
+        mdl, res, info = high_pass_fourier_filter(data, wgts, (max_frate, bl_dly), (dt, sdf), tol=tol, window=window, edgecut_low=edgecut_low,
+                                                  mode = mode, edgecut_hi=edgecut_hi, maxiter=maxiter,
+                                                  gain=gain, clean2d=True, filt2d_mode=filt2d_mode,
                                                   fg_deconv_method=fg_deconv_method, fg_restore_size=fg_restore_size,
                                                   alpha=alpha, add_clean_residual=add_clean_residual, cache=cache,
-                                                  deconv_linear_foregrounds=deconv_linear_foregrounds)
+                                                  deconv_dayenu_foregrounds=deconv_dayenu_foregrounds)
 
     return mdl, res, info
 
@@ -1337,7 +1363,7 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
         return a_mat, cmat, cmati, tmat
 
 
-def sinc_downweight_mat_inv(nchan, df, filter_centers, filter_half_widths,
+def dayenu_mat_inv(nchan, df, filter_centers, filter_half_widths,
                             filter_factors, cache={}, wrap=False, wrap_interval=1,
                             nwraps=1000, no_regularization=False, user_frequencies=None):
     """
