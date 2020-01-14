@@ -996,6 +996,7 @@ def fourier_operator(dsize, nmax, nmin=None, freq_units=False, even_modes=False,
     F : array_like
         Fourier matrix operator, of shape (Nmodes, Ndata)
     """
+    nu = np.arange(dsize)
     if L is None:
         if not even_modes:
             L = nu[-1] - nu[0]
@@ -1004,7 +1005,6 @@ def fourier_operator(dsize, nmax, nmin=None, freq_units=False, even_modes=False,
     if nmin is None:
         nmin = -nmax
     # Construct frequency array (*not* in physical frequency units)
-    nu = np.arange(dsize)
 
     if freq_units:
         L  = L / (2. * np.pi)
