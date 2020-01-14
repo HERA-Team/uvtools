@@ -55,7 +55,7 @@ class TestMethods(unittest.TestCase):
         self.assertAlmostEqual(np.average(data), np.average(dmdl), 3)
         self.assertAlmostEqual(np.average(dres), 0, 3)
 
-    #def test_linear_filter()
+    #def test_dayenu_filter()
 
     def test_delay_filter_2D(self):
         NCHAN = 128
@@ -192,7 +192,7 @@ class TestMethods(unittest.TestCase):
 
         nt.assert_raises(ValueError, dspec.gen_window, 'foo', 200)
 
-def test_linear_filter():
+def test_dayenu_filter():
     nf = 100
     df = 100e3
     freqs = np.arange(-nf//2, nf//2) * df
@@ -211,45 +211,45 @@ def test_linear_filter():
     wghts_1d = np.ones(nf)
     wghts_2d = np.array([wghts_1d, wghts_1d])
     #test functionality for numpy arrays
-    dspec.linear_filter(data_1d, wghts_1d, [1], np.array(filter_centers), np.array(filter_half_widths),
+    dspec.dayenu_filter(data_1d, wghts_1d, [1], np.array(filter_centers), np.array(filter_half_widths),
                         np.array(filter_factors), delta_data=df)
     #provide filter_dimensions as an integer.
-    dspec.linear_filter(data_1d, wghts_1d, 1, np.array(filter_centers), np.array(filter_half_widths),
+    dspec.dayenu_filter(data_1d, wghts_1d, 1, np.array(filter_centers), np.array(filter_half_widths),
                         np.array(filter_factors), delta_data=df)
 
     #test functionality on floats
-    dspec.linear_filter(data_1d, wghts_1d,  1, filter_centers[0], filter_half_widths[0],
+    dspec.dayenu_filter(data_1d, wghts_1d,  1, filter_centers[0], filter_half_widths[0],
                         filter_factors[0],delta_data=df)
     filter_half_widths2 = [200e-9, 200e-9]
     filter_centers2 = [0., -1400e-9]
     filter_factors2 = [1e-9, 1e-9]
     #check if throws error when number of filter_half_widths not equal to len filter_centers
-    nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_1d, [1], filter_centers,
+    nt.assert_raises(ValueError, dspec.dayenu_filter, data_1d, wghts_1d, [1], filter_centers,
                     filter_half_widths2, filter_factors, delta_data=df)
     #check if throws error when number of filter_half_widths not equal to len filter_factors
-    nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_1d, 1, filter_centers,
+    nt.assert_raises(ValueError, dspec.dayenu_filter, data_1d, wghts_1d, 1, filter_centers,
                     filter_half_widths, filter_factors2, delta_data=df)
     #check if error thrown when wghts have different length then data
-    nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_1d[:-1], 1, filter_centers,
+    nt.assert_raises(ValueError, dspec.dayenu_filter, data_1d, wghts_1d[:-1], 1, filter_centers,
                     filter_half_widths, filter_factors, delta_data=df)
     #check if error thrown when dimension of data does not equal dimension of weights.
-    nt.assert_raises(ValueError, dspec.linear_filter, data_1d, wghts_2d, 1, filter_centers,
+    nt.assert_raises(ValueError, dspec.dayenu_filter, data_1d, wghts_2d, 1, filter_centers,
                     filter_half_widths, filter_factors, delta_data=df)
     #check if error thrown if dimension of data does not equal 2 or 1.
-    nt.assert_raises(ValueError, dspec.linear_filter, np.zeros((10,10,10)), wghts_1d, 1, filter_centers,
+    nt.assert_raises(ValueError, dspec.dayenu_filter, np.zeros((10,10,10)), wghts_1d, 1, filter_centers,
                     filter_half_widths, filter_factors, delta_data=df)
     #check if error thrown if dimension of weights does not equal 2 or 1.
-    nt.assert_raises(ValueError, dspec.linear_filter, wghts_1d, np.zeros((10,10,10)), 1, filter_centers,
+    nt.assert_raises(ValueError, dspec.dayenu_filter, wghts_1d, np.zeros((10,10,10)), 1, filter_centers,
                     filter_half_widths, filter_factors, delta_data=df)
     #now filter foregrounds and test that std of residuals are close to std of noise:
-    filtered_noise, _ =  dspec.linear_filter(data_1d, wghts_1d, [1], filter_centers, filter_half_widths,
+    filtered_noise, _ =  dspec.dayenu_filter(data_1d, wghts_1d, [1], filter_centers, filter_half_widths,
                                          filter_factors, delta_data=df)
     #print(np.std((data_1d - fg_tone).real)*np.sqrt(2.))
     #print(np.std((filtered_noise).real)*np.sqrt(2.))
     np.testing.assert_almost_equal( np.std(filtered_noise.real)**2. + np.std(filtered_noise.imag)**2.,
                                   np.std(noise.real)**2. + np.std(noise.imag)**2., decimal = 0)
     #now filter foregrounds and signal and test that std of residuals are close to std of signal.
-    filtered_signal, _ =  dspec.linear_filter(fg_sg, wghts_1d, [1], filter_centers, filter_half_widths,
+    filtered_signal, _ =  dspec.dayenu_filter(fg_sg, wghts_1d, [1], filter_centers, filter_half_widths,
                                               filter_factors, delta_data=df)
     np.testing.assert_almost_equal( (np.std(filtered_signal.real)**2. + np.std(filtered_signal.imag)**2.)/1e4,
                                   (np.std(sg_tone.real)**2. + np.std(sg_tone.imag)**2.)/1e4, decimal = 0)
@@ -267,7 +267,7 @@ def test_linear_filter():
     data_2d = signal_2d + noise_2d
     #now, only filter fringe-rate domain. The fringe rate for a source
     #overhead should be roughly 0.0036 for this baseline.
-    filtered_data_fr, _ = dspec.linear_filter(data_2d, np.ones_like(data_2d), delta_data = dt,
+    filtered_data_fr, _ = dspec.dayenu_filter(data_2d, np.ones_like(data_2d), delta_data = dt,
                         filter_centers = [0.], filter_half_widths = [0.004], filter_factors = [1e-10],
                         filter_dimensions = [0], cache = TEST_CACHE)
 
@@ -276,7 +276,7 @@ def test_linear_filter():
 
     #only filter in the delay-domain.
 
-    filtered_data_df, _ = dspec.linear_filter(data_2d, np.ones_like(data_2d), delta_data=100e3,
+    filtered_data_df, _ = dspec.dayenu_filter(data_2d, np.ones_like(data_2d), delta_data=100e3,
                         filter_centers = [0.], filter_half_widths=[100e-9], filter_factors=[1e-10],
                         filter_dimensions = [1], cache = TEST_CACHE)
 
@@ -286,7 +286,7 @@ def test_linear_filter():
     #filter in both domains. I use a smaller filter factor
     #for each domain since they multiply in the target region.
 
-    filtered_data_df_fr, _ = dspec.linear_filter(data_2d, np.ones_like(data_2d), delta_data = [dt,100e3],
+    filtered_data_df_fr, _ = dspec.dayenu_filter(data_2d, np.ones_like(data_2d), delta_data = [dt,100e3],
                     filter_centers = [[0.002],[0.]], filter_half_widths = [[0.001],[100e-9]], filter_factors = [[1e-5],[1e-5]],
                     filter_dimensions = [0,1],cache = TEST_CACHE)
 
@@ -294,7 +294,7 @@ def test_linear_filter():
                                     1., decimal = 1)
 
     #test error messages if we do not provide lists of lists.
-    nt.assert_raises(ValueError,dspec.linear_filter,data_2d, np.ones_like(data_2d),
+    nt.assert_raises(ValueError,dspec.dayenu_filter,data_2d, np.ones_like(data_2d),
                         delta_data = [dt,100e3],
                         filter_centers = [[0.002],0.],
                         filter_half_widths = [[0.001],[100e-9]],
@@ -306,7 +306,7 @@ def test_linear_filter():
     #test linear algebra error
     #wbad = np.ones(32,dtype=complex)
     #wbad[2:30] = 0.
-    #d_fail, info_fail = dspec.linear_filter(np.zeros(32,dtype=complex), wbad, 1e5, [0.], [32/1e5/32], [1e-9], cache = {},
+    #d_fail, info_fail = dspec.dayenu_filter(np.zeros(32,dtype=complex), wbad, 1e5, [0.], [32/1e5/32], [1e-9], cache = {},
     #                        filter_dimensions = [False, True])
     #np.testing.assert_array_equal(d_fail, np.zeros_like(d_fail))
     #np.testing.assert_array_equal(np.array(info_fail['skipped_channels']), np.array([0]))
@@ -536,33 +536,33 @@ def test_vis_filter_linear():
 
     # delay filter basic execution 1d with and without leastsq
     mdl1, res1, info1 = dspec.delay_filter(d[0], w[0], bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.,
-                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, linear=True, deconv_linear_foregrounds=True, fg_deconv_method='leastsq')
+                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, linear=True, deconv_dayenu_foregrounds=True, fg_deconv_method='leastsq')
 
     mdl2, res2, info2 = dspec.delay_filter(d[0], w[0], bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.,
-                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, linear=True, deconv_linear_foregrounds=True, fg_deconv_method='clean')
+                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, linear=True, deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
     #residuals should be same
     nt.assert_true(np.isclose(res1 - res2, 0.0).all())
 
     # delay filter basic execution with leastsq
     mdl, res, info = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.,
-                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, linear=True, deconv_linear_foregrounds=True, fg_deconv_method='leastsq')
+                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, linear=True, deconv_dayenu_foregrounds=True, fg_deconv_method='leastsq')
     cln = mdl + res
     snrs = get_snr(cln, fftax=1, avgax=0)
     nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=4))
     nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=4))
     # delay filter basic execution
     mdl, res, info = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.,
-                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, linear=True, deconv_linear_foregrounds=True, fg_deconv_method='clean')
+                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, linear=True, deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
     cln = mdl + res
     snrs = get_snr(cln, fftax=1, avgax=0)
     nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=3))
     nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
     # test vis filter is the same
     mdl2, res2, info2 = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, standoff=0, horizon=1.0, min_dly=0.,
-                                               tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, linear=True, deconv_linear_foregrounds=True, fg_deconv_method='clean')
+                                               tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, linear=True, deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
     nt.assert_true(np.isclose(mdl - mdl2, 0.0).all())
     # fringe filter basic execution
-    mdl, res, info = dspec.fringe_filter(d, w, frs[15] * 1.5, dt, tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, linear=True, deconv_linear_foregrounds=True, fg_deconv_method='clean')
+    mdl, res, info = dspec.fringe_filter(d, w, frs[15] * 1.5, dt, tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, linear=True, deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
     cln = mdl + res
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=0, avgax=1)
@@ -570,12 +570,12 @@ def test_vis_filter_linear():
     nt.assert_true(np.isclose(snrs[1], time_snr2, atol=3))
 
     # test vis filter is the same
-    mdl2, res2, info2 = dspec.vis_filter(d, w, max_frate=frs[15] * 1.5, dt=dt, tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, linear=True, deconv_linear_foregrounds=True, fg_deconv_method='clean')
+    mdl2, res2, info2 = dspec.vis_filter(d, w, max_frate=frs[15] * 1.5, dt=dt, tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, linear=True, deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
     cln2 = mdl2 + res2
     nt.assert_true(np.isclose(mdl - mdl2, 0.0).all())
 
     # try non-symmetric filter
-    mdl, res, info = dspec.fringe_filter(d, w, (frs[-20]*2, frs[10]*2), dt, tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, linear=True, deconv_linear_foregrounds=True, fg_deconv_method='clean')
+    mdl, res, info = dspec.fringe_filter(d, w, (frs[-20]*2, frs[10]*2), dt, tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, linear=True, deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
     cln = mdl + res
 
     # assert recovered snr of input modes
@@ -583,7 +583,7 @@ def test_vis_filter_linear():
     nt.assert_true(np.isclose(snrs[0], time_snr1, atol=3))
     nt.assert_true(np.isclose(snrs[1], time_snr2, atol=3))
     # 2d clean
-    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=1.5*frs[15], dt=dt, tol=1e-8, window='none', maxiter=100, gain=1e-1, linear=True, filt2d_mode='plus', deconv_linear_foregrounds=True, fg_deconv_method='clean')
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=1.5*frs[15], dt=dt, tol=1e-8, window='none', maxiter=100, gain=1e-1, linear=True, filt2d_mode='plus', deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
     cln = mdl + res
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=1, avgax=0)
@@ -591,13 +591,13 @@ def test_vis_filter_linear():
     nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
 
     #2d linear clean with least squares fitting of foregrounds
-    mdl2, res2, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=1.5*frs[15], dt=dt, tol=1e-8, window='none', maxiter=100, gain=1e-1, linear=True, filt2d_mode='plus', deconv_linear_foregrounds=True, fg_deconv_method='leastsq')
+    mdl2, res2, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=1.5*frs[15], dt=dt, tol=1e-8, window='none', maxiter=100, gain=1e-1, linear=True, filt2d_mode='plus', deconv_dayenu_foregrounds=True, fg_deconv_method='leastsq')
     #compare residuals
     nt.assert_true(np.isclose(res - res2, 0.0).all())
 
 
     # non-symmetric 2D clean
-    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, tol=1e-8, window='none', maxiter=100, gain=1e-1, linear=True, filt2d_mode='plus', deconv_linear_foregrounds=True, fg_deconv_method='clean')
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, tol=1e-8, window='none', maxiter=100, gain=1e-1, linear=True, filt2d_mode='plus', deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
     cln = mdl + res
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=1, avgax=0)
@@ -605,7 +605,7 @@ def test_vis_filter_linear():
     nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
 
     # try plus filtmode on 2d clean
-    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[10], frs[10]), dt=dt, tol=1e-8, window=('none', 'none'), edgecut_low=(0, 5), edgecut_hi=(2, 5), maxiter=100, gain=1e-1, filt2d_mode='plus' ,linear=True, deconv_linear_foregrounds=True, fg_deconv_method='clean')
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[10], frs[10]), dt=dt, tol=1e-8, window=('none', 'none'), edgecut_low=(0, 5), edgecut_hi=(2, 5), maxiter=100, gain=1e-1, filt2d_mode='plus' ,linear=True, deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
     mfft = np.fft.ifft2(mdl)
     cln = mdl + res
 
