@@ -127,7 +127,7 @@ class TestMethods(unittest.TestCase):
 
         # Test 1D code with non-linear leastsq
         bf_model, cn_out, data_out = dspec.delay_filter_leastsq_1d(
-            data[0], flags[0], sigma, nmax=3, add_noise=False, use_linear=False)
+            data[0], flags[0], sigma, nmax=3, add_noise=False, use_mode='clean')
         np.testing.assert_allclose(data[0], bf_model, atol=NCHAN*TOL)
 
         # Test that noise injection can be switched on
