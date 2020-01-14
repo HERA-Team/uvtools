@@ -127,7 +127,7 @@ class TestMethods(unittest.TestCase):
 
         # Test 1D code with non-linear leastsq
         bf_model, cn_out, data_out = dspec.delay_filter_leastsq_1d(
-            data[0], flags[0], sigma, nmax=3, add_noise=False, use_mode='clean')
+            data[0], flags[0], sigma, nmax=3, add_noise=False, use_linear=False)
         np.testing.assert_allclose(data[0], bf_model, atol=NCHAN*TOL)
 
         # Test that noise injection can be switched on
@@ -311,25 +311,25 @@ def test_dayenu_filter():
     #np.testing.assert_array_equal(d_fail, np.zeros_like(d_fail))
     #np.testing.assert_array_equal(np.array(info_fail['skipped_channels']), np.array([0]))
 
-def test_sinc_downweight_mat_inv():
-    cmat = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = [], filter_half_widths = [], filter_factors = [])
+def test_dayenu_mat_inv():
+    cmat = dspec.dayenu_mat_inv(32, 100e3, filter_centers = [], filter_half_widths = [], filter_factors = [])
     #verify that the inverse cleaning matrix without cleaning windows is the identity!
     np.testing.assert_array_equal(cmat, np.identity(32).astype(np.complex128))
     #next, test with a single filter window with list and float arguments supplied
-    cmat1 = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = 0., filter_half_widths = 112e-9, filter_factors = 1e-9)
-    cmat2 = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = [0.], filter_half_widths = [112e-9], filter_factors = [1e-9])
+    cmat1 = dspec.dayenu_mat_inv(32, 100e3, filter_centers = 0., filter_half_widths = 112e-9, filter_factors = 1e-9)
+    cmat2 = dspec.dayenu_mat_inv(32, 100e3, filter_centers = [0.], filter_half_widths = [112e-9], filter_factors = [1e-9])
     x,y = np.meshgrid(np.arange(-16,16), np.arange(-16,16))
     cmata = np.identity(32).astype(np.complex128) + 1e9 * np.sinc( (x-y) * 100e3 * 224e-9 ).astype(np.complex128)
     np.testing.assert_array_equal(cmat1, cmat2)
     #next test that the array is equal to what we expect
     np.testing.assert_almost_equal(cmat1, cmata)
     #now test no_regularization
-    cmat1 = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = 0.,
+    cmat1 = dspec.dayenu_mat_inv(32, 100e3, filter_centers = 0.,
             filter_half_widths = 112e-9, filter_factors = 1, no_regularization = True)
     np.sinc( (x-y) * 100e3 * 224e-9 ).astype(np.complex128)
     np.testing.assert_almost_equal(cmat1, cmata / 1e9)
     #now test wrap!
-    cmat1 = dspec.sinc_downweight_mat_inv(32, 100e3, filter_centers = 0.,
+    cmat1 = dspec.dayenu_mat_inv(32, 100e3, filter_centers = 0.,
             filter_half_widths = 112e-9, filter_factors = 1, wrap = True,
              no_regularization = True)
     cmata = np.zeros_like(cmat1)
@@ -494,7 +494,7 @@ def test_delay_interpolation_matrix():
         print(len(w))
         nt.assert_true(len(w) > 0)
 
-def test_vis_filter_linear():
+def test_vis_filter_dayenu():
     # load file
     uvd = UVData()
     uvd.read_miriad(os.path.join(DATA_PATH, "zen.2458042.17772.xx.HH.uvXA"), bls=[(24, 25)])
@@ -514,7 +514,7 @@ def test_vis_filter_linear():
     n = 10 * ((np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes).astype(np.complex) \
          + 1j * np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes)).reshape(uvd.Ntimes, uvd.Nfreqs))
     d += n
-
+    print(uvd.Nfreqs)
     def get_snr(clean, fftax=1, avgax=0, modes=[2, 20]):
         cfft = np.fft.ifft(clean, axis=fftax)
         cavg = np.median(np.abs(cfft), axis=avgax)
@@ -536,33 +536,33 @@ def test_vis_filter_linear():
 
     # delay filter basic execution 1d with and without leastsq
     mdl1, res1, info1 = dspec.delay_filter(d[0], w[0], bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.,
-                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, linear=True, deconv_dayenu_foregrounds=True, fg_deconv_method='leastsq')
+                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, mode='dayenu', deconv_dayenu_foregrounds=True, fg_deconv_method='leastsq')
 
     mdl2, res2, info2 = dspec.delay_filter(d[0], w[0], bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.,
-                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, linear=True, deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
+                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, mode='dayenu', deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
     #residuals should be same
-    nt.assert_true(np.isclose(res1 - res2, 0.0).all())
+    nt.assert_true(np.isclose(res1 - res2, 0.0, atol=10).all())
 
     # delay filter basic execution with leastsq
     mdl, res, info = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.,
-                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, linear=True, deconv_dayenu_foregrounds=True, fg_deconv_method='leastsq')
+                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, mode='dayenu', deconv_dayenu_foregrounds=True, fg_deconv_method='leastsq')
     cln = mdl + res
     snrs = get_snr(cln, fftax=1, avgax=0)
     nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=4))
     nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=4))
     # delay filter basic execution
     mdl, res, info = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.,
-                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, linear=True, deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
+                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, mode='dayenu', deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
     cln = mdl + res
     snrs = get_snr(cln, fftax=1, avgax=0)
     nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=3))
     nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
     # test vis filter is the same
     mdl2, res2, info2 = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, standoff=0, horizon=1.0, min_dly=0.,
-                                               tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, linear=True, deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
+                                               tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, mode='dayenu', deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
     nt.assert_true(np.isclose(mdl - mdl2, 0.0).all())
     # fringe filter basic execution
-    mdl, res, info = dspec.fringe_filter(d, w, frs[15] * 1.5, dt, tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, linear=True, deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
+    mdl, res, info = dspec.fringe_filter(d, w, frs[15] * 1.5, dt, tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, mode='dayenu', deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
     cln = mdl + res
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=0, avgax=1)
@@ -570,12 +570,12 @@ def test_vis_filter_linear():
     nt.assert_true(np.isclose(snrs[1], time_snr2, atol=3))
 
     # test vis filter is the same
-    mdl2, res2, info2 = dspec.vis_filter(d, w, max_frate=frs[15] * 1.5, dt=dt, tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, linear=True, deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
+    mdl2, res2, info2 = dspec.vis_filter(d, w, max_frate=frs[15] * 1.5, dt=dt, tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, mode='dayenu', deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
     cln2 = mdl2 + res2
     nt.assert_true(np.isclose(mdl - mdl2, 0.0).all())
 
     # try non-symmetric filter
-    mdl, res, info = dspec.fringe_filter(d, w, (frs[-20]*2, frs[10]*2), dt, tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, linear=True, deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
+    mdl, res, info = dspec.fringe_filter(d, w, (frs[-20]*2, frs[10]*2), dt, tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, mode='dayenu', deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
     cln = mdl + res
 
     # assert recovered snr of input modes
@@ -583,7 +583,7 @@ def test_vis_filter_linear():
     nt.assert_true(np.isclose(snrs[0], time_snr1, atol=3))
     nt.assert_true(np.isclose(snrs[1], time_snr2, atol=3))
     # 2d clean
-    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=1.5*frs[15], dt=dt, tol=1e-8, window='none', maxiter=100, gain=1e-1, linear=True, filt2d_mode='plus', deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=1.5*frs[15], dt=dt, tol=1e-8, window='none', maxiter=100, gain=1e-1, mode='dayenu', filt2d_mode='plus', deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
     cln = mdl + res
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=1, avgax=0)
@@ -591,13 +591,13 @@ def test_vis_filter_linear():
     nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
 
     #2d linear clean with least squares fitting of foregrounds
-    mdl2, res2, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=1.5*frs[15], dt=dt, tol=1e-8, window='none', maxiter=100, gain=1e-1, linear=True, filt2d_mode='plus', deconv_dayenu_foregrounds=True, fg_deconv_method='leastsq')
+    mdl2, res2, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=1.5*frs[15], dt=dt, tol=1e-8, window='none', maxiter=100, gain=1e-1, mode='dayenu', filt2d_mode='plus', deconv_dayenu_foregrounds=True, fg_deconv_method='leastsq')
     #compare residuals
     nt.assert_true(np.isclose(res - res2, 0.0).all())
 
 
     # non-symmetric 2D clean
-    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, tol=1e-8, window='none', maxiter=100, gain=1e-1, linear=True, filt2d_mode='plus', deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, tol=1e-8, window='none', maxiter=100, gain=1e-1, mode='dayenu', filt2d_mode='plus', deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
     cln = mdl + res
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=1, avgax=0)
@@ -605,7 +605,7 @@ def test_vis_filter_linear():
     nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
 
     # try plus filtmode on 2d clean
-    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[10], frs[10]), dt=dt, tol=1e-8, window=('none', 'none'), edgecut_low=(0, 5), edgecut_hi=(2, 5), maxiter=100, gain=1e-1, filt2d_mode='plus' ,linear=True, deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
+    mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[10], frs[10]), dt=dt, tol=1e-8, window=('none', 'none'), edgecut_low=(0, 5), edgecut_hi=(2, 5), maxiter=100, gain=1e-1, filt2d_mode='plus' ,mode='dayenu', deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
     mfft = np.fft.ifft2(mdl)
     cln = mdl + res
 
