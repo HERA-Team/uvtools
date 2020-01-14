@@ -138,7 +138,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         fg_restore_size = filter_size
     assert dndim == 1 or dndim == 2, "data must be a 1D or 2D ndarray"
 
-    if not mode.lower in ['clean', 'dayenu', 'dft_interp']:
+    if not mode.lower() in ['clean', 'dayenu', 'dft_interp']:
         raise ValueError("mode must be in ['clean', 'dayenu', 'dft_interp']")
 
     if clean2d:
