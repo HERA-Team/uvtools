@@ -221,6 +221,9 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                 else:
                     _d_cl = _d - _d_res
             elif mode.lower()=='dft_interp':
+                nmin = int((fcfg[0] - fwfg[0]) * real_delta * data.shape[-1])
+                nmax = int((fcfg[0] + fwfg[0]) * real_delta * data.shape[-1])
+                info['fg_deconv'] = {'method':'dft_interp','nmin':nmin, 'nmax':nmax}
                 d_cl, _, _ = delay_filter_leastsq( (data * wgts * win).squeeze(), flags=(wgts==0.).squeeze(), sigma=1.,
                                                     nmax=(nmin, nmax), freq_units=True, even_modes=True)
                 _d_cl = np.fft.ifft(d_cl)
@@ -237,13 +240,13 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                     _d_res[i] = _d[i]
                     info.append({'skipped': True})
                 else:
-                    if mode.lower=='clean':
+                    if mode.lower()=='clean':
                         _cl, info_here = aipy.deconv.clean(_d[i], _w[i], area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
                         _d_cl[i] = _cl
                         _d_res[i] = info_here['res']
                         del info_here['res']
                         info.append(info_here)
-                    elif mode.lower=='dayenu':
+                    elif mode.lower()=='dayenu':
                         d_r, info_here = dayenu_filter(data[i] * wgts[i] * win, wgts[i] * win, delta_data=real_delta,
                                                             filter_dimensions=[1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache)
                         _d_res[i] = np.fft.ifft(d_r)
@@ -266,10 +269,15 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                         info.append(info_here)
 
                     elif mode.lower()=='dft_interp':
+                        info_here = {}
+                        nmin = int((fcfg[0] - fwfg[0]) * real_delta * data.shape[-1])
+                        nmax = int((fcfg[0] + fwfg[0]) * real_delta * data.shape[-1])
+                        info_here['fg_deconv'] = {'method':'dft_interp','nmin':nmin, 'nmax':nmax}
                         d_cl, _, _ = delay_filter_leastsq( (data[i] * wgts[i] * win).squeeze(), flags=(wgts==0.).squeeze(), sigma=1.,
                                                             nmax=(nmin, nmax), freq_units=True, even_modes=True)
                         _d_cl[i] = np.fft.ifft(d_cl)
-                        _d_res[i] = _d[i] * wgts[i] * win - _d_cl[i]
+                        _d_res[i] = _d[i] - _d_cl[i]
+                        info.append(info_here)
 
     # 2D clean on 2D data
     else:
