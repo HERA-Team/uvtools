@@ -224,7 +224,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                 nmin = int((fcfg[0] - fwfg[0]) * real_delta * data.shape[-1])
                 nmax = int((fcfg[0] + fwfg[0]) * real_delta * data.shape[-1])
                 info['fg_deconv'] = {'method':'dft_interp','nmin':nmin, 'nmax':nmax}
-                d_cl, _, _ = delay_filter_leastsq( (data * wgts * win).squeeze(), flags=(wgts==0.).squeeze(), sigma=1.,
+                d_cl, _, _ = delay_filter_leastsq_1d( (data * wgts * win ).squeeze(), flags=(wgts==0.).squeeze(), sigma=1.,
                                                     nmax=(nmin, nmax), freq_units=True, even_modes=True)
                 _d_cl = np.fft.ifft(d_cl)
                 _d_res = _d * wgts * win - _d_cl
@@ -273,7 +273,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                         nmin = int((fcfg[0] - fwfg[0]) * real_delta * data.shape[-1])
                         nmax = int((fcfg[0] + fwfg[0]) * real_delta * data.shape[-1])
                         info_here['fg_deconv'] = {'method':'dft_interp','nmin':nmin, 'nmax':nmax}
-                        d_cl, _, _ = delay_filter_leastsq( (data[i] * wgts[i] * win).squeeze(), flags=(wgts==0.).squeeze(), sigma=1.,
+                        d_cl, _, _ = delay_filter_leastsq_1d( (data[i] * wgts[i] * win ).squeeze(), flags=(wgts[i]==0.).squeeze(), sigma=1.,
                                                             nmax=(nmin, nmax), freq_units=True, even_modes=True)
                         _d_cl[i] = np.fft.ifft(d_cl)
                         _d_res[i] = _d[i] - _d_cl[i]
@@ -332,7 +332,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         if filt2d_mode == 'plus':
             _area = np.zeros(data.shape, dtype=np.int)
             _area_fg = np.zeros_like(_area)
-            if not linear:
+            if not mode.lower()=='dayenu':
                 _area[:, 0] = area[:, 0]
                 _area[0, :] = area[0, :]
                 _area_fg[:, 0] = area_fg[:, 0]
