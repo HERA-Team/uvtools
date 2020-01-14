@@ -138,7 +138,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         fg_restore_size = filter_size
     assert dndim == 1 or dndim == 2, "data must be a 1D or 2D ndarray"
 
-    if not mode.lower() in ['clean', 'dayenu', 'dft_interp']:
+    if not mode in ['clean', 'dayenu', 'dft_interp']:
         raise ValueError("mode must be in ['clean', 'dayenu', 'dft_interp']")
 
     if clean2d:
@@ -196,11 +196,11 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         # run clean
         if dndim == 1:
             # For 1D data array run once
-            if mode.lower()=='clean':
+            if mode=='clean':
                 _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
                 _d_res = info['res']
                 del info['res']
-            elif mode.lower()=='dayenu':
+            elif mode=='dayenu':
                 d_r, info = dayenu_filter(data * wgts * win, wgts * win, delta_data=real_delta,
                                                 filter_dimensions = [1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache)
                 _d_res = np.fft.ifft(d_r)
@@ -220,7 +220,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                         _d_cl = np.fft.ifft(d_cl)
                 else:
                     _d_cl = _d - _d_res
-            elif mode.lower()=='dft_interp':
+            elif mode=='dft_interp':
                 nmin = int((fcfg[0] - fwfg[0]) * real_delta * data.shape[-1])
                 nmax = int((fcfg[0] + fwfg[0]) * real_delta * data.shape[-1])
                 info['fg_deconv'] = {'method':'dft_interp','nmin':nmin, 'nmax':nmax}
@@ -240,13 +240,13 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                     _d_res[i] = _d[i]
                     info.append({'skipped': True})
                 else:
-                    if mode.lower()=='clean':
+                    if mode=='clean':
                         _cl, info_here = aipy.deconv.clean(_d[i], _w[i], area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
                         _d_cl[i] = _cl
                         _d_res[i] = info_here['res']
                         del info_here['res']
                         info.append(info_here)
-                    elif mode.lower()=='dayenu':
+                    elif mode=='dayenu':
                         d_r, info_here = dayenu_filter(data[i] * wgts[i] * win, wgts[i] * win, delta_data=real_delta,
                                                             filter_dimensions=[1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache)
                         _d_res[i] = np.fft.ifft(d_r)
@@ -268,7 +268,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                             _d_cl[i] = _d[i] - _d_res[i]
                         info.append(info_here)
 
-                    elif mode.lower()=='dft_interp':
+                    elif mode=='dft_interp':
                         info_here = {}
                         nmin = int((fcfg[0] - fwfg[0]) * real_delta * data.shape[-1])
                         nmax = int((fcfg[0] + fwfg[0]) * real_delta * data.shape[-1])
@@ -332,7 +332,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         if filt2d_mode == 'plus':
             _area = np.zeros(data.shape, dtype=np.int)
             _area_fg = np.zeros_like(_area)
-            if not mode.lower()=='dayenu':
+            if not mode=='dayenu':
                 _area[:, 0] = area[:, 0]
                 _area[0, :] = area[0, :]
                 _area_fg[:, 0] = area_fg[:, 0]
@@ -391,7 +391,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         d_mdl = np.fft.fft(_d_cl)
         d_res = np.fft.fft(_d_res)
     # get residual in data space
-    if mode =='dayenu':
+    if mode =='clean':
         d_res = (data - d_mdl) * ~np.isclose(wgts * win, 0.0)
 
     return d_mdl, d_res, info
