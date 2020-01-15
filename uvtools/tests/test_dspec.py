@@ -700,6 +700,14 @@ def test_vis_filter_dft_interp():
                                              tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1,
                                              mode='dft_interp', deconv_dayenu_foregrounds=True, fg_deconv_method='leastsq')
     cln = mdl + res
+    #test whether setting a larger fundamental period manually produces close results.
+    mdl2, res2, info2 = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.,
+                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1,
+                                             mode='dft_interp', deconv_dayenu_foregrounds=True, fg_deconv_method='leastsq', fg_deconv_fundamental_period=d.shape[1])
+
+    np.testing.assert_almost_equal(mdl2, mdl)
+    np.testing.assert_almost_equal(res2, res)
+
     snrs = get_snr(cln, fftax=1, avgax=0)
     nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=4))
     nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=4))
@@ -708,9 +716,23 @@ def test_vis_filter_dft_interp():
                                                tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, mode='dft_interp',
                                                deconv_dayenu_foregrounds=True, fg_deconv_method='leastsq')
     nt.assert_true(np.isclose(mdl - mdl2, 0.0).all())
+
+    mdl3, res3, info3 = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, standoff=0, horizon=1.0, min_dly=0.,
+                                               tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, mode='dft_interp',
+                                               deconv_dayenu_foregrounds=True, fg_deconv_method='leastsq',
+                                               fg_deconv_fundamental_period=d.shape[1])
+    np.testing.assert_almost_equal(mdl3, mdl2)
+    np.testing.assert_almost_equal(res3, res2)
     # fringe filter basic execution
     mdl, res, info = dspec.fringe_filter(d, w, frs[15] * 1.5, dt, tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, mode='dft_interp')
     cln = mdl + res
+
+    mdl4, res4, info = dspec.fringe_filter(d, w, frs[15] * 1.5, dt, tol=1e-8, window='none', skip_wgt=0.1, gain=0.1, mode='dft_interp',
+                                           fg_deconv_fundamental_period=d.shape[0])
+
+    np.testing.assert_almost_equal(mdl4, mdl)
+    np.testing.assert_almost_equal(res4, res)
+
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=0, avgax=1)
     nt.assert_true(np.isclose(snrs[0], time_snr1, atol=3))

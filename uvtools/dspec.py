@@ -141,7 +141,9 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
     if fg_restore_size is None:
         fg_restore_size = filter_size
     if fg_deconv_fundamental_period is None:
-        fg_deconv_fundamental_period = data.shape
+        fg_deconv_fundamental_period = data.shape[-1]
+    if isinstance(fg_deconv_fundamental_period, (float, int, np.float, np.int)):
+        fg_deconv_fundamental_period = [fg_deconv_fundamental_period]
 
     assert dndim == 1 or dndim == 2, "data must be a 1D or 2D ndarray"
 
@@ -619,7 +621,8 @@ def dayenu_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
 def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, tol=1e-4,
                  window='none', skip_wgt=0.5, maxiter=100, gain=0.1, edgecut_low=0, edgecut_hi=0,
                  alpha=0.5, add_clean_residual=False, mode='clean', cache={},
-                 deconv_dayenu_foregrounds=False, fg_deconv_method='clean', fg_restore_size=None):
+                 deconv_dayenu_foregrounds=False, fg_deconv_method='clean',
+                 fg_restore_size=None, fg_deconv_fundamental_period=None):
     '''Apply a wideband delay filter to data. Variable names preserved for
         backward compatability with capo/PAPER analysis.
 
@@ -674,6 +677,9 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
             This allows us to avoid the problem that if we have RFI flagging and apply a linear filter
             that is larger then the horizon then the foregrounds that we fit might actually include super
             -horizon flagging side-lobes and restoring them will introduce spurious structure.
+        fg_deconv_fundamental_period: int, optional
+            fundamental period of Fourier modes to fit too.
+            if none, default to length of data vector.
 
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
@@ -692,12 +698,14 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
                                     fg_deconv_method=fg_deconv_method, alpha=alpha,
                                     add_clean_residual=add_clean_residual, mode=mode,
                                     cache=cache, deconv_dayenu_foregrounds=deconv_dayenu_foregrounds,
-                                    fg_restore_size=fg_restore_size)
+                                    fg_restore_size=fg_restore_size,
+                                    fg_deconv_fundamental_period=fg_deconv_fundamental_period)
 
 
 def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100, gain=0.1,
                   window='none', edgecut_low=0, edgecut_hi=0, alpha=0.5, add_clean_residual=False,
-                  mode='clean', cache = {}, deconv_dayenu_foregrounds=False, fg_deconv_method='clean', fg_restore_size=None):
+                  mode='clean', cache = {}, deconv_dayenu_foregrounds=False,
+                  fg_deconv_method='clean', fg_restore_size=None,fg_deconv_fundamental_period=None):
     """
     Run a CLEAN deconvolution along the time axis.
 
@@ -755,6 +763,9 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
             This allows us to avoid the problem that if we have RFI flagging and apply a linear filter
             that is larger then the horizon then the foregrounds that we fit might actually include super
             -horizon flagging side-lobes and restoring them will introduce spurious structure.
+        fg_deconv_fundamental_period: int, optional
+            fundamental period of Fourier modes to fit too.
+            if none, default to length of data vector.
 
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
@@ -768,14 +779,16 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
     # run fourier filter
     mdl, res, info = high_pass_fourier_filter(data.T, wgts.T, max_frate, dt, tol=tol, window=window, edgecut_low=edgecut_low, fg_deconv_method=fg_deconv_method,
                                               edgecut_hi=edgecut_hi, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, deconv_dayenu_foregrounds=deconv_dayenu_foregrounds,
-                                              alpha=alpha, add_clean_residual=add_clean_residual, mode=mode, cache=cache, fg_restore_size=fg_restore_size)
+                                              alpha=alpha, add_clean_residual=add_clean_residual, mode=mode, cache=cache,
+                                              fg_restore_size=fg_restore_size, fg_deconv_fundamental_period=fg_deconv_fundamental_period)
     return mdl.T, res.T, info
 
 
 def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, standoff=0.0, horizon=1., min_dly=0.,
                tol=1e-4, window='none', maxiter=100, gain=1e-1, skip_wgt=0.5, filt2d_mode='rect',
                edgecut_low=0, edgecut_hi=0, alpha=0.5, add_clean_residual=False, mode='clean', cache={},
-               deconv_dayenu_foregrounds=False, fg_deconv_method='clean', fg_restore_size=None):
+               deconv_dayenu_foregrounds=False, fg_deconv_method='clean', fg_restore_size=None,
+               fg_deconv_fundamental_period=None):
     """
     A generalized interface to delay and/or fringe-rate 1D CLEAN functions, or a full 2D clean
     if both bl_len & sdf and max_frate & dt variables are specified.
@@ -835,6 +848,9 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
             This allows us to avoid the problem that if we have RFI flagging and apply a linear filter
             that is larger then the horizon then the foregrounds that we fit might actually include super
             -horizon flagging side-lobes and restoring them will introduce spurious structure.
+        fg_deconv_fundamental_period: int, optional
+            fundamental period of Fourier modes to fit too.
+            if none, default to length of data vector.
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
         d_res: CLEAN residual -- difference of data and d_mdl, nulled at flagged channels
