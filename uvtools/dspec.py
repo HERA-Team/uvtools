@@ -519,7 +519,8 @@ def dayenu_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
                 ff_list = [ff_list[0] for m in range(len(filter_centers[ff_num]))]
     else:
         assert isinstance(user_frequencies,(list,np.ndarray)) or user_frequencies is None, "for 1d clean, provide a list or numpy array for user_frequencies"
-        assert isinstance(delta_data, (float,np.float, int, np.int)), "for 1d clean, provide a float or integer for delta_data"
+        if not delta_data is None:
+            assert isinstance(delta_data, (float,np.float, int, np.int)), "for 1d clean, provide a float or integer for delta_data"
         # If we are going to filter along a single dimensions.
         if len(filter_factors) == 1:
             # extend filter factor list of user supplied a float or len-1 list.

@@ -55,7 +55,6 @@ class TestMethods(unittest.TestCase):
         self.assertAlmostEqual(np.average(data), np.average(dmdl), 3)
         self.assertAlmostEqual(np.average(dres), 0, 3)
 
-    #def test_dayenu_filter()
 
     def test_delay_filter_2D(self):
         NCHAN = 128
@@ -281,6 +280,13 @@ def test_dayenu_filter():
                         filter_dimensions = [1], cache = TEST_CACHE)
 
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df.flatten())**2.)),
+                                                            1., decimal = 1)
+    #supply an int for filter dimensions
+    filtered_data_df, _ = dspec.dayenu_filter(data_2d, np.ones_like(data_2d), delta_data=100e3,
+                        filter_centers = [0.], filter_half_widths=[100e-9], filter_factors=[1e-10],
+                        filter_dimensions = 1, cache = TEST_CACHE)
+
+    np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df.flatten())**2.)),
                                     1., decimal = 1)
 
     #filter in both domains. I use a smaller filter factor
@@ -310,6 +316,30 @@ def test_dayenu_filter():
     #                        filter_dimensions = [False, True])
     #np.testing.assert_array_equal(d_fail, np.zeros_like(d_fail))
     #np.testing.assert_array_equal(np.array(info_fail['skipped_channels']), np.array([0]))
+
+def test_dayenu_filter_user_frequencies():
+    nf = 100
+    df = 100e3
+    freqs = np.arange(-nf//2, nf//2) * df
+    noise = (np.random.randn(nf) + 1j * np.random.randn(nf))/np.sqrt(2.)
+    #a foreground tone and a signal tone
+    fg_tone = 1e4 * np.exp(2j * np.pi * freqs * 50e-9)
+    sg_tone = 1e2 * np.exp(2j * np.pi * freqs * 1000e-9)
+    fg_ns = noise + fg_tone
+    fg_sg =  fg_tone + sg_tone
+    filter_centers = [0.]
+    filter_half_widths = [200e-9]
+    filter_factors = [1e-9]
+    wghts_1d = np.ones(nf)
+    data_1d = fg_ns
+
+    d1,_ = dspec.dayenu_filter(data_1d, wghts_1d, [1], np.array(filter_centers), np.array(filter_half_widths),
+                            np.array(filter_factors), delta_data=df)
+    d2,_ = dspec.dayenu_filter(data_1d, wghts_1d, [1], np.array(filter_centers), np.array(filter_half_widths),
+                            np.array(filter_factors), user_frequencies=freqs)
+    #test whether user provided frequencies gives same answer as non user provided frequencies.
+    np.testing.assert_almost_equal(d1, d2)
+
 
 def test_dayenu_mat_inv():
     cmat = dspec.dayenu_mat_inv(32, 100e3, filter_centers = [], filter_half_widths = [], filter_factors = [])
