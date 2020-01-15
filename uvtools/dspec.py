@@ -234,7 +234,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                 d_cl, _, _ = delay_filter_leastsq_1d( (data * wgts * win ).squeeze(), flags=(wgts==0.).squeeze(), sigma=1.,
                                                     nmax=(nmin, nmax), freq_units=True, even_modes=True, fundamental_period=fg_deconv_fundamental_period[-1])
                 _d_cl = np.fft.ifft(d_cl)
-                _d_res = _d * wgts * win - _d_cl
+                _d_res = _d  - _d_cl
 
         elif data.ndim == 2:
             # For 2D data array, iterate
@@ -398,7 +398,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         d_mdl = np.fft.fft(_d_cl)
         d_res = np.fft.fft(_d_res)
     # get residual in data space
-    if mode =='clean':
+    if mode =='clean' or mode == 'dft_interp':
         d_res = (data - d_mdl) * ~np.isclose(wgts * win, 0.0)
 
     return d_mdl, d_res, info
