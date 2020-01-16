@@ -1338,6 +1338,53 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
     return mdl_array, cn_array, inp_data
 
 
+def fourier_interpolation_operator(x, filter_centers, filter_half_widths,
+                                 filter_factors, cache={}, fundamental_period=None, xc=None):
+    """
+    Calculates Fourier operator with multiple flexible delay windows to fit data, potentially with arbitrary
+    user provided frequencies.
+
+    A_{nu tau} = e^{- 2 * pi * i * nu * tau / B}
+
+    Parameters
+    ----------
+    x:
+        x values to evaluate operator at
+    filter_centers: float or list
+        float or list of floats of centers of delay filter windows in nanosec
+    filter_half_widths: float or list
+        float or list of floats of half-widths of delay filter windows in nanosec
+    filter_factors: float or list
+        float or list of floats of filtering factors.
+    cache: dictionary, optional dictionary storing filter matrices with keys
+    (nchan, df, ) + (filter_centers) + (filter_half_widths) + \
+    (filter_factors)
+    B: fundamental period of fourier modes to use for fitting. units of 1/x. For standard DFT, this is bandwidth.
+    """
+    #if no fundamental fourier period is provided, set fundamental period equal to measurement
+    #bandwidth.
+    if fundamental_period is None:
+        fundamental_period = np.median(np.diff(x)) * len(x)
+    if xc is None:
+        xc = x[int(np.round(len(x)/2))]
+    filter_centers, filter_half_widths, _ = parse_check_fourier_operator_inputs(filter_centers,
+                                                                                filter_half_widths,
+                                                                                user_frequencies)
+    #each column is a fixed delay
+    opkey = ('fourier_interpolation_operator',) + tuple(x) + tuple(filter_centers) + tuple(filter_half_widths)
+    if not opkey in cache:
+        amat = []
+        for fc, fw in zip(filter_centers,filter_half_widths):
+            bs = np.ceil(fw * fundamental_period)
+            dlys = fc + np.arange(-bs, bs) / fundamental_period
+            xg, dg = np.meshgrid(x-xc, dlys, indexing='ij')
+            fblock = np.exp(2j * np.pi * dg * xg)
+            amat.append(fblock)
+        cache[opkey] = np.hstack(amat)
+    return cache[opkey]
+
+
+
 def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cache={}, taper='none', return_diagnostics=False):
     """
     Compute a foreground interpolation matrix.
@@ -1356,6 +1403,8 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
     ([ A^T @ W @ A]^{-1} @ A^T W solves the linear least squares problem) and then return
     the unflagged Fourier transform by apply A @ to the fitted coefficients, resulting
     in data that is linearly interpolated.
+
+    !!! THIS FUNCTION WILL BE DEPRECATED BY INTERPOLATION_MATRIX !!!
 
     Parameters
     ----------
@@ -1407,20 +1456,41 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
     else:
         return a_mat, cmat, cmati, tmat
 
+def parse_check_fourier_operator_inputs(filter_centers, filter_half_widths,user_frequencies):
+    """
+    Parse and check floats or lists of filter window parameters.
 
-def dayenu_mat_inv(nchan, df, filter_centers, filter_half_widths,
+    Parameters
+    ----------------------------------------------------
+    filter_centers: float or list
+        float or list of floats of centers of delay filter windows in nanosec
+    filter_half_widths: float or list
+        float or list of floats of half-widths of delay filter windows in nanosec
+    filter_factors: float or list
+        float or list of floats of filtering factors.
+    Returns
+    ----------------------------------------------------
+    Filter parameters with types checked and converted to lists.
+    """
+    if isinstance(filter_centers, float) or isinstance(filter_factors, int):
+        filter_centers = [filter_centers]
+    if isinstance(filter_half_widths, float) or isinstance(filter_factors, int):
+        filter_half_widths = [filter_half_widths]
+    assert user_frequencies is None or isinstance(user_frequencies,(list, np.ndarray)),"user provided frequencies must be ndarray or list"
+    return filter_centers, filter_half_widths
+
+def dayenu_mat_inv(x, filter_centers, filter_half_widths,
                             filter_factors, cache={}, wrap=False, wrap_interval=1,
-                            nwraps=1000, no_regularization=False, user_frequencies=None):
+                            nwraps=1000, no_regularization=False):
     """
     Computes the inverse of sinc weights for a baseline.
     This form of weighting is diagonal in delay-space and down-weights tophat regions.
 
     Parameters
     ----------
-    nchan: integer
-        Number of channels on baseline
-    df: float
-        channel width (Hz). Must be set equal to 1 if user_frequencies are supplied.
+    x: array like
+        array-like list of arbitrary frequencies. If this is supplied, evaluate sinc_downweight_mat at these frequencies
+        instead of linear array of nchan.
     filter_centers: float or list
         float or list of floats of centers of delay filter windows in nanosec
     filter_half_widths: float or list
@@ -1428,11 +1498,9 @@ def dayenu_mat_inv(nchan, df, filter_centers, filter_half_widths,
     filter_factors: float or list
         float or list of floats of filtering factors.
     cache: dictionary, optional dictionary storing filter matrices with keys
-    (nchan, df, ) + (filter_centers) + (filter_half_widths) + \
+    tuple(x) + (filter_centers) + (filter_half_widths) + \
     (filter_factors)
-    user_frequencies: optional
-        array-like list of arbitrary frequencies. If this is supplied, evaluate sinc_downweight_mat at these frequencies
-        instead of linear array of nchan.
+
 
     !!!-------------
     WARNING: The following parameters are intended for theoretical
@@ -1450,26 +1518,15 @@ def dayenu_mat_inv(nchan, df, filter_centers, filter_half_widths,
      (nchan, nchan) complex inverse of the tophat filtering matrix assuming that the delay-space covariance is diagonal and zero outside
          of the horizon
     """
-    if isinstance(filter_centers, float) or isinstance(filter_factors, int):
-        filter_centers = [filter_centers]
-    if isinstance(filter_half_widths, float) or isinstance(filter_factors, int):
-        filter_half_widths = [filter_half_widths]
     if isinstance(filter_factors,float) or isinstance(filter_factors, int):
         filter_factors = [filter_factors]
-    assert user_frequencies is None or isinstance(user_frequencies,(list, np.ndarray)),"user provided frequencies must be ndarray or list"
-    if not user_frequencies is None:
-            nchan = len(user_frequencies)
-            filter_key = tuple(user_frequencies) + tuple(filter_centers) + \
-            tuple(filter_half_widths) + tuple(filter_factors) + (wrap, wrap_interval, nwraps, no_regularization)
-    else:
-        filter_key = (nchan, df, ) + tuple(filter_centers) + \
-        tuple(filter_half_widths) + tuple(filter_factors) + (wrap, wrap_interval, nwraps, no_regularization)
+    filter_centers, filter_half_widths = parse_check_fourier_operator_inputs(filter_centers,
+                                                                            filter_half_widths, x)
+    nchan = len(user_frequencies)
+    filter_key = tuple(x) + tuple(filter_centers) + \
+    tuple(filter_half_widths) + tuple(filter_factors) + (wrap, wrap_interval, nwraps, no_regularization)
+
     if not filter_key in cache:
-        if user_frequencies is None:
-            x = np.arange(-int(nchan/2),int(np.ceil(nchan/2)))
-        else:
-            x = user_frequencies
-            assert df == 1., "df must be set equal to 1 if user_frequencies are supplied."
         fx, fy = np.meshgrid(x,x)
         sdwi_mat = np.identity(fx.shape[0]).astype(np.complex128)
         if no_regularization:
@@ -1477,13 +1534,13 @@ def dayenu_mat_inv(nchan, df, filter_centers, filter_half_widths,
         for fc, fw, ff in zip(filter_centers, filter_half_widths, filter_factors):
             if not ff == 0:
                 if not wrap:
-                    sdwi_mat = sdwi_mat + np.sinc( 2. * (fx-fy) * df * fw ).astype(np.complex128)\
+                    sdwi_mat = sdwi_mat + np.sinc( 2. * (fx-fy) * fw ).astype(np.complex128)\
                             * np.exp(-2j * np.pi * (fx-fy) * df * fc) / ff
                 else:
                     for wnum in np.arange(-nwraps//2, nwraps//2):
                         offset = nchan * wnum * wrap_interval
                         sdwi_mat = sdwi_mat + \
-                        np.sinc( 2. *  (fx-fy - offset) * df * fw  ).astype(np.complex128)\
+                        np.sinc( 2. *  (fx-fy - offset) * fw  ).astype(np.complex128)\
                         * np.exp(-2j * np.pi * (fx-fy - offset) * df * fc) / ff
     else:
         sdwi_mat = cache[filter_key]
