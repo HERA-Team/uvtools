@@ -1337,14 +1337,88 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
 
     return mdl_array, cn_array, inp_data
 
+def dpss(x, filter_centers, filter_half_widths, cache={}, eigenval_cutoff=None, nterms=None):
+    """
+    Calculates DPSS operator with multiple delay windows to fit data. Frequencies
+    must be equally spaced (unlike Fourier operator). Users can specify how the
+    DPSS series fits are cutoff in each delay-filtering window with one (and only one)
+    of three conditions: eigenvalues in sinc matrix fall below a thresshold (eigenval_cutoff),
+    user specified number of DPSS terms (nterms), xor the suppression of fourier
+    tones at the filter edge by a user specified amount (edge_supression).
+
+    Parameters
+    ----------
+    x: array of floats
+        x values to evaluate operator at
+    filter_centers: list of floats
+        list of floats of centers of delay filter windows in nanosec
+    filter_half_widths: list of floats
+        list of floats of half-widths of delay filter windows in nanosec
+    cache: dictionary, optional
+        dictionary for storing operator matrices with keys
+        (x) + (filter_centers) + (filter_half_widths) + (eigval_cutoff,)
+    eigenval_cutoff: list of floats, optional
+        list of sinc matrix eigenvalue cutoffs to use for included dpss modes.
+    nterms: list of integers, optional
+        integer specifying number of dpss terms to include in each delay fitting block.
+    edge_suppression: list of floats, optional
+        specifies the degree of supression that must occur to tones at the filter edges to
+        calculate the number of DPSS terms to fit in each sub-window.
+
+    Returns
+    ----------
+    Design matrix for DPSS fitting.   Ndata x (Nfilter_window * nterm)
+    transforming from DPSS modes to data.
+    """
+    #conditions for halting.
+    none_criteria_labels = ['eigenval_cutoff', 'nterms', 'edge_suppression']
+    none_criteria = np.asarray([eigenval_cutoff is None, nterms is None, edge_suppression is None]).astype(bool)
+    #only allow the user to specify a single condition for cutting off DPSS modes to fit.
+    if len(none_criteria[~none_criteria]) != 1:
+        raise ValueError('Must only provide a single series cutoff condition. %d were provided: %s '%str(len(none_criteria[~none_criteria],
+                                                                                                 none_criteria_labels[~none_criteria])))
+
+    #check that xs are equally spaced.
+    if not np.all(np.diff(x) == np.mean(np.diff(x))):
+        raise ValueError('x values must be equally spaced for DPSS operator!')
+    opkey = ('dpss_interpolation_operator',) + tuple(x) + tuple(filter_centers) + tuple(filter_half_widths)+(eigenval_cutoff,)
+    if not opkey in cache:
+        nf = len(x)
+        df = x[1]-x[0]
+        xg, yg = np.meshgrid(x,x)
+        #determine cutoffs
+        if nterms is None:
+            nterms = []
+            for fn,fw in enumerate(filter_half_widths):
+                smat = np.sinc(2 * df * fw * (xg-yg)) * 2 * df * fw
+                dpss_vectors = windows.dpss(nf, bandwidth*fw, nf)
+                eigvals = np.sum(smat @ dpss_vectors.T) * dpss_vectors.T, axis=0)
+                if not eigval_cutoff is None:
+                    nterms.append(np.max(np.where(eigvals>=eigval_cutoff[fn])))
+                if not edge_supression is None:
+                    z0=fw * nf * df
+                    dprod = np.exp(1j*np.pi*(nf-1)*fw*)
+
+
+        amat = []
+        for fc, fw in zip(filter_centers,filter_half_widths):
+            nterms = 2 * np.ceil(fw * bandwidth)
+            dpss_modes = windows.dpss(nf, bandwidth * fw)
+        cache[opkey] = np.hstack(amat)
+    return cache[opkey]
+
 
 def fourier_interpolation_operator(x, filter_centers, filter_half_widths,
-                                 filter_factors, cache={}, fundamental_period=None, xc=None):
+                                 cache={}, fundamental_period=None, xc=None):
     """
     Calculates Fourier operator with multiple flexible delay windows to fit data, potentially with arbitrary
     user provided frequencies.
 
     A_{nu tau} = e^{- 2 * pi * i * nu * tau / B}
+
+    for a set of taus contained within delay regions centered at filter_centers
+    and with half widths of filter_half_widths separated by 1/B where B
+    is provided by fundamental_period.
 
     Parameters
     ----------
@@ -1354,12 +1428,16 @@ def fourier_interpolation_operator(x, filter_centers, filter_half_widths,
         float or list of floats of centers of delay filter windows in nanosec
     filter_half_widths: float or list
         float or list of floats of half-widths of delay filter windows in nanosec
-    filter_factors: float or list
-        float or list of floats of filtering factors.
-    cache: dictionary, optional dictionary storing filter matrices with keys
-    (nchan, df, ) + (filter_centers) + (filter_half_widths) + \
-    (filter_factors)
+    cache: dictionary, optional dictionary storing operator matrices with keys
+    (x) + (filter_centers) + (filter_half_widths) + \
     B: fundamental period of fourier modes to use for fitting. units of 1/x. For standard DFT, this is bandwidth.
+
+    Returns
+    --------
+
+    Ndata x (Nfilter_window * nterm) design matrix transforming DFT coefficients
+    to data.
+
     """
     #if no fundamental fourier period is provided, set fundamental period equal to measurement
     #bandwidth.
@@ -1369,9 +1447,9 @@ def fourier_interpolation_operator(x, filter_centers, filter_half_widths,
         xc = x[int(np.round(len(x)/2))]
     filter_centers, filter_half_widths, _ = parse_check_fourier_operator_inputs(filter_centers,
                                                                                 filter_half_widths,
-                                                                                user_frequencies)
+                                                                                x)
     #each column is a fixed delay
-    opkey = ('fourier_interpolation_operator',) + tuple(x) + tuple(filter_centers) + tuple(filter_half_widths)
+    opkey = ('fourier_interpolation_operator',) + tuple(x) + tuple(filter_centers) + tuple(filter_half_widths) + (fundamental_period,)
     if not opkey in cache:
         amat = []
         for fc, fw in zip(filter_centers,filter_half_widths):
