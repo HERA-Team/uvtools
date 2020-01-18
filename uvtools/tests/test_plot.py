@@ -97,6 +97,10 @@ class TestDiffPlotters(unittest.TestCase):
         sim.add_eor("noiselike_eor")
         self.uvd2 = copy.deepcopy(sim.data)
         # now just make some things with metadata that will raise exceptions
+
+        # make the visibility units disagree
+        sim.data.vis_units = 'mK'
+        self.uvd_bad_vis_units = copy.deepcopy(sim.data)
         # mismatched baselines
         sim = hera_sim.Simulator(n_freq=10, n_times=10, 
                                  antennas=offset_ants,
@@ -285,7 +289,7 @@ class TestDiffPlotters(unittest.TestCase):
             if not attr.startswith("uvd_bad"):
                 continue
             print("testing on: {}".format(attr))
-            nt.assert_raises(AssertionError, 
+            nt.assert_raises(uvt.utils.MetadataError, 
                              uvt.plot.plot_diff_uv,
                              self.uvd1, value,
                              check_metadata=True)
