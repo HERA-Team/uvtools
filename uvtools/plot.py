@@ -872,10 +872,10 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
               }
 
     # and now for ordinate labels
-    vis_labels = {"time" : r"$V(t)$ [Jy]",
-                  "freq" : r"$V(\nu)$ [Jy]",
-                  "fr" : r"$\tilde{V}(f)$ [Jy$\cdot$s]",
-                  "dly" : r"$\tilde{V}(\tau)$ [Jy$\cdot$Hz]"
+    vis_labels = {"time" : r"$V(t)$ [{vis_units}]",
+                  "freq" : r"$V(\nu)$ [{vis_units}]",
+                  "fr" : r"$\tilde{V}(f)$ [{vis_units}$\cdot$s]",
+                  "dly" : r"$\tilde{V}(\tau)$ [{vis_units}$\cdot$Hz]"
                   }
 
     # make some mappings for plot types
@@ -920,7 +920,9 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
         )
 
         xdim = item[0]
-        xlabel, ylabel = labels[xdim], vis_labels[xdim]
+        xlabel = labels[xdim]
+        # to ensure appropriate LaTeX formatting and visibility units
+        ylabel = vis_labels[xdim].format(V="{V}", vis_units=uvd1.vis_units)
 
         # actually plot it
         for ax, diff in zip(axes[i], diffs):
