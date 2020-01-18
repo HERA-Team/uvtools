@@ -743,9 +743,9 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
     plot_type : str, optional
         A string identifying which quantities to plot. Accepted values are 
         as follows:
-            - base
+            - normal
                 - Single row of plots in the usual basis (time or frequency).
-            - dual
+            - fourier
                 - Single row of plots in Fourier space (fringe rate or delay).
             - both
                 - Two rows of plots in the usual and Fourier domains.
@@ -760,7 +760,7 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
         Default behavior is to check the metadata.
     
     dimension : str, optional
-        String specifying which dimension is used for the base domain. This 
+        String specifying which dimension is used for the normal domain. This 
         may be either 'time' or 'freq'. Default is to determine which axis has
         more entries and to use that axis.
 
@@ -781,14 +781,14 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
     if check_metadata:
         utils.check_uvd_pair_metadata(uvd1, uvd2)
 
-    if plot_type not in ("base", "dual", "both"):
+    if plot_type not in ("normal", "fourier", "both"):
         raise ValueError(
             "You must specify whether to make one or two plots with "
             "the ``plot_type`` parameter. You may choose to plot the "
             "visibility difference as a function of frequency/time by "
-            "setting ``plot_type`` to 'base', or you can choose to "
+            "setting ``plot_type`` to 'normal', or you can choose to "
             "plot the difference in Fourier space by setting "
-            "``plot_type`` to 'dual'. If you would like to plot both, "
+            "``plot_type`` to 'fourier'. If you would like to plot both, "
             "then set ``plot_type`` to 'both'."
         )
 
@@ -858,9 +858,9 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
                   }
 
     # update the plot_type parameter to something useful
-    if plot_type == "base":
+    if plot_type == "normal":
         plot_type = (dimension,)
-    elif plot_type == "dual":
+    elif plot_type == "fourier":
         plot_type = (dual,)
     else:
         plot_type = (dimension, dual)
