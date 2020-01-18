@@ -725,7 +725,8 @@ def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, bins=50):
     return fig
 
 def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both", 
-                 check_metadata=True, dimension=None):
+                 check_metadata=True, dimension=None,
+                 average_mode=None, **kwargs):
     """Produce plots of visibility differences along a single axis.
 
     Parameters
@@ -764,6 +765,15 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
         may be either 'time' or 'freq'. Default is to determine which axis has
         more entries and to use that axis.
 
+    average_mode : str, optional
+        String specifying which ``numpy`` averaging function to use. Default 
+        behavior is to use ``np.mean``.
+
+    **kwargs
+        These are passed directly to the averaging function used. Refer to 
+        the documentation of the averaging function you want to use for 
+        information regarding what parameters may be specified here.
+
     Returns
     -------
     fig : matplotlib.pyplot.Figure
@@ -774,9 +784,13 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
     Notes
     -----
     This function extracts the visibility waterfall corresponding to the 
-    provided antpairpol and flattens it by taking the mean along the axis 
-    not being used. For true 1d arrays this just modifies the shape, but it 
-    might not exactly be the desired behavior--so be warned.
+    provided antpairpol and flattens it by taking the average along the axis 
+    not being used. The averaging function used may be specified with the 
+    `average_mode` parameter, and weights (or optional parameters to be 
+    passed to the averaging function) may be specified in the variable 
+    keyword parameter `kwargs`. Any flags relevant for the data are 
+    currently ignored, but this functionality may be introduced in a future 
+    update.
     """
     if check_metadata:
         utils.check_uvd_pair_metadata(uvd1, uvd2)
@@ -816,9 +830,21 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
     use_axis = 0 if dimension == "time" else 1
     proj_axis = (use_axis + 1) % 2
 
+    # choose an averaging function
+    if average_mode is not None:
+        try:
+            average = getattr(np, average_mode)
+        except AttributeError as err:
+            err_msg = err.args[0] + "\nDefaulting to using np.mean"
+            warnings.warn(err_msg)
+        finally:
+            average = np.mean
+    else:
+        average = np.mean
+
     # get visibility data
-    vis1 = uvd1.get_data(antpairpol).mean(axis=proj_axis)
-    vis2 = uvd2.get_data(antpairpol).mean(axis=proj_axis)
+    vis1 = average(uvd1.get_data(antpairpol), axis=proj_axis, **kwargs)
+    vis2 = average(uvd2.get_data(antpairpol), axis=proj_axis, **kwargs)
 
     # use same approach as in plot_diff_waterfall
     # get important metadata
