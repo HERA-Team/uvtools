@@ -152,7 +152,7 @@ class TestDiffPlotters(unittest.TestCase):
 
     def test_plot_diff_1d(self):
         # list possible plot types and dimensions
-        plot_types = ("base", "dual", "both")
+        plot_types = ("normal", "fourier", "both")
         dimensions = ("time", "freq")
         duals = {"time" : "fringe rate", "freq" : "delay"}
 
@@ -174,9 +174,9 @@ class TestDiffPlotters(unittest.TestCase):
                     xlabel = ax.get_xlabel().lower()
 
                     # find out what the dimension should be
-                    if plot_type == "base":
+                    if plot_type == "normal":
                         dim = dimension
-                    elif plot_type == "dual":
+                    elif plot_type == "fourier":
                         dim = duals[dimension]
                     else:
                         dim = dimension if i // 3 == 0 else duals[dimension]
@@ -194,7 +194,7 @@ class TestDiffPlotters(unittest.TestCase):
 
         # make just one row of plots
         fig = uvt.plot.plot_diff_1d(
-            self.sim.data, self.sim.data, self.antpairpol, plot_type="base"
+            self.sim.data, self.sim.data, self.antpairpol, plot_type="normal"
         )
 
         # make sure that it's plotting in frequency space
