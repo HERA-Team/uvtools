@@ -1193,7 +1193,6 @@ def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False, freq_unit
         A = np.atleast_2d(w).T * F.T
         res = lsq_linear(A / mat_sigma ** 2., w * data / sigma ** 2.)
         cn_out = res.x
-        model, resid, info = fit_basis_1d(x, y, w / sigma ** 2.)
     else:
         # Use full non-linear leastsq fit
         def loglike(cn):
@@ -1339,6 +1338,12 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
     return mdl_array, cn_array, inp_data
 
 def fit_basis_1d(x, y, w, filter_centers, filter_half_widths, method='leastsq', basis='dft', cache={}, basis_options):
+    """
+    A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
+    y_model = A @ c
+    where A is a design matrix encoding our choice for a basis functions
+    and y_model
+    """
     basis_options['cache'] = cache
     if basis.lower() == 'dft':
         amat = fourier_interpolation_operator(x, *basis_options)
@@ -1357,16 +1362,51 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths, method='leastsq', 
         res = lsq_linear(a, w * y)
         cn_out = res.x
     elif mode == 'linear':
-        fmat = fit_matrix(w, amat, cache=cache)
+        fmat = fit_solution_matrix(wmat, amat, cache=cache)
         cn_out = fmat @ y
-
     else:
         raise ValueError("mode must be in ['leastsq', 'linear']")
+    model = amat @ cn_out
+    resid = y - model
     return model, resid, info
 
-def fit_matrix(weights, design_matrix, cache={}):
-    return np.linalg.inv(design_matrix.T @ weights @ design_matrix)\
-                         @ design_matrix.T @ weights
+def fit_solution_matrix(weights, design_matrix, cache={}):
+    """
+    Calculate the linear least squares solution matrix
+    from a design matrix, A and a weights matrix W
+    S = [A^T W A]^{-1} A^T W
+
+    Parameters
+    ----------
+    weights: array-like
+        ndata x ndata matrix of data weights
+    design_matrx: array-like
+        ndata x n_fit_params matrix transforming fit_parameters to data
+    cache: optional dictionary
+        optional dictionary storing pre-computed fitting matrix.
+
+    Returns
+    -----------
+        array-like
+        n_fit_params x n_fit_params matrix
+        S = [A^T W A]^{-1} A ^T W
+    """
+    ndata = weights.shape[0]
+    if not weights.shape[0] == weights.shape[1]:
+        raise ValueError("weights must be a square matrix")
+    if not design_matrix.shape[1] == ndata:
+        raise ValueError("weights incompatible with design_matrix!")
+    opkey = ('fitting_matrix',)\
+    +tuple(weights.flatten())\
+    +tuple(design_matrix.flatten())
+    if not opkey in cache:
+        #check condition number
+        cmat = design_matrix.T @ weights @ design_matrix
+        if np.linalg.cond(cmat)>=1e9:
+            warn('Warning!!!!: Poorly conditioned matrix! Your linear inpainting IS WRONG!')
+        cache[opkey] = np.linalg.inv(cmat) @ design_matrix.T @ weights
+    return cache[opkey]
+
 
 def dpss_operator(x, filter_centers, filter_half_widths, cache={}, eigenval_cutoff=None,
         edge_suppression=None, terms=None, xc=None):
@@ -1476,6 +1516,7 @@ def fourier_interpolation_operator(x, filter_centers, filter_half_widths,
     to data.
 
     """
+
     #if no fundamental fourier period is provided, set fundamental period equal to measurement
     #bandwidth.
     if fundamental_period is None:
@@ -1485,6 +1526,7 @@ def fourier_interpolation_operator(x, filter_centers, filter_half_widths,
     filter_centers, filter_half_widths, _ = parse_check_fourier_operator_inputs(filter_centers,
                                                                                 filter_half_widths,
                                                                                 x)
+
     #each column is a fixed delay
     opkey = ('fourier_interpolation_operator',) + tuple(x) + tuple(filter_centers) + tuple(filter_half_widths) + (fundamental_period,)
     if not opkey in cache:
@@ -1500,7 +1542,7 @@ def fourier_interpolation_operator(x, filter_centers, filter_half_widths,
 
 
 
-def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cache={}, taper='none', return_diagnostics=False):
+def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cache={}, taper='none'):
     """
     Compute a foreground interpolation matrix.
 
@@ -1519,7 +1561,7 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
     the unflagged Fourier transform by apply A @ to the fitted coefficients, resulting
     in data that is linearly interpolated.
 
-    !!! THIS FUNCTION WILL BE DEPRECATED BY INTERPOLATION_MATRIX !!!
+    !!! THIS FUNCTION WILL BE DEPRECATED BY fit_solution_matrix !!!
 
     Parameters
     ----------
@@ -1552,24 +1594,10 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
     if not np.sum((np.abs(wgts) > 0.).astype(float)) >= 2*ndelay:
         raise ValueError("number of unflagged channels must be greater then or equal to number of delays")
     matkey = (nchan, ndelay, fundamental_period) + tuple(wgts)
-    if matkey not in cache or return_diagnostics:
-        frequencies, delays = np.meshgrid(np.arange(nchan)-nchan/2, np.arange(-ndelay,ndelay), indexing='ij')
-        delays = delays / fundamental_period
-        a_mat = np.exp(2j * delays * frequencies * np.pi) / fundamental_period
-        wmat = np.diag(wgts * gen_window(taper, nchan)).astype(complex)
-        cmat = np.dot(a_mat.T, (a_mat.T * wgts).T)
-        if np.linalg.cond(cmat)>=1e9:
-            warn('Warning!!!!: Poorly conditioned matrix! Your linear inpainting IS WRONG!'
-                  'Fix this by adjusting fundamental tones!')
-        cmati = np.linalg.inv(cmat)
-        tmat = np.dot(cmati,(a_mat.T * wgts))
-        a_mat = np.dot(a_mat, tmat)
-        cache[matkey] = a_mat
-    a_mat = cache[matkey]
-    if not return_diagnostics:
-        return a_mat
-    else:
-        return a_mat, cmat, cmati, tmat
+    amat = fourier_interpolation_operator(x=np.arange(nchan)-nchan/2., [0.], [ndelay/fundamental_period],
+                                          cache=cache, fundamental_period=fundamental_period, xc=)
+    wmat = np.diag(wgts * gen_window(taper, nchan)).astype(complex)
+    return amat @ fit_solution_matrix(wmat, amat)
 
 def parse_check_fourier_operator_inputs(filter_centers, filter_half_widths,user_frequencies):
     """
