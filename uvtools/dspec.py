@@ -1193,6 +1193,7 @@ def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False, freq_unit
         A = np.atleast_2d(w).T * F.T
         res = lsq_linear(A / mat_sigma ** 2., w * data / sigma ** 2.)
         cn_out = res.x
+        model, resid, info = fit_basis_1d(x, y, w / sigma ** 2.)
     else:
         # Use full non-linear leastsq fit
         def loglike(cn):
@@ -1337,7 +1338,38 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
 
     return mdl_array, cn_array, inp_data
 
-def dpss(x, filter_centers, filter_half_widths, cache={}, eigenval_cutoff=None, nterms=None):
+def fit_basis_1d(x, y, w, filter_centers, filter_half_widths, method='leastsq', basis='dft', cache={}, basis_options):
+    basis_options['cache'] = cache
+    if basis.lower() == 'dft':
+        amat = fourier_interpolation_operator(x, *basis_options)
+    elif basis.lower() == 'dpss':
+        amat = dpss_operator(x, *basis_options)
+    else:
+        raise ValueError("Specify a fitting basis in supported bases: ['dft', 'dpss']")
+    info = copy.deepcopy(basis_options)
+    info['method'] = method
+    info['basis'] = basis
+    info['filter_centers'] = filter_centers
+    info['filter_half_widths'] = filter_half_widths
+    wmat = np.atleast_2d(w)
+    if mode == 'leastsq':
+        a = wmat.T * amat.T
+        res = lsq_linear(a, w * y)
+        cn_out = res.x
+    elif mode == 'linear':
+        fmat = fit_matrix(w, amat, cache=cache)
+        cn_out = fmat @ y
+
+    else:
+        raise ValueError("mode must be in ['leastsq', 'linear']")
+    return model, resid, info
+
+def fit_matrix(weights, design_matrix, cache={}):
+    return np.linalg.inv(design_matrix.T @ weights @ design_matrix)\
+                         @ design_matrix.T @ weights
+
+def dpss_operator(x, filter_centers, filter_half_widths, cache={}, eigenval_cutoff=None,
+        edge_suppression=None, terms=None, xc=None):
     """
     Calculates DPSS operator with multiple delay windows to fit data. Frequencies
     must be equally spaced (unlike Fourier operator). Users can specify how the
@@ -1364,6 +1396,7 @@ def dpss(x, filter_centers, filter_half_widths, cache={}, eigenval_cutoff=None, 
     edge_suppression: list of floats, optional
         specifies the degree of supression that must occur to tones at the filter edges to
         calculate the number of DPSS terms to fit in each sub-window.
+    xc: float optional
 
     Returns
     ----------
@@ -1386,24 +1419,28 @@ def dpss(x, filter_centers, filter_half_widths, cache={}, eigenval_cutoff=None, 
         nf = len(x)
         df = x[1]-x[0]
         xg, yg = np.meshgrid(x,x)
+        if xc is None:
+            xc = x[nf//2]
         #determine cutoffs
         if nterms is None:
             nterms = []
             for fn,fw in enumerate(filter_half_widths):
-                smat = np.sinc(2 * df * fw * (xg-yg)) * 2 * df * fw
                 dpss_vectors = windows.dpss(nf, bandwidth*fw, nf)
-                eigvals = np.sum(smat @ dpss_vectors.T) * dpss_vectors.T, axis=0)
                 if not eigval_cutoff is None:
+                    smat = np.sinc(2 * df * fw * (xg-yg)) * 2 * df * fw
+                    eigvals = np.sum(smat @ dpss_vectors.T) * dpss_vectors.T, axis=0)
                     nterms.append(np.max(np.where(eigvals>=eigval_cutoff[fn])))
                 if not edge_supression is None:
-                    z0=fw * nf * df
-                    dprod = np.exp(1j*np.pi*(nf-1)*fw*)
-
-
+                    z0=fw * df
+                    edge_tone=np.exp(-2j*np.pi*np.arange(nf)*z0)
+                    fit_components = dpss_vectors * (dpss_vectors @ edge_tone)
+                    #this is a vector of RMS residuals of a tone at the edge of the delay window being fitted between 0 to nf DPSS components.
+                    rms_residuals = np.asarray([ np.sqrt(np.mean(np.abs(edge_tone - np.sum(fit_components[:k],axis=0))**2.)) for k in range(nf)])
+                    nterms.append(np.max(np.where(rms_residuals>=edge_supression[fn])))
+        #next, construct A matrix.
         amat = []
-        for fc, fw in zip(filter_centers,filter_half_widths):
-            nterms = 2 * np.ceil(fw * bandwidth)
-            dpss_modes = windows.dpss(nf, bandwidth * fw)
+        for fc, fw, nt in zip(filter_centers,filter_half_widths, nterms):
+            amat.append(np.exp(-2j * np.pi * (yg[:,:nt]-xc) * fc ) * windows.dpss(nf, nf * df * fw, nt).T )
         cache[opkey] = np.hstack(amat)
     return cache[opkey]
 
