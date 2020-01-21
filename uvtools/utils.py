@@ -102,7 +102,7 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
 
     return datafiles, datapols
 
-def FFT(data, axis, taper=None):
+def FFT(data, axis, taper=None, **kwargs):
     """Convenient function for performing a FFT along an axis.
 
     Parameters
@@ -114,16 +114,23 @@ def FFT(data, axis, taper=None):
     axis : int
         The axis to perform the FFT over.
 
+    taper : str, optional
+        Choice of taper (windowing function) to apply to the data. Default is 
+        to use no taper.
+
+    **kwargs
+        Keyword arguments for generating the taper. Passed directly to 
+        ``uvtools.dspec.gen_window``.
+
     Returns
     -------
     data_fft : np.ndarray
         The Fourier transform of the data along the specified axis. The array
         has the same shape as the original data, with the same ordering.
     """
-    if taper is not None:
-        window = dspec.gen_window(taper, data.shape[axis]).reshape(1,-1)
-    else:
-        window = np.ones(data.shape)
+    window = dspec.gen_window(taper, data.shape[axis], **kwargs)
+    new_shape = tuple([1 if ax != axis else -1 for ax in range(data.ndim)])
+    window.shape = new_shape
 
     return fftshift(fft(window * data, axis=axis), axis)
 
