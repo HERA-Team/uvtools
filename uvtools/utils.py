@@ -121,12 +121,11 @@ def FFT(data, axis, taper=None):
         has the same shape as the original data, with the same ordering.
     """
     if taper is not None:
-        window = dspec.gen_window(taper, data.shape[axis])
-        window = fftshift(fft(window)).reshape(1,-1)
+        window = dspec.gen_window(taper, data.shape[axis]).reshape(1,-1)
     else:
         window = np.ones(data.shape)
 
-    return window * fftshift(fft(data, axis=axis), axis)
+    return fftshift(fft(window * data, axis=axis), axis)
 
 def fourier_freqs(times):
     """A function for generating Fourier frequencies given 'times'.
