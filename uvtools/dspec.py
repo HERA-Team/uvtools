@@ -1395,7 +1395,7 @@ def fit_basis_1d(x, y, w, basis_options, method='leastsq', basis='dft', cache={}
                 dictionary containing fitting arguments for reference.
                 if 'matrix' method is used, info also contains
                 'fitting_matrix' with the matrix used for deriving the model
-                from the data. 
+                from the data.
     """
     basis_options['cache'] = cache
     if basis.lower() == 'dft':
@@ -1513,7 +1513,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache={}, eigenval_cuto
     #check that xs are equally spaced.
     if not np.all(np.diff(x) == np.mean(np.diff(x))):
         raise ValueError('x values must be equally spaced for DPSS operator!')
-    opkey = ('dpss_interpolation_operator',) + tuple(x) + tuple(filter_centers) + tuple(filter_half_widths)+(eigenval_cutoff,)
+    opkey = ('dpss_operator',) + tuple(x) + tuple(filter_centers) + tuple(filter_half_widths)+(eigenval_cutoff,)
     if not opkey in cache:
         nf = len(x)
         df = x[1]-x[0]
@@ -1595,7 +1595,7 @@ def dft_operator(x, filter_centers, filter_half_widths,
         filter_half_widths = [filter_half_widths]
 
     #each column is a fixed delay
-    opkey = ('fourier_interpolation_operator',) + tuple(x) + tuple(filter_centers) + tuple(filter_half_widths) + (fundamental_period,)
+    opkey = ('dft_operator',) + tuple(x) + tuple(filter_centers) + tuple(filter_half_widths) + (fundamental_period,)
     if not opkey in cache:
         amat = []
         for fc, fw in zip(filter_centers,filter_half_widths):
