@@ -472,7 +472,9 @@ def omni_view_gif(filenames, name='omni_movie.gif'):
     imageio.mimsave(name, images)
     
 def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all", 
-                        check_metadata=True, taper=None):
+                        check_metadata=True, freq_taper=None, 
+                        freq_taper_kwargs=None, time_taper=None,
+                        time_taper_kwargs=None):
     """Produce waterfall plot(s) of differenced visibilities.
 
     Parameters
@@ -501,6 +503,28 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
         may not error out, depending on how the metadata disagree. 
         Default behavior is to check the metadata.
 
+    freq_taper : str, optional
+        Choice of tapering function to use along the frequency axis. Default 
+        is to use no taper.
+
+    freq_taper_kwargs : dict, optional
+        Keyword arguments to be used with the taper for the frequency-axis. 
+        These are ultimately passed to ``dspec.gen_window``. Default behavior 
+        is to use an empty dictionary.
+
+    time_taper : str, optional
+        Choice of tapering function to use along the time axis. Default is to 
+        use no taper.
+
+    time_taper_kwargs : dict, optional
+        Keyword arguments to be used with the taper for the time axis. These 
+        are ultimately passed to ``dspec.gen_window``. Default behavior is to 
+        use an empty dictionary.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Figure object containing all of the desired plots.
     """
     # check that metadata agrees, unless specified otherwise
     if check_metadata:
@@ -534,12 +558,20 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
               "dly" : "Delay [ns]",
               }
 
+    # convert taper kwargs to empty dictionaries if not specified
+    freq_taper_kwargs = freq_taper_kwargs or {}
+    time_taper_kwargs = time_taper_kwargs or {}
+
     # map plot types to transforms needed
-    plot_types = {"time_vs_freq" : lambda data : data, # do nothing
-                  "time_vs_dly" : lambda data : utils.FFT(data, 1, taper), # FFT in freq
-                  "fr_vs_freq" : lambda data : utils.FFT(data, 0), # FFT in time
-                  "fr_vs_dly" : lambda data : utils.FFT(utils.FFT(data, 0), 1, taper), # both
-                  }
+    plot_types = {
+        "time_vs_freq" : lambda data : data, # do nothing
+        "time_vs_dly" : lambda data : utils.FFT(data, 1, freq_taper, **freq_taper_kwargs),
+        "fr_vs_freq" : lambda data : utils.FFT(data, 0, time_taper, **time_taper_kwargs),
+        "fr_vs_dly" : lambda data : utils.FFT(
+            utils.FFT(data, 0, time_taper, **time_taper_kwargs), 
+            1, freq_taper, **freq_taper_kwargs
+        ),
+    }
 
     # convert plot type to tuple
     if isinstance(plot_type, str):
