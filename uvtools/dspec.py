@@ -1354,9 +1354,48 @@ def fit_basis_1d(x, y, w, basis_options, method='leastsq', basis='dft', cache={}
                         list of floats specifying the centers of fourier windows with which to fit signals
                     * 'filter_half_widths': array-like
                         list of floats specifying the half-widths of fourier windows to use as a fitting basis.
-                    *
+                    * 'fundamental_period': float
+                        the fundamental_period of dft modes to fit. The number of
+                        modes fit within each window in 'filter_half_widths' will
+                        equal fw / fundamental_period
+                * 'dpss':
+                    *'filter_centers': array-like
+                        list of floats specifying the centers of fourier windows with which to fit signals
+                    *'filter_half_widths': array-like
+                        list of floats specifying the half-widths of fourier windows to model.
+                    The basis_options must include one and only one of the four options
+                    for specifying how to terminate the dpss series in each filter window.
+                    *'eigenval_cutoff': array-like
+                        list of sinc_matrix eigenvalue cutoffs to use for included dpss modes.
+                    *'nterms': array-like
+                        list of integers specifying the order of the dpss sequence to use in each
+                        filter window.
+                    *'edge_supression': array-like
+                        specifies the degree of supression that must occur to tones at the filter edges
+                        to calculate the number of DPSS terms to fit in each sub-window.
+                    *'avg_suppression': list of floats, optional
+                        specifies the average degree of suppression of tones inside of the filter edges
+                        to calculate the number of DPSS terms. Similar to edge_supression but instead checks
+                        the suppression of a since vector with equal contributions from all tones inside of the
+                        filter width instead of a single tone.
+        method: string
+            specifies the fitting method to use. We currently support.
+                *'leastsq' to perform iterative leastsquares fit to derive model.
+                    using scipy.optimize.leastsq
+                *'matrix' derive model by directly calculate the fitting matrix
+                    [A^T W A]^{-1} A^T W and applying it to the y vector.
 
 
+        Returns:
+            model: array-like
+                Ndata array of complex floats equal to interpolated model
+            resid: array-like
+                Ndata array of complex floats equal to y - model
+            info:
+                dictionary containing fitting arguments for reference.
+                if 'matrix' method is used, info also contains
+                'fitting_matrix' with the matrix used for deriving the model
+                from the data. 
     """
     basis_options['cache'] = cache
     if basis.lower() == 'dft':
@@ -1375,11 +1414,12 @@ def fit_basis_1d(x, y, w, basis_options, method='leastsq', basis='dft', cache={}
         a = wmat.T * amat.T
         res = lsq_linear(a, w * y)
         cn_out = res.x
-    elif mode == 'linear':
+    elif mode == 'matrix':
+        info['fitting_matrix'] = fmat
         fmat = fit_solution_matrix(wmat, amat, cache=cache)
         cn_out = fmat @ y
     else:
-        raise ValueError("mode must be in ['leastsq', 'linear']")
+        raise ValueError("mode must be in ['leastsq', 'matrix']")
     model = amat @ cn_out
     resid = y - model
     return model, resid, info
@@ -1453,7 +1493,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache={}, eigenval_cuto
     avg_suppression: list of floats, optional
         specifies the average degree of suppression of tones inside of the filter edges
         to calculate the number of DPSS terms. Similar to edge_suppression but instead
-        checks the suppression a sinc vector with equal contributions from
+        checks the suppression of a sinc vector with equal contributions from
         all tones inside of the filter width instead of a single tone.
     xc: float optional
 
@@ -1511,10 +1551,10 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache={}, eigenval_cuto
     return cache[opkey]
 
 
-def fourier_interpolation_operator(x, filter_centers, filter_half_widths,
+def dft_operator(x, filter_centers, filter_half_widths,
                                  cache={}, fundamental_period=None, xc=None):
     """
-    Calculates Fourier operator with multiple flexible delay windows to fit data, potentially with arbitrary
+    Discrete Fourier operator with multiple flexible delay windows to fit data, potentially with arbitrary
     user provided frequencies.
 
     A_{nu tau} = e^{- 2 * pi * i * nu * tau / B}
@@ -1621,7 +1661,7 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
     if not np.sum((np.abs(wgts) > 0.).astype(float)) >= 2*ndelay:
         raise ValueError("number of unflagged channels must be greater then or equal to number of delays")
     matkey = (nchan, ndelay, fundamental_period) + tuple(wgts)
-    amat = fourier_interpolation_operator(x=np.arange(nchan)-nchan/2., filter_centers=[0.], filter_half_widths=[ndelay/fundamental_period],
+    amat = dft_operator(x=np.arange(nchan)-nchan/2., filter_centers=[0.], filter_half_widths=[ndelay/fundamental_period],
                                           cache=cache, fundamental_period=fundamental_period)
     wmat = np.diag(wgts * gen_window(taper, nchan)).astype(complex)
     return amat @ fit_solution_matrix(wmat, amat)
