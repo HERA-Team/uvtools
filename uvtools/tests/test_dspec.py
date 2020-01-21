@@ -210,46 +210,46 @@ def test_dayenu_filter():
     wghts_1d = np.ones(nf)
     wghts_2d = np.array([wghts_1d, wghts_1d])
     #test functionality for numpy arrays
-    dspec.dayenu_filter(data_1d, wghts_1d, [1], np.array(filter_centers), np.array(filter_half_widths),
-                        np.array(filter_factors), delta_data=df)
+    dspec.dayenu_filter(np.arange(-nf/2,nf/2)*df, data_1d, wghts_1d, [1], np.array(filter_centers), np.array(filter_half_widths),
+                        np.array(filter_factors))
     #provide filter_dimensions as an integer.
-    dspec.dayenu_filter(data_1d, wghts_1d, 1, np.array(filter_centers), np.array(filter_half_widths),
-                        np.array(filter_factors), delta_data=df)
+    dspec.dayenu_filter(np.arange(-nf/2,nf/2)*df, data_1d, wghts_1d, 1, np.array(filter_centers), np.array(filter_half_widths),
+                        np.array(filter_factors))
 
     #test functionality on floats
-    dspec.dayenu_filter(data_1d, wghts_1d,  1, filter_centers[0], filter_half_widths[0],
-                        filter_factors[0],delta_data=df)
+    dspec.dayenu_filter(np.arange(-nf/2,nf/2)*df, data_1d, wghts_1d,  1, filter_centers[0], filter_half_widths[0],
+                        filter_factors[0])
     filter_half_widths2 = [200e-9, 200e-9]
     filter_centers2 = [0., -1400e-9]
     filter_factors2 = [1e-9, 1e-9]
     #check if throws error when number of filter_half_widths not equal to len filter_centers
-    nt.assert_raises(ValueError, dspec.dayenu_filter, data_1d, wghts_1d, [1], filter_centers,
-                    filter_half_widths2, filter_factors, delta_data=df)
+    nt.assert_raises(ValueError, dspec.dayenu_filter, freqs, data_1d, wghts_1d, [1], filter_centers,
+                    filter_half_widths2, filter_factors)
     #check if throws error when number of filter_half_widths not equal to len filter_factors
-    nt.assert_raises(ValueError, dspec.dayenu_filter, data_1d, wghts_1d, 1, filter_centers,
-                    filter_half_widths, filter_factors2, delta_data=df)
+    nt.assert_raises(ValueError, dspec.dayenu_filter, freqs, data_1d, wghts_1d, 1, filter_centers,
+                    filter_half_widths, filter_factors2)
     #check if error thrown when wghts have different length then data
-    nt.assert_raises(ValueError, dspec.dayenu_filter, data_1d, wghts_1d[:-1], 1, filter_centers,
-                    filter_half_widths, filter_factors, delta_data=df)
+    nt.assert_raises(ValueError, dspec.dayenu_filter, freqs, data_1d, wghts_1d[:-1], 1, filter_centers,
+                    filter_half_widths, filter_factors)
     #check if error thrown when dimension of data does not equal dimension of weights.
-    nt.assert_raises(ValueError, dspec.dayenu_filter, data_1d, wghts_2d, 1, filter_centers,
-                    filter_half_widths, filter_factors, delta_data=df)
+    nt.assert_raises(ValueError, dspec.dayenu_filter, freqs, data_1d, wghts_2d, 1, filter_centers,
+                    filter_half_widths, filter_factors)
     #check if error thrown if dimension of data does not equal 2 or 1.
-    nt.assert_raises(ValueError, dspec.dayenu_filter, np.zeros((10,10,10)), wghts_1d, 1, filter_centers,
-                    filter_half_widths, filter_factors, delta_data=df)
+    nt.assert_raises(ValueError, dspec.dayenu_filter, freqs, np.zeros((10,10,10)), wghts_1d, 1, filter_centers,
+                    filter_half_widths, filter_factors)
     #check if error thrown if dimension of weights does not equal 2 or 1.
-    nt.assert_raises(ValueError, dspec.dayenu_filter, wghts_1d, np.zeros((10,10,10)), 1, filter_centers,
-                    filter_half_widths, filter_factors, delta_data=df)
+    nt.assert_raises(ValueError, dspec.dayenu_filter, freqs, wghts_1d, np.zeros((10,10,10)), 1, filter_centers,
+                    filter_half_widths, filter_factors)
     #now filter foregrounds and test that std of residuals are close to std of noise:
-    filtered_noise, _ =  dspec.dayenu_filter(data_1d, wghts_1d, [1], filter_centers, filter_half_widths,
-                                         filter_factors, delta_data=df)
+    filtered_noise, _ =  dspec.dayenu_filter(np.arange(-nf/2, nf/2)*df, data_1d, wghts_1d, [1], filter_centers, filter_half_widths,
+                                         filter_factors)
     #print(np.std((data_1d - fg_tone).real)*np.sqrt(2.))
     #print(np.std((filtered_noise).real)*np.sqrt(2.))
     np.testing.assert_almost_equal( np.std(filtered_noise.real)**2. + np.std(filtered_noise.imag)**2.,
                                   np.std(noise.real)**2. + np.std(noise.imag)**2., decimal = 0)
     #now filter foregrounds and signal and test that std of residuals are close to std of signal.
-    filtered_signal, _ =  dspec.dayenu_filter(fg_sg, wghts_1d, [1], filter_centers, filter_half_widths,
-                                              filter_factors, delta_data=df)
+    filtered_signal, _ =  dspec.dayenu_filter(np.arange(-nf/2, nf/2)*df, fg_sg, wghts_1d, [1], filter_centers, filter_half_widths,
+                                              filter_factors)
     np.testing.assert_almost_equal( (np.std(filtered_signal.real)**2. + np.std(filtered_signal.imag)**2.)/1e4,
                                   (np.std(sg_tone.real)**2. + np.std(sg_tone.imag)**2.)/1e4, decimal = 0)
     #Next, we test performing a fringe-rate clean. Generate a 50-meter EW baseline with a single
@@ -266,7 +266,7 @@ def test_dayenu_filter():
     data_2d = signal_2d + noise_2d
     #now, only filter fringe-rate domain. The fringe rate for a source
     #overhead should be roughly 0.0036 for this baseline.
-    filtered_data_fr, _ = dspec.dayenu_filter(data_2d, np.ones_like(data_2d), delta_data = dt,
+    filtered_data_fr, _ = dspec.dayenu_filter(np.arange(-nf/2,nf/2)*dt, data_2d, np.ones_like(data_2d),
                         filter_centers = [0.], filter_half_widths = [0.004], filter_factors = [1e-10],
                         filter_dimensions = [0], cache = TEST_CACHE)
 
@@ -275,14 +275,14 @@ def test_dayenu_filter():
 
     #only filter in the delay-domain.
 
-    filtered_data_df, _ = dspec.dayenu_filter(data_2d, np.ones_like(data_2d), delta_data=100e3,
+    filtered_data_df, _ = dspec.dayenu_filter(np.arange(-nf/2, nf/2)*df, data_2d, np.ones_like(data_2d),
                         filter_centers = [0.], filter_half_widths=[100e-9], filter_factors=[1e-10],
                         filter_dimensions = [1], cache = TEST_CACHE)
 
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df.flatten())**2.)),
                                                             1., decimal = 1)
     #supply an int for filter dimensions
-    filtered_data_df, _ = dspec.dayenu_filter(data_2d, np.ones_like(data_2d), delta_data=100e3,
+    filtered_data_df, _ = dspec.dayenu_filter(np.arange(-nf/2, nf/2)*df, data_2d, np.ones_like(data_2d),
                         filter_centers = [0.], filter_half_widths=[100e-9], filter_factors=[1e-10],
                         filter_dimensions = 1, cache = TEST_CACHE)
 
@@ -292,16 +292,18 @@ def test_dayenu_filter():
     #filter in both domains. I use a smaller filter factor
     #for each domain since they multiply in the target region.
 
-    filtered_data_df_fr, _ = dspec.dayenu_filter(data_2d, np.ones_like(data_2d), delta_data = [dt,100e3],
-                    filter_centers = [[0.002],[0.]], filter_half_widths = [[0.001],[100e-9]], filter_factors = [[1e-5],[1e-5]],
-                    filter_dimensions = [0,1],cache = TEST_CACHE)
+    filtered_data_df_fr, _ = dspec.dayenu_filter([np.arange(-nf/2,nf/2)*dt, np.arange(-nf/2,nf/2)*df],
+                                                    data_2d, np.ones_like(data_2d),
+                                                    filter_centers = [[0.002],[0.]],
+                                                    filter_half_widths = [[0.001],[100e-9]], filter_factors = [[1e-5],[1e-5]],
+                                                    filter_dimensions = [0,1],cache = TEST_CACHE)
 
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df_fr.flatten())**2.)),
                                     1., decimal = 1)
 
     #test error messages if we do not provide lists of lists.
-    nt.assert_raises(ValueError,dspec.dayenu_filter,data_2d, np.ones_like(data_2d),
-                        delta_data = [dt,100e3],
+    nt.assert_raises(ValueError,dspec.dayenu_filter,[np.arange(-nf/2,nf/2)*dt, np.arange(-nf/2,nf/2)*df],
+                        data_2d, np.ones_like(data_2d),
                         filter_centers = [[0.002],0.],
                         filter_half_widths = [[0.001],[100e-9]],
                         filter_factors = [1e-5,[1e-5]],
@@ -333,33 +335,34 @@ def test_dayenu_filter_user_frequencies():
     wghts_1d = np.ones(nf)
     data_1d = fg_ns
 
-    d1,_ = dspec.dayenu_filter(data_1d, wghts_1d, [1], np.array(filter_centers), np.array(filter_half_widths),
-                            np.array(filter_factors), delta_data=df)
-    d2,_ = dspec.dayenu_filter(data_1d, wghts_1d, [1], np.array(filter_centers), np.array(filter_half_widths),
-                            np.array(filter_factors), user_frequencies=freqs)
+    d1,_ = dspec.dayenu_filter(freqs, data_1d, wghts_1d, [1], np.array(filter_centers), np.array(filter_half_widths),
+                            np.array(filter_factors))
+    d2,_ = dspec.dayenu_filter(freqs, data_1d, wghts_1d, [1], np.array(filter_centers), np.array(filter_half_widths),
+                            np.array(filter_factors))
     #test whether user provided frequencies gives same answer as non user provided frequencies.
     np.testing.assert_almost_equal(d1, d2)
 
 
 def test_dayenu_mat_inv():
-    cmat = dspec.dayenu_mat_inv(32, 100e3, filter_centers = [], filter_half_widths = [], filter_factors = [])
+    freqs = np.arange(-16,16)*100e3
+    cmat = dspec.dayenu_mat_inv(freqs, filter_centers = [], filter_half_widths = [], filter_factors = [])
     #verify that the inverse cleaning matrix without cleaning windows is the identity!
     np.testing.assert_array_equal(cmat, np.identity(32).astype(np.complex128))
     #next, test with a single filter window with list and float arguments supplied
-    cmat1 = dspec.dayenu_mat_inv(32, 100e3, filter_centers = 0., filter_half_widths = 112e-9, filter_factors = 1e-9)
-    cmat2 = dspec.dayenu_mat_inv(32, 100e3, filter_centers = [0.], filter_half_widths = [112e-9], filter_factors = [1e-9])
+    cmat1 = dspec.dayenu_mat_inv(freqs, filter_centers = 0., filter_half_widths = 112e-9, filter_factors = 1e-9)
+    cmat2 = dspec.dayenu_mat_inv(freqs, filter_centers = [0.], filter_half_widths = [112e-9], filter_factors = [1e-9])
     x,y = np.meshgrid(np.arange(-16,16), np.arange(-16,16))
     cmata = np.identity(32).astype(np.complex128) + 1e9 * np.sinc( (x-y) * 100e3 * 224e-9 ).astype(np.complex128)
     np.testing.assert_array_equal(cmat1, cmat2)
     #next test that the array is equal to what we expect
     np.testing.assert_almost_equal(cmat1, cmata)
     #now test no_regularization
-    cmat1 = dspec.dayenu_mat_inv(32, 100e3, filter_centers = 0.,
+    cmat1 = dspec.dayenu_mat_inv(freqs, filter_centers = 0.,
             filter_half_widths = 112e-9, filter_factors = 1, no_regularization = True)
     np.sinc( (x-y) * 100e3 * 224e-9 ).astype(np.complex128)
     np.testing.assert_almost_equal(cmat1, cmata / 1e9)
     #now test wrap!
-    cmat1 = dspec.dayenu_mat_inv(32, 100e3, filter_centers = 0.,
+    cmat1 = dspec.dayenu_mat_inv(freqs, filter_centers = 0.,
             filter_half_widths = 112e-9, filter_factors = 1, wrap = True,
              no_regularization = True)
     cmata = np.zeros_like(cmat1)
@@ -511,8 +514,8 @@ def test_delay_interpolation_matrix():
     nt.assert_raises(ValueError, dspec.delay_interpolation_matrix, 10, 2, np.ones(5))
     nt.assert_raises(ValueError, dspec.delay_interpolation_matrix, 5, 2, np.asarray([0., 0., 0., 0., 0.]))
     #test diagnostic mode.
-    data_interp1, _, _, _ = dspec.delay_interpolation_matrix(nchan=20, ndelay=5, wgts=wgts,
-     fundamental_period=20, cache={}, return_diagnostics=True)
+    data_interp1 = dspec.delay_interpolation_matrix(nchan=20, ndelay=5, wgts=wgts,
+     fundamental_period=20, cache={})
     data_interp1 = np.dot(data_interp1, dw)
     nt.assert_true(np.all(np.isclose(data_interp, data_interp1, atol=1e-6)))
      #test warning

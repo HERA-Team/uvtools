@@ -210,8 +210,9 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                 _d_res = info['res']
                 del info['res']
             elif mode=='dayenu':
-                d_r, info = dayenu_filter(data * wgts * win, wgts * win, delta_data=real_delta,
-                                                filter_dimensions = [1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache)
+                d_r, info = dayenu_filter(np.arange(len(data))-len(data)/2*real_delta,
+                                         data * wgts * win, wgts * win,
+                                         filter_dimensions = [1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache)
                 _d_res = np.fft.ifft(d_r)
                 if deconv_dayenu_foregrounds:
                     if fg_deconv_method == 'clean':
@@ -256,8 +257,9 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                         del info_here['res']
                         info.append(info_here)
                     elif mode=='dayenu':
-                        d_r, info_here = dayenu_filter(data[i] * wgts[i] * win, wgts[i] * win, delta_data=real_delta,
-                                                            filter_dimensions=[1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache)
+                        d_r, info_here = dayenu_filter(np.arange(len(data[i]))*real_delta,
+                                                       data[i] * wgts[i] * win, wgts[i] * win,
+                                                        filter_dimensions=[1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache)
                         _d_res[i] = np.fft.ifft(d_r)
                         if deconv_dayenu_foregrounds:
                             if fg_deconv_method == 'clean':
@@ -364,8 +366,10 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         elif mode == 'dayenu':
             assert filt2d_mode == "plus", "2d linear deconvolution only supports filt2d_mode == 'plus'."
 
-            d_r, info = dayenu_filter(data * wgts * win, wgts * win, delta_data=[real_delta[0],real_delta[1]], filter_centers=fc, filter_half_widths=fw,
-                                         filter_factors=ff, cache=cache, filter_dimensions=[0, 1])
+            d_r, info = dayenu_filter([(np.arange(data.shape[0])-data.shape[0]/2)*real_delta[0],
+                                        (np.arange(data.shape[1])-data.shape[1]/2)*real_delta[1]],
+                                        data * wgts * win, wgts * win, filter_centers=fc, filter_half_widths=fw,
+                                        filter_factors=ff, cache=cache, filter_dimensions=[0, 1])
             _d_res = np.fft.ifft2(d_r)
             if deconv_dayenu_foregrounds:
                 if fg_deconv_method == 'clean':
@@ -405,10 +409,13 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
 
     return d_mdl, d_res, info
 
-def dayenu_filter(data, wgts, filter_dimensions, filter_centers, filter_half_widths, filter_factors, delta_data=None, cache = {}, user_frequencies=None):
+def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_widths, filter_factors,
+                  cache = {}):
     '''Apply a linear delay filter to waterfall data.
         Due to performance reasons, linear filtering only supports separable delay/fringe-rate filters.
     Arguments:
+        x: array-like or length-2 list/tuples that are array-like
+            x-values for each data point in dimension to be filtered.
         data: 1D or 2D (real or complex) numpy array where last dimension is frequency.
         Does not assume that weights have already been multiplied!
         wgts: real numpy array of linear multiplicative weights with the same shape as the data.
@@ -426,9 +433,6 @@ def dayenu_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
             filter_half_widths. If a float or length-1 list/ndarray is provided,
             the same filter factor will be used in every filter window.
         cache: optional dictionary for storing pre-computed delay filter matrices.
-        user_frequencies: optional
-            array-like list of arbitrary frequencies. If this is supplied, evaluate sinc_downweight_mat at these frequencies
-            instead of linear array of nchan. For 2d clean, should be supplied as a 2-tuple or 2-list.
     Returns:
         data: array, 2d clean residual with data filtered along the frequency direction.
         info: dictionary with filtering parameters and a list of skipped_times and skipped_channels
@@ -439,7 +443,6 @@ def dayenu_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
     w_shape = wgts.shape
     d_dim = data.ndim
     w_dim = wgts.ndim
-    assert not (delta_data is None and user_frequencies is None), "Error: no delta_data or user_frequencies provided. delta_data must be specified if no user_frequencies are specified. user_frequencies must be specified if delta_data is not specified."
     if not (d_dim == 1 or d_dim == 2):
         raise ValueError("number of dimensions in data array does not "
                          "equal 1 or 2! data dim = %d"%(d_dim))
@@ -462,23 +465,28 @@ def dayenu_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
         data_1d = True
         # 1d data will result in nonsensical filtering along zeroth axis.
         filter_dimensions=[1]
-
     else:
         data_1d = False
     nchan = data.shape[1]
     ntimes = data.shape[0]
+    if not isinstance(x, (np.ndarray,list, tuple)):
+        raise ValueError("x must be a numpy array, list, or tuple")
     # Check that inputs are tiples or lists
-    assert isinstance(filter_dimensions, (list,tuple,int)), "filter_dimensions must be a list or tuple"
+    if not isinstance(filter_dimensions, (list,tuple,int)):
+        raise ValueError("filter_dimensions must be a list or tuple")
     # if filter_dimensions are supplied as a single integer, convert to list (core code assumes lists).
     if isinstance(filter_dimensions, int):
         filter_dimensions = [filter_dimensions]
     # check that filter_dimensions is no longer then 2 elements
-    assert len(filter_dimensions) in [1, 2], "length of filter_dimensions cannot exceed 2"
+    if not len(filter_dimensions) in [1, 2]:
+        raise ValueError("length of filter_dimensions cannot exceed 2")
     # make sure filter_dimensions are 0 or 1.
     for dim in filter_dimensions:
-        assert isinstance(dim,int), "only integers are valid filter dimensions"
+        if not isinstance(dim,int):
+            raise ValueError("only integers are valid filter dimensions")
     # make sure that all filter dimensions are valid for the supplied data.
-    assert np.all(np.abs(np.asarray(filter_dimensions)) < data.ndim), "invalid filter dimensions provided, must be 0 or 1/-1"
+    if not np.all(np.abs(np.asarray(filter_dimensions)) < data.ndim):
+        raise ValueError("invalid filter dimensions provided, must be 0 or 1/-1")
     # convert filter dimensions to a list of integers (incase the dimensions were supplied as floats)
     filter_dimensions=list(np.unique(np.asarray(filter_dimensions)).astype(int))
     # will only filter each dim a single time.
@@ -505,12 +513,12 @@ def dayenu_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
                     raise ValueError(err_msg)
             else:
                 raise ValueError(err_msg)
-            assert (isinstance(delta_data,(tuple,list,np.ndarray)) and len(delta_data) == 2) or delta_data is None, "For 2d filtering, delta_data must be a 2d long list or tuple or ndarray"
-            assert (isinstance(user_frequencies,(tuple,list,np.ndarray)) and len(user_frequencies) == 2) or user_frequencies is None, "For 2d filtering, user_frequencies must be 2d long list or tuple or ndarray"
-            if user_frequencies is None:
-                user_frequencies = [None, None]
-            if delta_data is None:
-                delta_data = [None, None]
+            if not len(x) == 2:
+                raise ValueError("For 2d filtering, x must be 2d long list or tuple or ndarray")
+            for j in range(2):
+                if not isinstance(x[j], (tuple, list, np.ndarray)):
+                    raise ValueError("x[%d] must be a tuple, list or numpy array."%(j))
+                x[j]=np.asarray(x[j])
         for ff_num,ff_list in zip([0,1],filter_factors):
             # we allow the user to provide a single filter factor for multiple
             # filtering windows on a single dimension. This code
@@ -519,11 +527,9 @@ def dayenu_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
             # length as filter_centers.
             if len(ff_list) == 1:
                 ff_list = [ff_list[0] for m in range(len(filter_centers[ff_num]))]
+
+
     else:
-        assert isinstance(user_frequencies,(list,np.ndarray)) or user_frequencies is None, "for 1d clean, provide a list or numpy array for user_frequencies"
-        if not delta_data is None:
-            assert isinstance(delta_data, (float,np.float, int, np.int)), "for 1d clean, provide a float or integer for delta_data"
-        # If we are going to filter along a single dimensions.
         if len(filter_factors) == 1:
             # extend filter factor list of user supplied a float or len-1 list.
             filter_factors = [filter_factors[0] for m in range(len(filter_centers))]
@@ -533,16 +539,14 @@ def dayenu_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
             filter_factors = [filter_factors,[]]
             filter_centers = [filter_centers,[]]
             filter_half_widths = [filter_half_widths,[]]
-            user_frequencies = [user_frequencies,None]
-            delta_data = [delta_data,0.]
+            x = [x,None]
         elif 1 in filter_dimensions:
             # convert 1d input-lists to
             # a list of lists for core-code to operate on.
             filter_factors = [[],filter_factors]
             filter_centers = [[],filter_centers]
             filter_half_widths = [[],filter_half_widths]
-            delta_data = [0., delta_data]
-            user_frequencies = [None, user_frequencies]
+            x = [None, x]
     check_vars = [filter_centers, filter_half_widths, filter_factors]
     # Now check that the number of filter factors = number of filter widths
     # = number of filter centers for each dimension.
@@ -554,7 +558,7 @@ def dayenu_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
                                      " number of elements %s-%d!"%(aname1, fs, aname2, fs))
 
     info = {'filter_centers':filter_centers, 'filter_half_widths':filter_half_widths, 'filter_factors': filter_factors,
-            'delta_data':delta_data, 'data_shape':data.shape, 'filter_dimensions': filter_dimensions, 'user_frequencies':user_frequencies}
+            'x':x, 'data_shape':data.shape, 'filter_dimensions': filter_dimensions}
     skipped = [[],[]]
     # in the lines below, we iterate over the time dimension. For each time, we
     # compute a lazy covariance matrix (filter_mat) from the weights (wght) and
@@ -572,24 +576,15 @@ def dayenu_filter(data, wgts, filter_dimensions, filter_centers, filter_half_wid
         #if the axis orthogonal to the iteration axis is to be filtered, then
         #filter it!.
         for sample_num, sample, wght in zip(range(data.shape[fs-1]), _d, _w):
-            if user_frequencies[fs] is None:
-                filter_key = (data.shape[fs], delta_data[fs], ) + tuple(filter_centers[fs]) + \
-                tuple(filter_half_widths[fs]) + tuple(filter_factors[fs]) + tuple(wght.tolist()) + ('inverse',)
-            else:
-                filter_key = (data.shape[fs], ) + tuple(user_frequencies[fs]) + tuple(filter_centers[fs]) + \
-                tuple(filter_half_widths[fs]) + tuple(filter_factors[fs]) + tuple(wght.tolist()) + ('inverse',)
+            filter_key = (data.shape[fs], ) + tuple(x[fs]) + tuple(filter_centers[fs]) + \
+            tuple(filter_half_widths[fs]) + tuple(filter_factors[fs]) + tuple(wght.tolist()) + ('inverse',)
             if not filter_key in cache:
                 #only calculate filter matrix and psuedo-inverse explicitly if they are not already cached
                 #(saves calculation time).
                 wght_mat = np.outer(wght.T, wght)
-                if not user_frequencies[fs] is None:
-                    df=1.
-                else:
-                    df=delta_data[fs]
-                filter_mat = dayenu_mat_inv(nchan=data.shape[fs], df=df, filter_centers=filter_centers[fs],
+                filter_mat = dayenu_mat_inv(x=x[fs], filter_centers=filter_centers[fs],
                                                      filter_half_widths=filter_half_widths[fs],
-                                                     filter_factors=filter_factors[fs], cache=cache,
-                                                     user_frequencies=user_frequencies[fs]) * wght_mat
+                                                     filter_factors=filter_factors[fs], cache=cache) * wght_mat
                 try:
                     #Try taking psuedo-inverse. Occasionally I've encountered SVD errors
                     #when a lot of channels are flagged. Interestingly enough, I haven't
@@ -1337,12 +1332,31 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
 
     return mdl_array, cn_array, inp_data
 
-def fit_basis_1d(x, y, w, filter_centers, filter_half_widths, method='leastsq', basis='dft', cache={}, basis_options):
+def fit_basis_1d(x, y, w, basis_options, method='leastsq', basis='dft', cache={}):
     """
     A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
     y_model = A @ c
     where A is a design matrix encoding our choice for a basis functions
     and y_model
+
+    Parameters:
+        x: array-like
+            x-axis of data to fit.
+        y: array-like
+            y-axis of data to fit.
+        w: array-like
+            data weights.
+        basis_options: dictionary
+            basis specific options for fitting. The two bases currently supported are dft and dpss whose options
+            are as follows:
+                * 'dft':
+                    * 'filter_centers': array-like
+                        list of floats specifying the centers of fourier windows with which to fit signals
+                    * 'filter_half_widths': array-like
+                        list of floats specifying the half-widths of fourier windows to use as a fitting basis.
+                    *
+
+
     """
     basis_options['cache'] = cache
     if basis.lower() == 'dft':
@@ -1394,8 +1408,8 @@ def fit_solution_matrix(weights, design_matrix, cache={}):
     ndata = weights.shape[0]
     if not weights.shape[0] == weights.shape[1]:
         raise ValueError("weights must be a square matrix")
-    if not design_matrix.shape[1] == ndata:
-        raise ValueError("weights incompatible with design_matrix!")
+    if not design_matrix.shape[0] == ndata:
+        raise ValueError("weights matrix incompatible with design_matrix!")
     opkey = ('fitting_matrix',)\
     +tuple(weights.flatten())\
     +tuple(design_matrix.flatten())
@@ -1440,7 +1454,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache={}, eigenval_cuto
         specifies the average degree of suppression of tones inside of the filter edges
         to calculate the number of DPSS terms. Similar to edge_suppression but instead
         checks the suppression a sinc vector with equal contributions from
-        all tones inside of the filter width instead of a single tone. 
+        all tones inside of the filter width instead of a single tone.
     xc: float optional
 
     Returns
@@ -1473,7 +1487,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache={}, eigenval_cuto
                 dpss_vectors = windows.dpss(nf, bandwidth*fw, nf)
                 if not eigval_cutoff is None:
                     smat = np.sinc(2 * df * fw * (xg-yg)) * 2 * df * fw
-                    eigvals = np.sum(smat @ dpss_vectors.T) * dpss_vectors.T, axis=0)
+                    eigvals = np.sum((smat @ dpss_vectors.T) * dpss_vectors.T, axis=0)
                     nterms.append(np.max(np.where(eigvals>=eigval_cutoff[fn])))
                 if not edge_supression is None:
                     z0=fw * df
@@ -1535,9 +1549,10 @@ def fourier_interpolation_operator(x, filter_centers, filter_half_widths,
         fundamental_period = np.median(np.diff(x)) * len(x)
     if xc is None:
         xc = x[int(np.round(len(x)/2))]
-    filter_centers, filter_half_widths, _ = parse_check_fourier_operator_inputs(filter_centers,
-                                                                                filter_half_widths,
-                                                                                x)
+    if isinstance(filter_centers, float):
+        filter_centers = [filter_centers]
+    if isinstance(filter_half_widths, float):
+        filter_half_widths = [filter_half_widths]
 
     #each column is a fixed delay
     opkey = ('fourier_interpolation_operator',) + tuple(x) + tuple(filter_centers) + tuple(filter_half_widths) + (fundamental_period,)
@@ -1606,33 +1621,11 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
     if not np.sum((np.abs(wgts) > 0.).astype(float)) >= 2*ndelay:
         raise ValueError("number of unflagged channels must be greater then or equal to number of delays")
     matkey = (nchan, ndelay, fundamental_period) + tuple(wgts)
-    amat = fourier_interpolation_operator(x=np.arange(nchan)-nchan/2., [0.], [ndelay/fundamental_period],
-                                          cache=cache, fundamental_period=fundamental_period, xc=)
+    amat = fourier_interpolation_operator(x=np.arange(nchan)-nchan/2., filter_centers=[0.], filter_half_widths=[ndelay/fundamental_period],
+                                          cache=cache, fundamental_period=fundamental_period)
     wmat = np.diag(wgts * gen_window(taper, nchan)).astype(complex)
     return amat @ fit_solution_matrix(wmat, amat)
 
-def parse_check_fourier_operator_inputs(filter_centers, filter_half_widths,user_frequencies):
-    """
-    Parse and check floats or lists of filter window parameters.
-
-    Parameters
-    ----------------------------------------------------
-    filter_centers: float or list
-        float or list of floats of centers of delay filter windows in nanosec
-    filter_half_widths: float or list
-        float or list of floats of half-widths of delay filter windows in nanosec
-    filter_factors: float or list
-        float or list of floats of filtering factors.
-    Returns
-    ----------------------------------------------------
-    Filter parameters with types checked and converted to lists.
-    """
-    if isinstance(filter_centers, float) or isinstance(filter_factors, int):
-        filter_centers = [filter_centers]
-    if isinstance(filter_half_widths, float) or isinstance(filter_factors, int):
-        filter_half_widths = [filter_half_widths]
-    assert user_frequencies is None or isinstance(user_frequencies,(list, np.ndarray)),"user provided frequencies must be ndarray or list"
-    return filter_centers, filter_half_widths
 
 def dayenu_mat_inv(x, filter_centers, filter_half_widths,
                             filter_factors, cache={}, wrap=False, wrap_interval=1,
@@ -1673,11 +1666,14 @@ def dayenu_mat_inv(x, filter_centers, filter_half_widths,
      (nchan, nchan) complex inverse of the tophat filtering matrix assuming that the delay-space covariance is diagonal and zero outside
          of the horizon
     """
-    if isinstance(filter_factors,float) or isinstance(filter_factors, int):
+    if isinstance(filter_factors,(float,int, np.int, np.float)):
         filter_factors = [filter_factors]
-    filter_centers, filter_half_widths = parse_check_fourier_operator_inputs(filter_centers,
-                                                                            filter_half_widths, x)
-    nchan = len(user_frequencies)
+    if isinstance(filter_centers, (float, int, np.int, np.float)):
+        filter_centers = [filter_centers]
+    if isinstance(filter_half_widths, (float, int, np.int, np.float)):
+        filter_half_widths = [filter_half_widths]
+
+    nchan = len(x)
     filter_key = tuple(x) + tuple(filter_centers) + \
     tuple(filter_half_widths) + tuple(filter_factors) + (wrap, wrap_interval, nwraps, no_regularization)
 
@@ -1690,13 +1686,14 @@ def dayenu_mat_inv(x, filter_centers, filter_half_widths,
             if not ff == 0:
                 if not wrap:
                     sdwi_mat = sdwi_mat + np.sinc( 2. * (fx-fy) * fw ).astype(np.complex128)\
-                            * np.exp(-2j * np.pi * (fx-fy) * df * fc) / ff
+                            * np.exp(-2j * np.pi * (fx-fy) * fc) / ff
                 else:
+                    bwidth = x[-1] - x[0] + (x[1]-x[0])
                     for wnum in np.arange(-nwraps//2, nwraps//2):
-                        offset = nchan * wnum * wrap_interval
+                        offset = bwidth * wnum * wrap_interval
                         sdwi_mat = sdwi_mat + \
                         np.sinc( 2. *  (fx-fy - offset) * fw  ).astype(np.complex128)\
-                        * np.exp(-2j * np.pi * (fx-fy - offset) * df * fc) / ff
+                        * np.exp(-2j * np.pi * (fx-fy - offset) * fc) / ff
     else:
         sdwi_mat = cache[filter_key]
     return sdwi_mat
