@@ -472,7 +472,7 @@ def omni_view_gif(filenames, name='omni_movie.gif'):
     imageio.mimsave(name, images)
     
 def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all", 
-                        check_metadata=True):
+                        check_metadata=True, taper=None):
     """Produce waterfall plot(s) of differenced visibilities.
 
     Parameters
@@ -536,9 +536,9 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
 
     # map plot types to transforms needed
     plot_types = {"time_vs_freq" : lambda data : data, # do nothing
-                  "time_vs_dly" : lambda data : utils.FFT(data, 1), # FFT in freq
+                  "time_vs_dly" : lambda data : utils.FFT(data, 1, taper), # FFT in freq
                   "fr_vs_freq" : lambda data : utils.FFT(data, 0), # FFT in time
-                  "fr_vs_dly" : lambda data : utils.FFT(utils.FFT(data, 0), 1), # both
+                  "fr_vs_dly" : lambda data : utils.FFT(utils.FFT(data, 0), 1, taper), # both
                   }
 
     # convert plot type to tuple

@@ -2,6 +2,7 @@ from numpy.fft import fft, fftshift
 import numpy as np
 import glob
 
+from . import dspec
 
 def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flatten=False):
     """
@@ -101,7 +102,7 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
 
     return datafiles, datapols
 
-def FFT(data, axis):
+def FFT(data, axis, taper=None):
     """Convenient function for performing a FFT along an axis.
 
     Parameters
@@ -119,8 +120,13 @@ def FFT(data, axis):
         The Fourier transform of the data along the specified axis. The array
         has the same shape as the original data, with the same ordering.
     """
+    if taper is not None:
+        window = dspec.gen_window(taper, data.shape[axis])
+        window = fftshift(fft(window)).reshape(1,-1)
+    else:
+        window = np.ones(data.shape)
 
-    return fftshift(fft(data, axis=axis), axis)
+    return window * fftshift(fft(data, axis=axis), axis)
 
 def fourier_freqs(times):
     """A function for generating Fourier frequencies given 'times'.
