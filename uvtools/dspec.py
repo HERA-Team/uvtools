@@ -60,7 +60,134 @@ def calc_width(filter_size, real_delta, nsamples):
         lthresh = nsamples
     return (uthresh, lthresh)
 
+## TODO: Finish this function
+def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppression_factors, method, 2dfilter,
+                   fitting_options, taper='none', cache={}):
 
+                   '''Apply an arbitrary fourier filter to data (not necessarily high pass).
+                   Parameters
+                   -----------
+                   x: array-like
+                      Array of floats giving x-values of data. Depending on the chosen method, this data may need to be equally spaced.
+                      If performing a 2d clean, a 2-list or 2-tuple of np.ndarrays with x-values should be provided.
+                    data: array-like
+                        1d or 2d numpy.ndarray of complex data to filter.
+                    wgts: array-like
+                        1d or 2d numpy.ndarray of real weights. Must be the same shape as data.
+                    filter_centers: array-like
+                        if not 2dfilter: 1d np.ndarray or list or tuple of floats
+                        specifying centers of rectangular fourier regions to filter.
+                        If 2dfilter: should be a 2-list or 2-tuple. Each element
+                        should be a list or tuple or np.ndarray of floats that include
+                        centers of rectangular regions to filter.
+                    filter_half_widths: array-like
+                        if not 2dfilter: 1d np.ndarray or list of tuples of floats
+                        specifying the half-widths of rectangular fourier regions to filter.
+                        if 2dfilter: should be a 2-list or 2-tuple. Each element should
+                        be a list or tuple or np.ndarray of floats that include centers
+                        of rectangular bins.
+                    suppression_factors: array-like
+                        if not 2dfilter: 1d np.ndarray or list of tuples of floats
+                        specifying the fractional residuals of model to leave in the data.
+                        For example, 1e-6 means that the filter will leave in 1e-6 of data fitted
+                        by the model.
+                        if 2dfilter: should be a 2-list or 2-tuple. Each element should
+                        be a list or tuple or np.ndarray of floats that include centers
+                        of rectangular bins.
+                    method: string or list
+                        the method to use for foreground filtering. Can be
+                        'clean': use the CLEAN algorithm in aipy.deconv.clean
+                        'dayenu': use a lazy inverse covariance filter.
+                        'dft_interp': interpolate model with DFT modes.
+                        'dpss_interp': interpolate a model with DPSS modes.
+                        if 2dfilter is true, provide a 2-list or 2-tuple
+                        with mode that you want to use over each dimension.
+                    2dfilter: bool
+                        specify whether filtering will be performed in 2d or 1d.
+                        If filter is 1d, it will be applied across the -1 axis.
+                        2dfilt is only supported for `clean`.
+                    taper: string or list, optional
+                        multiplicative taper
+                        if 2dfilter, must provide a 2-tuple or list specifying
+                        taper on each dimension that will be filtered.
+                    fitting_options: dict
+                        dictionary with options for fitting techniques.
+                        if 2dfilt, should be a 2-tuple or 2-list
+                        of dictionaries.
+                        The dictionary for each dimension must specify the following.
+                    basis_options: dictionary
+                        method specific options are
+                            * 'dft':
+                                'fundamental_period': float
+                                    the fundamental_period of dft modes to fit. The number of
+                                    modes fit within each window in 'filter_half_widths' will
+                                    equal fw / fundamental_period
+                                'fit_method': string
+                                    method to use for dft fitting, options are
+                                    'leastsq' which is iterative or 'matrix'
+                                    which computes and applies a linear leastsq matrix.
+                                    'matrix' involves calculating an inverse and is slower.
+                            * 'dayenu':
+                                'deconv_model': string,
+                                    set with a string specifying
+                                    'dft', 'dpss', or 'clean', setting a
+                                    method and/or basis for modeling  the difference
+                                    between data and data with dayenu applied.
+                                    data and dayenu residuals using DPSS,
+                                    DFT, or CLEAN interpolation.
+                                    If this is set to True, user must
+                                    specify options from 'dft' and 'dpss' and/or 'clean'
+                                    listed below.
+                            * 'dpss':
+                                'eigenval_cutoff': array-like
+                                    list of sinc_matrix eigenvalue cutoffs to use for included dpss modes.
+                                'nterms': array-like
+                                    list of integers specifying the order of the dpss sequence to use in each
+                                    filter window.
+                                'edge_supression': array-like
+                                    specifies the degree of supression that must occur to tones at the filter edges
+                                    to calculate the number of DPSS terms to fit in each sub-window.
+                                'avg_suppression': list of floats, optional
+                                    specifies the average degree of suppression of tones inside of the filter edges
+                                    to calculate the number of DPSS terms. Similar to edge_supression but instead checks
+                                    the suppression of a since vector with equal contributions from all tones inside of the
+                                    filter width instead of a single tone.
+                                'fit_method': string
+                                    method to use for dpss fitting, options are
+                                    'leastsq' which is iterative or 'matrix'
+                                    which computes and applies a linear leastsq matrix.
+                                    'matrix' involves calculating an inverse and is slower.
+                            *'clean':
+                                 'tol': float,
+                                    clean tolerance. 1e-9 is standard.
+                                 'maxiter': int
+                                    maximum number of clean iterations. 100 is standard.
+                                 'pad': int or array-like
+                                    if filt2d is false, just an integer specifing the number of channels
+                                    to pad for CLEAN (sets Fourier interpolation resolution).
+                                    if filt2d is true, specify 2-tuple in both dimensions.
+                                 'filt2d_mode': string
+                                    if 'rect', clean withing a rectangular region of Fourier space given
+                                    by the intersection of each set of windows.
+                                    if 'plus' only clean the plus-shaped shape along
+                                    zero-delay and fringe rate.
+                                 ''
+                    cache: dict, optional
+                        dictionary for caching fitting matrices.
+
+
+                    Returns
+                    ---------
+                        d_mdl: array-like
+                            model -- best fit real-space model of data.
+                        d_res: array-like
+                            residual -- difference of data and model, nulled at flagged channels
+                        info: dictionary (1D case) or list of dictionaries (2D case) with CLEAN metadata
+                   '''
+                   if mode ==
+
+
+#TODO: Add DPSS interpolation function to this.
 def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False, tol=1e-9, window='none',
                              skip_wgt=0.1, maxiter=100, gain=0.1, filt2d_mode='rect', alpha=0.5,
                              edgecut_low=0, edgecut_hi=0, add_clean_residual=False, mode='clean', cache={},
@@ -1474,11 +1601,11 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache={}, eigenval_cuto
 
     Parameters
     ----------
-    x: array of floats
+    x: array-like
         x values to evaluate operator at
-    filter_centers: list of floats
+    filter_centers: array-like
         list of floats of centers of delay filter windows in nanosec
-    filter_half_widths: list of floats
+    filter_half_widths: array-like
         list of floats of half-widths of delay filter windows in nanosec
     cache: dictionary, optional
         dictionary for storing operator matrices with keys
@@ -1512,6 +1639,9 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache={}, eigenval_cuto
 
     #check that xs are equally spaced.
     if not np.all(np.diff(x) == np.mean(np.diff(x))):
+        #for now, don't support DPSS iterpolation unless x is equally spaced.
+        #In principal, I should be able to compute off-grid DPSS points using
+        #the fourier integral of the DPSWF
         raise ValueError('x values must be equally spaced for DPSS operator!')
     opkey = ('dpss_operator',) + tuple(x) + tuple(filter_centers) + tuple(filter_half_widths)+(eigenval_cutoff,)
     if not opkey in cache:
