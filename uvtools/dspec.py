@@ -61,7 +61,7 @@ def calc_width(filter_size, real_delta, nsamples):
     return (uthresh, lthresh)
 
 ## TODO: Finish this function
-def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppression_factors, method, 2dfilter,
+def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppression_factors, mode, 2dfilter,
                    fitting_options, taper='none', cache={}):
 
                    '''Apply an arbitrary fourier filter to data (not necessarily high pass).
@@ -122,7 +122,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                     the fundamental_period of dft modes to fit. The number of
                                     modes fit within each window in 'filter_half_widths' will
                                     equal fw / fundamental_period
-                                'fit_method': string
+                                'method': string
                                     method to use for dft fitting, options are
                                     'leastsq' which is iterative or 'matrix'
                                     which computes and applies a linear leastsq matrix.
@@ -152,7 +152,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                     to calculate the number of DPSS terms. Similar to edge_supression but instead checks
                                     the suppression of a since vector with equal contributions from all tones inside of the
                                     filter width instead of a single tone.
-                                'fit_method': string
+                                'method': string
                                     method to use for dpss fitting, options are
                                     'leastsq' which is iterative or 'matrix'
                                     which computes and applies a linear leastsq matrix.
@@ -184,7 +184,40 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             residual -- difference of data and model, nulled at flagged channels
                         info: dictionary (1D case) or list of dictionaries (2D case) with CLEAN metadata
                    '''
-                   if mode ==
+                   ndim_data = len(data.shape)
+                   ndim_wgts = len(wgts.shape)
+                   if not ndim_wgts == ndim_data:
+                       raise ValueError("Number of dimensions in weights, %d does not equal number of dimensions in data, %d!"%(ndim_wgts, ndim_data))
+                   #The core code of this method will always assume 2d data
+                   if ndim_data == 1:
+                       data = np.asarray([data])
+                       wgts = np.asarray([wgts])
+                   if mode == 'dayenu':
+                       if filter2d:
+                           fd = [0, 1]
+                       residual, info  dayenu_filter(x=x, data=data, wgts=wgts, filter_dimensions=fd,
+                                                     filter_centers=filter_centers, filter_half_widths=filter_half_widths,
+                                                     filter_factors=suppression_factors, cache=cache)
+                       model = data - residual
+                       if 'deconv_model' in fitting_options.keys():
+                           model, _, _ = fourier_filter(x=x, data=model, wgts=wgts, filter_centers=filter_centers,
+                                                        filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
+                                                        method=fitting_options['deconv_model'], filter2d=filter2d, fitting_options=fitting_options,
+                                                        taper=taper, cache=cache)
+                    elif mode == 'dft' or mode=='dpss':
+                        model, resid, info = fit_basis_1d(x=x, y=data, w=wgts, suppression_factors=suppression_factors,
+                                                          basis_option=fitting_options, method=fitting_options['method'], basis=mode, cache=cache)
+                    elif mode == 'clean':
+
+
+
+
+
+
+
+
+
+
 
 
 #TODO: Add DPSS interpolation function to this.
@@ -1459,7 +1492,7 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
 
     return mdl_array, cn_array, inp_data
 
-def fit_basis_1d(x, y, w, basis_options, method='leastsq', basis='dft', cache={}):
+def fit_basis_1d(x, y, w, suppression_factors=None, basis_options, method='leastsq', basis='dft', cache={}):
     """
     A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
     y_model = A @ c
@@ -1473,6 +1506,13 @@ def fit_basis_1d(x, y, w, basis_options, method='leastsq', basis='dft', cache={}
             y-axis of data to fit.
         w: array-like
             data weights.
+        suprression_factors: array-like, optional
+            list of floats for each basis function denoting the fraction of
+            of each basis element that should be present in the fitted model
+            If none provided, model will include 100% of each mode.
+            It is sometimes useful, for renormalization reversability
+            to only include 1-\epsilon where \epsilon is a small number of
+            each mode in the model.
         basis_options: dictionary
             basis specific options for fitting. The two bases currently supported are dft and dpss whose options
             are as follows:
@@ -1524,18 +1564,29 @@ def fit_basis_1d(x, y, w, basis_options, method='leastsq', basis='dft', cache={}
                 'fitting_matrix' with the matrix used for deriving the model
                 from the data.
     """
+    info = copy.deepcopy(basis_options)
     basis_options['cache'] = cache
     if basis.lower() == 'dft':
-        amat = fourier_interpolation_operator(x, *basis_options)
+        amat = dft_operator(x, *basis_options)
     elif basis.lower() == 'dpss':
-        amat = dpss_operator(x, *basis_options)
+        nterms, amat = dpss_operator(x, *basis_options)
+        info['nterms'] = nterms
     else:
         raise ValueError("Specify a fitting basis in supported bases: ['dft', 'dpss']")
-    info = copy.deepcopy(basis_options)
+    if suppression_factors is None:
+        vector = np.ones(amat.shape[0])
+    else:
+        if basis.lower() == 'dft':
+            suppression_vector =  np.hstack([1-sf * np.ones(np.ceil(fw * fit_options['fundamental_period']))\
+                                             for sf,fw in zip(filter_half_widths, suppression_factors])
+        elif basis.lower() == 'dpss':
+            suppression_vector = np.hstack([1-sf * np.ones(nterm) for nterm in nterms])
     info['method'] = method
     info['basis'] = basis
     info['filter_centers'] = filter_centers
     info['filter_half_widths'] = filter_half_widths
+    info['amat'] = amat
+    infot['suppression_vector'] = suppression_vector
     wmat = np.atleast_2d(w)
     if mode == 'leastsq':
         a = wmat.T * amat.T
@@ -1547,7 +1598,7 @@ def fit_basis_1d(x, y, w, basis_options, method='leastsq', basis='dft', cache={}
         cn_out = fmat @ y
     else:
         raise ValueError("mode must be in ['leastsq', 'matrix']")
-    model = amat @ cn_out
+    model = amat @ (suppression_vector * cn_out)
     resid = y - model
     return model, resid, info
 
@@ -1626,8 +1677,13 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache={}, eigenval_cuto
 
     Returns
     ----------
-    Design matrix for DPSS fitting.   Ndata x (Nfilter_window * nterm)
-    transforming from DPSS modes to data.
+    2-tuple
+    First element:
+        Design matrix for DPSS fitting.   Ndata x (Nfilter_window * nterm)
+        transforming from DPSS modes to data.
+    Second element:
+        list of integers with number of terms for each fourier window specified by filter_centers
+        and filter_half_widths
     """
     #conditions for halting.
     none_criteria_labels = ['eigenval_cutoff', 'nterms', 'edge_suppression', 'avg_suppression']
@@ -1677,7 +1733,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache={}, eigenval_cuto
         amat = []
         for fc, fw, nt in zip(filter_centers,filter_half_widths, nterms):
             amat.append(np.exp(-2j * np.pi * (yg[:,:nt]-xc) * fc ) * windows.dpss(nf, nf * df * fw, nt).T )
-        cache[opkey] = np.hstack(amat)
+        cache[opkey] = ( np.hstack(amat), nterms )
     return cache[opkey]
 
 
