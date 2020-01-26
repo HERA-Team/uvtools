@@ -60,15 +60,15 @@ def calc_width(filter_size, real_delta, nsamples):
         lthresh = nsamples
     return (uthresh, lthresh)
 
-def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppression_factors, mode, 2dfilter,
+def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppression_factors, mode, filter2d,
                    fitting_options, cache={}, filter_dim=1):
-
-                   '''Your one-stop-shop for fourier filtering.
+                   '''
+                   Your one-stop-shop for fourier filtering.
                    We don't use the other filtering functions anymore.
                    It can filter 1d or 2d data with x-axis(es) x and wgts in fourier domain
                    rectangular windows centered at filter_centers or filter_half_widths
                    perform filtering along any of 2 dimensions in 2d or 1d!
-                   the 'dft' and 'dayenu' modes support irregularly sampled data. 
+                   the 'dft' and 'dayenu' modes support irregularly sampled data.
                    -----------
                    x: array-like
                       Array of floats giving x-values of data. Depending on the chosen method, this data may need to be equally spaced.
@@ -219,7 +219,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                    if mode == 'dayenu':
                        if filter2d:
                            fd = [0, 1]
-                       residual, info  dayenu_filter(x=x, data=data, wgts=wgts, filter_dimensions=fd,
+                       residual, info = dayenu_filter(x=x, data=data, wgts=wgts, filter_dimensions=fd,
                                                      filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                                                      filter_factors=suppression_factors, cache=cache)
                        model = data - residual
@@ -228,7 +228,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                                         filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
                                                         method=fitting_options['deconv_model'], filter2d=filter2d, fitting_options=fitting_options,
                                                         taper=taper, cache=cache)
-                    elif mode == 'dft' or mode=='dpss':
+                   elif mode == 'dft' or mode=='dpss':
                         model = np.zeros_like(data)
                         residual = np.zeros_like(resid)
                         fit_method = fitting_options['method']
@@ -255,7 +255,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                                                 filter_half_widths=filter_half_widths[0],
                                                                 suppression_factors=suppression_factors[0],
                                                                 basis_option=fitting_options, method=fit_method, basis=mode, cache=cache)
-                    elif mode == 'clean':
+                   elif mode == 'clean':
                         #Unpack all of the clean parameters from
                         #fourier filter
                         if not 'tol' in fitting_options:
@@ -301,7 +301,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         #arguments for 2d clean should be supplied as
                         #2-list. For code economy, we expand 1d arguments to 2d
                         #including the data and weights to 1 x N arrays.
-                        if not np.all(np.diff(x[0]) == np.mean(np.diff(x[0]))) or
+                        if not np.all(np.diff(x[0]) == np.mean(np.diff(x[0]))):
                             raise ValueError("Data must be equally spaced for CLEAN mode!")
                         if not filt2d:
                             pad = [0, pad]
@@ -312,7 +312,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             filter_centers = [[], copy.deepcopy(filter_centers)]
                             filter_half_widths = [[], copy.deepcopy(filter_half_widths)]
                         else:
-                            if not np.all(np.diff(x[1]) == np.mean(np.diff(x[1]))) or
+                            if not np.all(np.diff(x[1]) == np.mean(np.diff(x[1]))):
                                 raise ValueError("Data must be equally spaced for CLEAN mode!")
                             _x = [np.fft.fftfreq(len(x[m]), x[m][1]-x[m][0]) for m in range(2)]
 
@@ -352,10 +352,10 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         model = np.fft.fft2(_d_cl)
                         residual = np.fft.fft2(_d_res)
                     #transpose back if filtering the 0th dimension.
-                    if not filter2d and filter_dim == 0:
+                   if not filter2d and filter_dim == 0:
                         model = model.T
                         residual = residual.T
-                    return model, residual, info
+                   return model, residual, info
 
 
 #TODO: Add DPSS interpolation function to this.
@@ -1632,7 +1632,7 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
 
 
 def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
-                suppression_factors=None, basis_options,
+                basis_options, suppression_factors=None, 
                 method='leastsq', basis='dft', cache={}):
     """
     A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
@@ -1715,7 +1715,7 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     else:
         if basis.lower() == 'dft':
             suppression_vector =  np.hstack([1-sf * np.ones(np.ceil(fw * fit_options['fundamental_period']))\
-                                             for sf,fw in zip(filter_half_widths, suppression_factors])
+                                             for sf,fw in zip(filter_half_widths, suppression_factors)])
         elif basis.lower() == 'dpss':
             suppression_vector = np.hstack([1-sf * np.ones(nterm) for nterm in nterms])
     info['method'] = method
