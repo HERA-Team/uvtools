@@ -160,18 +160,38 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             *'clean':
                                  'tol': float,
                                     clean tolerance. 1e-9 is standard.
-                                 'maxiter': int
+                                 'maxiter' : int
                                     maximum number of clean iterations. 100 is standard.
                                  'pad': int or array-like
                                     if filt2d is false, just an integer specifing the number of channels
                                     to pad for CLEAN (sets Fourier interpolation resolution).
                                     if filt2d is true, specify 2-tuple in both dimensions.
-                                 'filt2d_mode': string
+                                 'filt2d_mode' : string
                                     if 'rect', clean withing a rectangular region of Fourier space given
                                     by the intersection of each set of windows.
                                     if 'plus' only clean the plus-shaped shape along
                                     zero-delay and fringe rate.
-                                 ''
+                                'edgecut_low' : int, number of bins to consider zero-padded at low-side of the FFT axis,
+                                    such that the windowing function smoothly approaches zero. For 2D cleaning, can
+                                    be fed as a tuple specifying edgecut_low for first and second FFT axis.
+                                'edgecut_hi' : int, number of bins to consider zero-padded at high-side of the FFT axis,
+                                    such that the windowing function smoothly approaches zero. For 2D cleaning, can
+                                    be fed as a tuple specifying edgecut_hi for first and second FFT axis.
+                                'add_clean_residual' : bool, if True, adds the CLEAN residual within the CLEAN bounds
+                                    in fourier space to the CLEAN model. Note that the residual actually returned is
+                                    not the CLEAN residual, but the residual in input data space.
+                                'tol' : CLEAN algorithm convergence tolerance (see aipy.deconv.clean)
+                                'taper' : window function for filtering applied to the filtered axis.
+                                    See dspec.gen_window for options. If clean2D, can be fed as a list
+                                    specifying the window for each axis in data.
+                                'skip_wgt' : skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
+                                    Model is left as 0s, residual is left as data, and info is {'skipped': True} for that
+                                    time. Only works properly when all weights are all between 0 and 1.
+                                'maxiter': Maximum number of iterations for aipy.deconv.clean to converge.
+                                'gain': The fraction of a residual used in each iteration. If this is too low, clean takes
+                                    unnecessarily long. If it is too high, clean does a poor job of deconvolving.
+                                'alpha': float, if window is 'tukey', this is its alpha parameter.
+
                     cache: dict, optional
                         dictionary for caching fitting matrices.
 
@@ -208,16 +228,103 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         model, resid, info = fit_basis_1d(x=x, y=data, w=wgts, suppression_factors=suppression_factors,
                                                           basis_option=fitting_options, method=fitting_options['method'], basis=mode, cache=cache)
                     elif mode == 'clean':
+                        #Unpack all of the clean parameters from
+                        #fourier filter
+                        if not 'tol' in fitting_options:
+                            fitting_options['tol'] = 1e-9
+                        else:
+                            tol = fitting_options['tol']
+                        if not 'taper' in fitting_options:
+                            taper_opt = 'none'
+                        else:
+                            taper_opt = fitting_options['taper']
+                        if not 'alpha' in fitting_options:
+                            alpha = 0.5
+                        else:
+                            alpha = fitting_options['alpha']
+                        if not 'maxiter' in fitting_options:
+                            maxiter = 100
+                        else:
+                            maxiter = fitting_options['maxiter']
+                        if not 'gain' in fitting_options:
+                            gain = 0.1
+                        else:
+                            gain = fitting_options['gain']
+                        if not 'edgecut_low' in fitting_options:
+                            edgecut_low = 0
+                        else:
+                            edgecut_low = fitting_options['edgecut_low']
+                        if not 'edgecut_hi' in fitting_options:
+                            edgecut_hi = 0
+                        else:
+                            edgecut_hi = fitting_options['edgecut_hi']
+                        if not 'pad' in fitting_options:
+                            pad = 0
+                        else:
+                            pad = fitting_options['pad']
+                        if not 'skip_wgt' in fitting_options:
+                            skip_wgt = 0.1
+                        else:
+                            skip_wgt = fitting_options['skip_wgt']
+                        if not 'add_clean_residual' in fitting_options:
+                            add_clean_residual = False
+                        else:
+                            add_clean_residual = fitting_options['add_clean_residual']
+                        #arguments for 2d clean should be supplied as
+                        #2-list. For code economy, we expand 1d arguments to 2d
+                        #including the data and weights to 1 x N arrays.
+                        if not np.all(np.diff(x[0]) == np.mean(np.diff(x[0]))) or
+                            raise ValueError("Data must be equally spaced for CLEAN mode!")
+                        if not filt2d:
+                            pad = [0, pad]
+                            _x = [np.array([0]), np.fft.fftfreq(len(x), x[1]-x[0])]
+                            x = [np.array([0]), x]
+                            edgecut_hi = [ 0, edgecut_hi ]
+                            edgecut_low = [ 0, edgecut_low ]
+                            filter_centers = [[], copy.deepcopy(filter_centers)]
+                            filter_half_widths = [[], copy.deepcopy(filter_half_widths)]
+                        else:
+                            if not np.all(np.diff(x[1]) == np.mean(np.diff(x[1]))) or
+                                raise ValueError("Data must be equally spaced for CLEAN mode!")
+                            _x = [np.fft.fftfreq(len(x[m]), x[m][1]-x[m][0]) for m in range(2)]
 
+                        data_pad = np.pad(data, [(pad[m], pad[m]) for m in range(2)], mode='constant')
+                        wgts_pad = np.pad(wgts, [(pad[m], pad[m]) for m in range(2)], mode='constant')
+                        taper = [gen_window(taper_opt, data.shape[m], alpha=alpha,
+                                           edgecut_low=edgecut_low[m], edgecut_hi=edgecut_hi[m]) for m in range(2)]
+                        taper = [np.pad(taper, [(pad[m], pad[m])], mode='constant') for m in range(2)]
+                        area = np.zeros((len(x[m]) + 2*pad[m] for m in range(2)))
+                        #set area equal to one inside of filtering regions
+                        for m in range(2):
+                            for fc, fw in zip(filter_centers[m], filter_half_widths[m]):
+                                area[np.abs(delays - fc)<=fw] = 1.
+                            area = area.T
+                        area=area.T
+                        area = np.fft.fftshift(area)
+                        _wgts = np.fft.ifft2(taper[0] * wgts_pad * taper[1])
+                        _data = np.fft.ifft2(taper[0] * data_pad * wgts * taper[1])
+                        _d_cl = np.zeros_like(_data)
+                        _d_res = np.zeros_like(_data)
+                        if not filt2d:
+                            info = {}
+                            for i, _d, _w in zip(range(data.shape[0]), _data, _wgts):
+                                if _w[0] < skip_wgt:
+                                    _d_cl[i] = 0.
+                                    _d_res[i] = _d
+                                _d_cl[i], _info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False,
+                                                                maxiter=maxiter, gain=gain)
+                                _d_res = _info['res']
+                                del _info['res']
+                                info.append(_info)
+                        elif filt2d:
+                                _d_cl, info = aipy.deconv.clean(_data, _wgts, area=area, tol=tol, stop_if_div=False,
+                                                                maxiter=maxiter, gain=gain)
+                                _d_res = info['res']
+                                del(info['res'])
+                        model = np.fft.fft2(_d_cl)
+                        residual = np.fft.fft2(_d_res)
 
-
-
-
-
-
-
-
-
+                    return model, residual, info
 
 
 #TODO: Add DPSS interpolation function to this.
