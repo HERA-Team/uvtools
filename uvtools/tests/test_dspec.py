@@ -64,6 +64,11 @@ class TestMethods(unittest.TestCase):
         fg, dg = np.meshgrid(freqs-150e6, np.arange(-10, 10) * (1./DF/NF) , indexing='ij')
         y = np.exp(2j * np.pi * fg * dg )
         np.testing.assert_allclose(fop, y)
+        fg, dg = np.meshgrid(freqs-150e6, np.arange(-20, 20) * (1./DF/NF/2) , indexing='ij')
+        y1 = np.exp(2j * np.pi * fg * dg )
+        fop1 = dspec.dft_operator(freqs, 0., 1e-6, fundamental_period=200*1e5)
+        #check fundamental period x 2 works alright.
+        np.testing.assert_allclose(fop1, y1)
 
     def test_delay_filter_2D(self):
         NCHAN = 128
