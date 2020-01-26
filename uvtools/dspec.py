@@ -60,12 +60,15 @@ def calc_width(filter_size, real_delta, nsamples):
         lthresh = nsamples
     return (uthresh, lthresh)
 
-## TODO: Finish this function
 def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppression_factors, mode, 2dfilter,
-                   fitting_options, taper='none', cache={}):
+                   fitting_options, cache={}, filter_dim=1):
 
-                   '''Apply an arbitrary fourier filter to data (not necessarily high pass).
-                   Parameters
+                   '''Your one-stop-shop for fourier filtering.
+                   We don't use the other filtering functions anymore.
+                   It can filter 1d or 2d data with x-axis(es) x and wgts in fourier domain
+                   rectangular windows centered at filter_centers or filter_half_widths
+                   perform filtering along any of 2 dimensions in 2d or 1d!
+                   the 'dft' and 'dayenu' modes support irregularly sampled data. 
                    -----------
                    x: array-like
                       Array of floats giving x-values of data. Depending on the chosen method, this data may need to be equally spaced.
@@ -102,14 +105,9 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         'dpss_interp': interpolate a model with DPSS modes.
                         if 2dfilter is true, provide a 2-list or 2-tuple
                         with mode that you want to use over each dimension.
-                    2dfilter: bool
+                    filter2d: bool
                         specify whether filtering will be performed in 2d or 1d.
                         If filter is 1d, it will be applied across the -1 axis.
-                        2dfilt is only supported for `clean`.
-                    taper: string or list, optional
-                        multiplicative taper
-                        if 2dfilter, must provide a 2-tuple or list specifying
-                        taper on each dimension that will be filtered.
                     fitting_options: dict
                         dictionary with options for fitting techniques.
                         if 2dfilt, should be a 2-tuple or 2-list
@@ -118,10 +116,12 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                     basis_options: dictionary
                         method specific options are
                             * 'dft':
-                                'fundamental_period': float
+                                'fundamental_period': float or 2-tuple
                                     the fundamental_period of dft modes to fit. The number of
                                     modes fit within each window in 'filter_half_widths' will
-                                    equal fw / fundamental_period
+                                    equal fw / fundamental_period.
+                                    if filter2d, must provide a 2-tuple with fundamental_period
+                                    of each dimension.
                                 'method': string
                                     method to use for dft fitting, options are
                                     'leastsq' which is iterative or 'matrix'
@@ -195,7 +195,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                     cache: dict, optional
                         dictionary for caching fitting matrices.
 
-
+                    filter_dim, int optional
+                        specify dimension to filter.
                     Returns
                     ---------
                         d_mdl: array-like
@@ -212,6 +213,9 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                    if ndim_data == 1:
                        data = np.asarray([data])
                        wgts = np.asarray([wgts])
+                   if not filter2d and filter_dim == 0:
+                       data = copy.deepcopy(data).T
+                       wgts = copy.deepcopy(wgts).T
                    if mode == 'dayenu':
                        if filter2d:
                            fd = [0, 1]
@@ -225,8 +229,32 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                                         method=fitting_options['deconv_model'], filter2d=filter2d, fitting_options=fitting_options,
                                                         taper=taper, cache=cache)
                     elif mode == 'dft' or mode=='dpss':
-                        model, resid, info = fit_basis_1d(x=x, y=data, w=wgts, suppression_factors=suppression_factors,
-                                                          basis_option=fitting_options, method=fitting_options['method'], basis=mode, cache=cache)
+                        model = np.zeros_like(data)
+                        residual = np.zeros_like(resid)
+                        fit_method = fitting_options['method']
+                        if not filt2d:
+                            x = [0, x]
+                            filter_centers = [[], copy.deepcopy(filter_centers)]
+                            filter_half_widths = [[], copy.deepcopy(filter_half_widths)]
+                            suppression_factors = [[], copy.deepcopy(suppression_factors)]
+                        else:
+                            if mode == 'dft':
+                                fitting_options = [{'fundamental_period': fp} for fp in fitting_options['fundamental_period']]
+                            elif mode == 'dps':
+                                fitting_options = [copy.deepcopy(fitting_options) for m in range(2)]
+                        #filter -1 dimension
+                        for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
+                            model[i], residual[i], _info = fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
+                                                            filter_half_widths=filter_half_widths[1],
+                                                            suppression_factors=suppression_factors[1],
+                                                            basis_option=fitting_options, method=fit_method, basis=mode, cache=cache)
+                        #and if filter2d, filter the 0 dimension. Note that we feed in 'model' here.
+                        if filter2d:
+                            for i, _y, _w, in zip(range(data.shape[1]), model.T, wgts.T):
+                                model.T[i], residual.T[i], _info = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
+                                                                filter_half_widths=filter_half_widths[0],
+                                                                suppression_factors=suppression_factors[0],
+                                                                basis_option=fitting_options, method=fit_method, basis=mode, cache=cache)
                     elif mode == 'clean':
                         #Unpack all of the clean parameters from
                         #fourier filter
@@ -323,7 +351,10 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                 del(info['res'])
                         model = np.fft.fft2(_d_cl)
                         residual = np.fft.fft2(_d_res)
-
+                    #transpose back if filtering the 0th dimension.
+                    if not filter2d and filter_dim == 0:
+                        model = model.T
+                        residual = residual.T
                     return model, residual, info
 
 
@@ -1599,7 +1630,10 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
 
     return mdl_array, cn_array, inp_data
 
-def fit_basis_1d(x, y, w, suppression_factors=None, basis_options, method='leastsq', basis='dft', cache={}):
+
+def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
+                suppression_factors=None, basis_options,
+                method='leastsq', basis='dft', cache={}):
     """
     A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
     y_model = A @ c
@@ -1613,6 +1647,10 @@ def fit_basis_1d(x, y, w, suppression_factors=None, basis_options, method='least
             y-axis of data to fit.
         w: array-like
             data weights.
+        filter_centers': array-like
+            list of floats specifying the centers of fourier windows with which to fit signals
+        filter_half_widths': array-like
+            list of floats specifying the half-widths of fourier windows to model.
         suprression_factors: array-like, optional
             list of floats for each basis function denoting the fraction of
             of each basis element that should be present in the fitted model
@@ -1624,19 +1662,11 @@ def fit_basis_1d(x, y, w, suppression_factors=None, basis_options, method='least
             basis specific options for fitting. The two bases currently supported are dft and dpss whose options
             are as follows:
                 * 'dft':
-                    * 'filter_centers': array-like
-                        list of floats specifying the centers of fourier windows with which to fit signals
-                    * 'filter_half_widths': array-like
-                        list of floats specifying the half-widths of fourier windows to use as a fitting basis.
                     * 'fundamental_period': float
                         the fundamental_period of dft modes to fit. The number of
                         modes fit within each window in 'filter_half_widths' will
                         equal fw / fundamental_period
                 * 'dpss':
-                    *'filter_centers': array-like
-                        list of floats specifying the centers of fourier windows with which to fit signals
-                    *'filter_half_widths': array-like
-                        list of floats specifying the half-widths of fourier windows to model.
                     The basis_options must include one and only one of the four options
                     for specifying how to terminate the dpss series in each filter window.
                     *'eigenval_cutoff': array-like
