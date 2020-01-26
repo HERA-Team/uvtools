@@ -60,15 +60,28 @@ class TestMethods(unittest.TestCase):
         NF = 100
         DF = 100e3
         freqs = np.arange(-NF/2, NF/2)*DF + 150e6
+        #test dft_operator by checking whether
+        #it gives us expected values.
         fop = dspec.dft_operator(freqs, 0., 1e-6)
         fg, dg = np.meshgrid(freqs-150e6, np.arange(-10, 10) * (1./DF/NF) , indexing='ij')
         y = np.exp(2j * np.pi * fg * dg )
         np.testing.assert_allclose(fop, y)
         fg, dg = np.meshgrid(freqs-150e6, np.arange(-20, 20) * (1./DF/NF/2) , indexing='ij')
+        #check fundamental period x 2 works alright
+        #and gives us expected values
         y1 = np.exp(2j * np.pi * fg * dg )
         fop1 = dspec.dft_operator(freqs, 0., 1e-6, fundamental_period=200*1e5)
-        #check fundamental period x 2 works alright.
         np.testing.assert_allclose(fop1, y1)
+
+    def test_dpss_operator(self):
+        #test that an error is thrown when we specify more then one
+        #termination method.
+        NF = 100
+        DF = 100e3
+        freqs = np.arange(-NF/2, NF/2)*DF + 150e6
+        freqs_bad = freqs[[0, 12, 14, 18, 22]]
+        self.assertRaises(ValueError, dspec.dpss_operator, x=freqs_bad, filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5])
+        self.assertRaises(ValueError, dspec.dpss_operator, x = freqs , filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5], avg_suppression=[1e-12])
 
     def test_delay_filter_2D(self):
         NCHAN = 128

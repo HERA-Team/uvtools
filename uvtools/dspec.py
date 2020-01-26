@@ -1632,7 +1632,7 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
 
 
 def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
-                basis_options, suppression_factors=None, 
+                basis_options, suppression_factors=None,
                 method='leastsq', basis='dft', cache={}):
     """
     A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
@@ -1778,7 +1778,7 @@ def fit_solution_matrix(weights, design_matrix, cache={}):
 
 
 def dpss_operator(x, filter_centers, filter_half_widths, cache={}, eigenval_cutoff=None,
-        edge_suppression=None, terms=None, xc=None):
+        edge_suppression=None, nterms=None, avg_suppression=None, xc=None):
     """
     Calculates DPSS operator with multiple delay windows to fit data. Frequencies
     must be equally spaced (unlike Fourier operator). Users can specify how the
@@ -1824,11 +1824,13 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache={}, eigenval_cuto
     """
     #conditions for halting.
     none_criteria_labels = ['eigenval_cutoff', 'nterms', 'edge_suppression', 'avg_suppression']
-    none_criteria = np.asarray([eigenval_cutoff is None, nterms is None, edge_suppression is None]).astype(bool)
+    none_criteria = np.asarray([eigenval_cutoff is None, nterms is None,
+    edge_suppression is None, avg_suppression is None]).astype(bool)
     #only allow the user to specify a single condition for cutting off DPSS modes to fit.
-    if len(none_criteria[~none_criteria]) != 1:
-        raise ValueError('Must only provide a single series cutoff condition. %d were provided: %s '%str(len(none_criteria[~none_criteria],
-                                                                                                 none_criteria_labels[~none_criteria])))
+    if np.count_nonzero(none_criteria) != 1:
+        provided_crit = [ label for m,label in enumerate(none_criteria_labels) if not none_criteria ]
+        raise ValueError('Must only provide a single series cutoff condition. %d were provided: %s '%(str(np.count_nonzero(none_criteria)),
+                                                                                                 str(provided_crit)))
 
     #check that xs are equally spaced.
     if not np.all(np.diff(x) == np.mean(np.diff(x))):
