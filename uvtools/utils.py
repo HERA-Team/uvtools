@@ -2,6 +2,9 @@ from numpy.fft import fft, fftshift
 import numpy as np
 import glob
 
+# for checking UVData pair metadata in plot.plot_diff_x functions
+class MetadataError(ValueError):
+    pass
 
 def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flatten=False):
     """
@@ -166,33 +169,40 @@ def check_uvd_pair_metadata(uvd1, uvd2):
     uvd1, uvd2 : pyuvdata.UVData
         UVData objects containing the visibilities that are being compared
         have sufficiently similar metadata.
-    
     """
     # make sure that both UVData objects have the same number of blts/freqs
-    assert uvd1.time_array.size == uvd2.time_array.size, \
-            "The number of baseline-times disagree."
+    if not uvd1.time_array.size == uvd2.time_array.size:
+        raise MetadataError("The number of baseline-times disagree.")
 
-    assert uvd1.freq_array.size == uvd2.freq_array.size, \
-            "The number of frequencies disagree."
+    if not uvd1.freq_array.size == uvd2.freq_array.size:
+        raise MetadataError("The number of frequencies disagree.")
 
     # helper function; mean separation in array values for two arrays x1, x2
     dx = lambda x1, x2 : 0.5 * (np.mean(np.diff(x1)) + np.mean(np.diff(x2)))
 
     t1vals = np.unique(uvd1.time_array)
     t2vals = np.unique(uvd2.time_array)
-    assert np.all(np.isclose(t1vals, t2vals, rtol=0, 
-                             atol=dx(t1vals, t2vals))), \
+    if not np.all(
+        np.isclose(t1vals, t2vals, rtol=0, atol=dx(t1vals, t2vals))
+    ):
+        raise MetadataError(
             "Time values disagree more than the mean integration time."
+        )
 
     f1vals = uvd1.freq_array[0]
     f2vals = uvd2.freq_array[0]
-    assert np.all(np.isclose(f1vals, f2vals, atol=dx(f1vals, f2vals))), \
+    if not np.all(np.isclose(f1vals, f2vals, atol=dx(f1vals, f2vals))):
+        raise MetadataError(
             "Frequency values disagree more than the mean channel width."
+        )
 
     bls1 = uvd1.uvw_array
     bls2 = uvd2.uvw_array
-    assert np.all(np.isclose(bls1, bls2)), \
-            "Baseline arrays do not agree."
+    if not np.all(np.isclose(bls1, bls2)):
+        raise MetadataError("Baseline arrays do not agree.")
+
+    if not uvd1.vis_units == uvd2.vis_units:
+        raise MetadataError("The visibility units do not agree.")
 
 def diff(vis1, vis2, mode):
     """Calculate a specified type of difference between two visibilities.
