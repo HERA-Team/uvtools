@@ -73,7 +73,7 @@ class TestMethods(unittest.TestCase):
         y1 = np.exp(2j * np.pi * fg * dg )
         fop1 = dspec.dft_operator(freqs, 0., 1e-6, fundamental_period=200*1e5)
         np.testing.assert_allclose(fop1, y1)
-        
+
     def test_dpss_operator(self):
         #test that an error is thrown when we specify more then one
         #termination method.
@@ -103,6 +103,33 @@ class TestMethods(unittest.TestCase):
         dpss_mat = windows.dpss(NF, NF * DF * 100e-9, ncolmax).T
         for m in range(ncolmax):
             np.testing.assert_allclose(amat4[:,m], dpss_mat[:,m])
+
+
+    def test_fit_solution_matrix(self):
+        #test for dft and dpss
+        fs = np.arange(-50,50)
+        #here is some underlying data
+        data = np.exp(2j * np.pi * 3.5/50. * fs) + 5*np.exp(2j * np.pi * 2.1/50. * fs)
+        data += np.exp(-2j * np.pi * 0.7/50. * fs) + 5*np.exp(2j * np.pi * -1.36/50. * fs)
+        #here are some weights with flags
+        wgts = np.ones_like(data)
+        wgts[6] = 0
+        wgts[17] = 0
+        dw = data*wgts
+        #generate fits for DPSS and DFT.
+        amat_dft = dspec.dft_operator(fs, [0.], [4. / 50.], fundamental_period=140.)
+        amat_dpss,_ = dspec.dpss_operator(fs, [0.], [5. / 50.], eigenval_cutoff=[1e-15])
+        wmat = np.diag(wgts)
+        fitmat_dft = dspec.fit_solution_matrix(wmat, amat_dft)
+        fitmat_dpss = dspec.fit_solution_matrix(wmat, amat_dpss)
+        interp_dft = amat_dft @ fitmat_dft @ dw
+        interp_dpss = amat_dpss @ fitmat_dpss @ dw
+        #DFT interpolation is meh, so we keep our standards low.
+        #DFT interpolation matrices are poorly conditioned so that's also
+        #Downer.
+        nt.assert_true(np.all(np.isclose(interp_dft, data, atol=1e-2)))
+        #DPSS interpolation is clutch. We can make our standards high.
+        nt.assert_true(np.all(np.isclose(interp_dpss, data, atol=1e-6)))
 
     def test_delay_filter_2D(self):
         NCHAN = 128
