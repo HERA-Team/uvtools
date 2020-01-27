@@ -257,7 +257,12 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                                                 basis_option=fitting_options, method=fit_method, basis=mode, cache=cache)
                    elif mode == 'clean':
                         #Unpack all of the clean parameters from
-                        #fourier filter
+                        #fitting_options. This is to preserve default behavior
+                        #in high_pass_fourier_filter and if I had my way,
+                        #I'd get rid of them.
+                        #However, keeping them preserves
+                        #high_pass_fourier_filter default behavior
+                        #for those who were raised on it.
                         if not 'tol' in fitting_options:
                             fitting_options['tol'] = 1e-9
                         else:
@@ -333,10 +338,12 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             if len(area_vecs[m]) == 1:
                                 area_vecs[m][:] = 1.
                         if filt2d_mode == 'rect':
+                            #if filtering windows are rectangular,
+                            #we can just take outer products
                             area = np.outer(area_vecs[0], area_vecs[1])
                         elif filt2d_mode == 'plus' and filter2d:
                             area = np.zeros(data_pad.shape)
-                            #construct and add a 'plus' for each filtering window pair in each direction.
+                            #construct and add a 'plus' for each filtering window pair in each dimension.
                             for fc0, fw0 in zip(filter_centers[0], filter_half_widths[0]):
                                 av0 = ((_x[0] - fc0) <= fw0).astype(float)
                                 for fc1, fw1 in zip(filter_centers[1], filter_half_widths[1]):
@@ -349,8 +356,6 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             area = (area>0.).astype(int)
                         else:
                             raise ValueError("%s is not a valid filt2d_mode! choose from ['rect', 'plus']"%(filt2d_mode))
-
-                        area=area.T
                         area = np.fft.fftshift(area)
                         _wgts = np.fft.ifft2(taper[0] * wgts_pad * taper[1])
                         _data = np.fft.ifft2(taper[0] * data_pad * wgts * taper[1])
@@ -1727,14 +1732,18 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     info = copy.deepcopy(basis_options)
     basis_options['cache'] = cache
     if basis.lower() == 'dft':
-        amat = dft_operator(x, *basis_options)
+        amat = dft_operator(x, filter_centers=filter_centers,
+                            filter_half_widths=filter_half_widths,
+                            **basis_options)
     elif basis.lower() == 'dpss':
-        nterms, amat = dpss_operator(x, *basis_options)
+        amat, nterms = dpss_operator(x, filter_centers=filter_centers,
+                                     filter_half_widths=filter_half_widths,
+                                     **basis_options)
         info['nterms'] = nterms
     else:
         raise ValueError("Specify a fitting basis in supported bases: ['dft', 'dpss']")
     if suppression_factors is None:
-        vector = np.ones(amat.shape[0])
+        suppression_vector = np.ones(amat.shape[1])
     else:
         if basis.lower() == 'dft':
             suppression_vector =  np.hstack([1-sf * np.ones(np.ceil(fw * fit_options['fundamental_period']))\
@@ -1746,18 +1755,18 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     info['filter_centers'] = filter_centers
     info['filter_half_widths'] = filter_half_widths
     info['amat'] = amat
-    infot['suppression_vector'] = suppression_vector
-    wmat = np.atleast_2d(w)
-    if mode == 'leastsq':
-        a = wmat.T * amat.T
+    info['suppression_vector'] = suppression_vector
+    wmat = np.diag(w)
+    if method == 'leastsq':
+        a = np.atleast_2d(w).T * amat
         res = lsq_linear(a, w * y)
         cn_out = res.x
-    elif mode == 'matrix':
-        info['fitting_matrix'] = fmat
+    elif method == 'matrix':
         fmat = fit_solution_matrix(wmat, amat, cache=cache)
+        info['fitting_matrix'] = fmat
         cn_out = fmat @ y
     else:
-        raise ValueError("mode must be in ['leastsq', 'matrix']")
+        raise ValueError("Provided 'method', '%s', is not in ['leastsq', 'matrix']."%(method))
     model = amat @ (suppression_vector * cn_out)
     resid = y - model
     return model, resid, info

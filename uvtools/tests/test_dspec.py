@@ -57,87 +57,6 @@ class TestMethods(unittest.TestCase):
         self.assertAlmostEqual(np.average(dres), 0, 3)
 
 
-    def test_dft_operator(self):
-        NF = 100
-        DF = 100e3
-        freqs = np.arange(-NF/2, NF/2)*DF + 150e6
-        #test dft_operator by checking whether
-        #it gives us expected values.
-        fop = dspec.dft_operator(freqs, 0., 1e-6)
-        fg, dg = np.meshgrid(freqs-150e6, np.arange(-10, 10) * (1./DF/NF) , indexing='ij')
-        y = np.exp(2j * np.pi * fg * dg )
-        np.testing.assert_allclose(fop, y)
-        fg, dg = np.meshgrid(freqs-150e6, np.arange(-20, 20) * (1./DF/NF/2) , indexing='ij')
-        #check fundamental period x 2 works alright
-        #and gives us expected values
-        y1 = np.exp(2j * np.pi * fg * dg )
-        fop1 = dspec.dft_operator(freqs, 0., 1e-6, fundamental_period=200*1e5)
-        np.testing.assert_allclose(fop1, y1)
-
-    def test_dpss_operator(self):
-        #test that an error is thrown when we specify more then one
-        #termination method.
-        NF = 100
-        DF = 100e3
-        freqs = np.arange(-NF/2, NF/2)*DF + 150e6
-        freqs_bad = freqs[[0, 12, 14, 18, 22]]
-        self.assertRaises(ValueError, dspec.dpss_operator, x=freqs_bad, filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5])
-        self.assertRaises(ValueError, dspec.dpss_operator, x = freqs , filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5], avg_suppression=[1e-12])
-        #now calculate DPSS operator matrices using different cutoff criteria. The columns
-        #should be the same up to the minimum number of columns of the three techniques.
-        amat1, ncol1 = dspec.dpss_operator(freqs, [0.], [100e-9], eigenval_cutoff=[1e-9])
-        amat2, ncol2 = dspec.dpss_operator(freqs, [0.], [100e-9], edge_suppression=[1e-9])
-        amat3, ncol3 = dspec.dpss_operator(freqs, [0.], [100e-9], avg_suppression=[1e-9])
-        ncols = [ncol1, ncol2, ncol3]
-        ncolmin = np.min(ncols)
-        ncolmax = np.max(ncols)
-        amat4, ncol4 = dspec.dpss_operator(freqs, [0.], [100e-9], nterms=[ncolmax])
-        self.assertTrue(ncol4[0]==ncolmax)
-        #check that all columns of matrices obtained with different methods
-        #of cutoff are identical.
-        for m in range(ncolmin):
-            np.testing.assert_allclose(amat1[:,m], amat2[:,m])
-            np.testing.assert_allclose(amat2[:,m], amat3[:,m])
-            np.testing.assert_allclose(amat3[:,m], amat4[:,m])
-
-        dpss_mat = windows.dpss(NF, NF * DF * 100e-9, ncolmax).T
-        for m in range(ncolmax):
-            np.testing.assert_allclose(amat4[:,m], dpss_mat[:,m])
-
-
-    def test_fit_solution_matrix(self):
-        #test for dft and dpss
-        fs = np.arange(-50,50)
-        #here is some underlying data
-        data = np.exp(2j * np.pi * 3.5/50. * fs) + 5*np.exp(2j * np.pi * 2.1/50. * fs)
-        data += np.exp(-2j * np.pi * 0.7/50. * fs) + 5*np.exp(2j * np.pi * -1.36/50. * fs)
-        #here are some weights with flags
-        wgts = np.ones_like(data)
-        wgts[6] = 0
-        wgts[17] = 0
-        dw = data*wgts
-        #generate fits for DPSS and DFT.
-        amat_dft = dspec.dft_operator(fs, [0.], [4. / 50.], fundamental_period=140.)
-        amat_dpss,_ = dspec.dpss_operator(fs, [0.], [5. / 50.], eigenval_cutoff=[1e-15])
-        wmat = np.diag(wgts)
-        fitmat_dft = dspec.fit_solution_matrix(wmat, amat_dft)
-        fitmat_dpss = dspec.fit_solution_matrix(wmat, amat_dpss)
-        interp_dft = amat_dft @ fitmat_dft @ dw
-        interp_dpss = amat_dpss @ fitmat_dpss @ dw
-        #DFT interpolation is meh, so we keep our standards low.
-        #DFT interpolation matrices are poorly conditioned so that's also
-        #Downer.
-        nt.assert_true(np.all(np.isclose(interp_dft, data, atol=1e-2)))
-        #DPSS interpolation is clutch. We can make our standards high.
-        nt.assert_true(np.all(np.isclose(interp_dpss, data, atol=1e-6)))
-        #Check Raising of ValueErrors.
-        amat_dft_pc = dspec.dft_operator(fs, [0.], [4. / 50.], fundamental_period=200.)
-        with warnings.catch_warnings(record=True) as w:
-            dspec.fit_solution_matrix(wmat, amat_dft_pc)
-            nt.assert_true(len(w) > 0)
-        self.assertRaises(ValueError, dspec.fit_solution_matrix, wmat[:50], amat_dft_pc)
-        self.assertRaises(ValueError, dspec.fit_solution_matrix, wmat, amat_dft[:-1])
-
     def test_delay_filter_2D(self):
         NCHAN = 128
         NTIMES = 10
@@ -272,6 +191,89 @@ class TestMethods(unittest.TestCase):
             nt.assert_true(np.all(np.isclose(win, win3*np.sqrt(np.mean(win**2.)),atol=1e-6)))
 
         nt.assert_raises(ValueError, dspec.gen_window, 'foo', 200)
+
+
+def test_dft_operator():
+    NF = 100
+    DF = 100e3
+    freqs = np.arange(-NF/2, NF/2)*DF + 150e6
+    #test dft_operator by checking whether
+    #it gives us expected values.
+    fop = dspec.dft_operator(freqs, 0., 1e-6)
+    fg, dg = np.meshgrid(freqs-150e6, np.arange(-10, 10) * (1./DF/NF) , indexing='ij')
+    y = np.exp(2j * np.pi * fg * dg )
+    np.testing.assert_allclose(fop, y)
+    fg, dg = np.meshgrid(freqs-150e6, np.arange(-20, 20) * (1./DF/NF/2) , indexing='ij')
+    #check fundamental period x 2 works alright
+    #and gives us expected values
+    y1 = np.exp(2j * np.pi * fg * dg )
+    fop1 = dspec.dft_operator(freqs, 0., 1e-6, fundamental_period=200*1e5)
+    np.testing.assert_allclose(fop1, y1)
+
+def test_dpss_operator():
+    #test that an error is thrown when we specify more then one
+    #termination method.
+    NF = 100
+    DF = 100e3
+    freqs = np.arange(-NF/2, NF/2)*DF + 150e6
+    freqs_bad = freqs[[0, 12, 14, 18, 22]]
+    nt.assert_raises(ValueError, dspec.dpss_operator, x=freqs_bad, filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5])
+    nt.assert_raises(ValueError, dspec.dpss_operator, x = freqs , filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5], avg_suppression=[1e-12])
+    #now calculate DPSS operator matrices using different cutoff criteria. The columns
+    #should be the same up to the minimum number of columns of the three techniques.
+    amat1, ncol1 = dspec.dpss_operator(freqs, [0.], [100e-9], eigenval_cutoff=[1e-9])
+    amat2, ncol2 = dspec.dpss_operator(freqs, [0.], [100e-9], edge_suppression=[1e-9])
+    amat3, ncol3 = dspec.dpss_operator(freqs, [0.], [100e-9], avg_suppression=[1e-9])
+    ncols = [ncol1, ncol2, ncol3]
+    ncolmin = np.min(ncols)
+    ncolmax = np.max(ncols)
+    amat4, ncol4 = dspec.dpss_operator(freqs, [0.], [100e-9], nterms=[ncolmax])
+    nt.assert_true(ncol4[0]==ncolmax)
+    #check that all columns of matrices obtained with different methods
+    #of cutoff are identical.
+    for m in range(ncolmin):
+        np.testing.assert_allclose(amat1[:,m], amat2[:,m])
+        np.testing.assert_allclose(amat2[:,m], amat3[:,m])
+        np.testing.assert_allclose(amat3[:,m], amat4[:,m])
+
+    dpss_mat = windows.dpss(NF, NF * DF * 100e-9, ncolmax).T
+    for m in range(ncolmax):
+        np.testing.assert_allclose(amat4[:,m], dpss_mat[:,m])
+
+
+def test_fit_solution_matrix():
+    #test for dft and dpss
+    fs = np.arange(-50,50)
+    #here is some underlying data
+    data = np.exp(2j * np.pi * 3.5/50. * fs) + 5*np.exp(2j * np.pi * 2.1/50. * fs)
+    data += np.exp(-2j * np.pi * 0.7/50. * fs) + 5*np.exp(2j * np.pi * -1.36/50. * fs)
+    #here are some weights with flags
+    wgts = np.ones_like(data)
+    wgts[6] = 0
+    wgts[17] = 0
+    dw = data*wgts
+    #generate fits for DPSS and DFT.
+    amat_dft = dspec.dft_operator(fs, [0.], [4. / 50.], fundamental_period=140.)
+    amat_dpss,_ = dspec.dpss_operator(fs, [0.], [5. / 50.], eigenval_cutoff=[1e-15])
+    wmat = np.diag(wgts)
+    fitmat_dft = dspec.fit_solution_matrix(wmat, amat_dft)
+    fitmat_dpss = dspec.fit_solution_matrix(wmat, amat_dpss)
+    interp_dft = amat_dft @ fitmat_dft @ dw
+    interp_dpss = amat_dpss @ fitmat_dpss @ dw
+    #DFT interpolation is meh, so we keep our standards low.
+    #DFT interpolation matrices are poorly conditioned so that's also
+    #Downer.
+    nt.assert_true(np.all(np.isclose(interp_dft, data, atol=1e-2)))
+    #DPSS interpolation is clutch. We can make our standards high.
+    nt.assert_true(np.all(np.isclose(interp_dpss, data, atol=1e-6)))
+    #Check Raising of ValueErrors.
+    amat_dft_pc = dspec.dft_operator(fs, [0.], [4. / 50.], fundamental_period=200.)
+    with warnings.catch_warnings(record=True) as w:
+        dspec.fit_solution_matrix(wmat, amat_dft_pc)
+        nt.assert_true(len(w) > 0)
+    nt.assert_raises(ValueError, dspec.fit_solution_matrix, wmat[:50], amat_dft_pc)
+    nt.assert_raises(ValueError, dspec.fit_solution_matrix, wmat, amat_dft[:-1])
+
 
 def test_dayenu_filter():
     nf = 100
@@ -453,7 +455,6 @@ def test_dayenu_mat_inv():
     np.testing.assert_almost_equal(cmat1, cmata)
 
 
-
 def test_vis_filter():
     # load file
     uvd = UVData()
@@ -608,6 +609,78 @@ def test_delay_interpolation_matrix():
         amat_pc = dspec.delay_interpolation_matrix(nchan=100, ndelay=25, wgts=wgtpc, fundamental_period=200)
         print(len(w))
         nt.assert_true(len(w) > 0)
+'''
+def test_fourier_filter():
+    # load file
+    uvd = UVData()
+    uvd.read_miriad(os.path.join(DATA_PATH, "zen.2458042.17772.xx.HH.uvXA"), bls=[(24, 25)])
+
+    freqs = uvd.freq_array.squeeze()
+    times = np.unique(uvd.time_array) * 24 * 3600
+    times -= np.mean(times)
+    sdf = np.median(np.diff(freqs))
+    dt = np.median(np.diff(times))
+    frs = np.fft.fftfreq(uvd.Ntimes, d=dt)
+    dlys = np.fft.fftfreq(uvd.Nfreqs, d=sdf) * 1e9
+    # simulate some data in fringe-rate and delay space
+    np.random.seed(0)
+    dfr, ddly = frs[1] - frs[0], dlys[1] - dlys[0]
+    d = 200 * np.exp(-2j*np.pi*times[:, None]*(frs[2]+dfr/4) - 2j*np.pi*freqs[None, :]*(dlys[2]+ddly/4)/1e9)
+    d += 50 * np.exp(-2j*np.pi*times[:, None]*(frs[20]) - 2j*np.pi*freqs[None, :]*(dlys[20])/1e9)
+    n = 10 * ((np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes).astype(np.complex) \
+         + 1j * np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes)).reshape(uvd.Ntimes, uvd.Nfreqs))
+    d += n
+    print(uvd.Nfreqs)
+    def get_snr(clean, fftax=1, avgax=0, modes=[2, 20]):
+        cfft = np.fft.ifft(clean, axis=fftax)
+        cavg = np.median(np.abs(cfft), axis=avgax)
+        std = np.median(cavg)
+        return [cavg[m] / std for m in modes]
+
+    # get snr of modes
+    freq_snr1, freq_snr2 = get_snr(d, fftax=1, avgax=0, modes=[2, 20])
+    time_snr1, time_snr2 = get_snr(d, fftax=0, avgax=1, modes=[2, 20])
+
+    # simulate some flags
+    f = np.zeros_like(d, dtype=np.bool)
+    d[:, 20:22] += 1e3
+    f[:, 20:22] = True
+    d[20, :] += 1e3
+    f[20, :] = True
+    w = (~f).astype(np.float)
+    bl_len = 70.0 / 2.99e8
+
+    # dpss filtering
+    dpss_options1={'eigenval_cutoff':1e-12, 'method':'leastsq'}
+    dpss_options1={'eigenval_cutoff':1e-12, 'method':'leastsq'}
+
+    mdl1, res1, info1 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.],
+                                             mode='dpss', filter2d=False, fitting
+                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, mode='dayenu', deconv_dayenu_foregrounds=True, fg_deconv_method='leastsq')
+'''
+
+
+def test_fit_basis_1d():
+    #perform dpss interpolation, leastsq
+    fs = np.arange(-50,50)
+    #here is some data
+    data = np.exp(2j * np.pi * 3.5/50. * fs) + 5*np.exp(2j * np.pi * 2.1/50. * fs)
+    data += np.exp(-2j * np.pi * 0.7/50. * fs) + 5*np.exp(2j * np.pi * -1.36/50. * fs)
+    #here are some weights with flags
+    wgts = np.ones_like(data)
+    wgts[6] = 0
+    wgts[17] = 0
+    dw = data*wgts
+    dpss_opts={'eigenval_cutoff':[1e-12]}
+    #perform dpss interpolation, leastsq and matrix and compare results
+    mod1, resid1, info1 = dspec.fit_basis_1d(fs, dw, wgts, [0.], [5./50.], basis_options=dpss_opts,
+                                    method='leastsq', basis='dpss')
+    mod2, resid2, info2 = dspec.fit_basis_1d(fs, dw, wgts, [0.], [5./50.], basis_options=dpss_opts,
+                                    method='matrix', basis='dpss')
+    nt.assert_true(np.all(np.isclose(mod1, mod2, atol=1e-6)))
+    #perofrm dpss interpolation ,matrix
+    #compare dpss and
+
 
 def test_vis_filter_dayenu():
     # load file
