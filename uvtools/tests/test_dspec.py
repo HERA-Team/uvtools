@@ -609,7 +609,7 @@ def test_delay_interpolation_matrix():
         amat_pc = dspec.delay_interpolation_matrix(nchan=100, ndelay=25, wgts=wgtpc, fundamental_period=200)
         print(len(w))
         nt.assert_true(len(w) > 0)
-'''
+
 def test_fourier_filter():
     # load file
     uvd = UVData()
@@ -651,13 +651,27 @@ def test_fourier_filter():
     bl_len = 70.0 / 2.99e8
 
     # dpss filtering
-    dpss_options1={'eigenval_cutoff':1e-12, 'method':'leastsq'}
-    dpss_options1={'eigenval_cutoff':1e-12, 'method':'leastsq'}
-
+    dpss_options1={'eigenval_cutoff':[1e-12]}
+    dft_options1={'fundamental_period':2.*(frs.max()-frs.min())}
+    clean_options1={'tol':1e-9, 'maxiter':100, 'pad':0, 'filt2d_mode':'rect',
+                    'edgecut_low':0, 'edgecut_hi':0, 'add_clean_residual':False,
+                    'taper':'none', 'skip_wgt':0.1, 'gain':0.1, 'alpha':0.5}
     mdl1, res1, info1 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.],
-                                             mode='dpss', filter2d=False, fitting
-                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, mode='dayenu', deconv_dayenu_foregrounds=True, fg_deconv_method='leastsq')
-'''
+                                             mode='dpss_leastsq', filter2d=False, fitting_options=dpss_options1)
+    mdl2, res2, info2 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.],
+                                             mode='dft_leastsq', filter2d=False, fitting_options=dft_options1)
+
+    #check clean with and without default options gives equivalent answers.
+    mdl3, res3, info3 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.],
+                                             mode='clean', filter2d=False, fitting_options={})
+    mdl4, res4, info4 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.],
+                                             mode='clean', fitting_options=clean_options1)
+    nt.assert_true(np.all(np.isclose(mdl3, mdl4, atol=1e-6)))
+    nt.assert_true(np.all(np.isclose(res3, res4, atol=1e-6)))
+
+    nt.assert_true(np.all(np.isclose(mdl1, mdl2, atol=1e-6)))
+    nt.asser_true(np.all(np.isclose(res1, res2)))
+
 
 
 def test_fit_basis_1d():

@@ -60,8 +60,8 @@ def calc_width(filter_size, real_delta, nsamples):
         lthresh = nsamples
     return (uthresh, lthresh)
 
-def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppression_factors, mode, filter2d,
-                   fitting_options, cache={}, filter_dim=1):
+def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppression_factors,
+                   mode, filter2d, fitting_options, cache={}, filter_dim=1):
                    '''
                    Your one-stop-shop for fourier filtering.
                    We don't use the other filtering functions anymore.
@@ -97,24 +97,48 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         if 2dfilter: should be a 2-list or 2-tuple. Each element should
                         be a list or tuple or np.ndarray of floats that include centers
                         of rectangular bins.
-                    method: string or list
-                        the method to use for foreground filtering. Can be
-                        'clean': use the CLEAN algorithm in aipy.deconv.clean
-                        'dayenu': use a lazy inverse covariance filter.
-                        'dft_interp': interpolate model with DFT modes.
-                        'dpss_interp': interpolate a model with DPSS modes.
-                        if 2dfilter is true, provide a 2-list or 2-tuple
-                        with mode that you want to use over each dimension.
+                    mode: string
+                        specify filtering mode. Currently supported are
+                        'clean', iterative clean
+                        'dpss_lsq', dpss fitting using scipy.optimize.lsq_linear
+                        'dft_lsq', dft fitting using scipy.optimize.lsq_linear
+                        'dpss_matrix', dpss fitting using direct lin-lsq matrix
+                                       computation. Slower then lsq but provides linear
+                                       operator that can be used to propagate
+                                       statistics.
+                        'dft_matrix', dft fitting using direct lin-lsq matrix
+                                      computation. Slower then lsq but provides
+                                      linear operator that can be used to propagate
+                                      statistics.
+                                      !!!WARNING: In my experience,
+                                      'dft_matrix' option is numerical unstable.!!!
+                                      'dpss_matrix' works much better.
+                        'dayenu', apply dayenu filter to data. Does not
+                                 deconvolve subtracted foregrounds.
+                        'dayenu_dft_leastsq', apply dayenu filter to data
+                                 and deconvolve subtracted foregrounds using
+                                'dft_leastsq' method (see above).
+                        'dayenu_dpss_leastsq', apply dayenu filter to data
+                                 and deconvolve subtracted foregrounds using
+                                 'dpss_leastsq' method (see above)
+                        'dayenu_dft_matrix', apply dayenu filter to data
+                                 and deconvolve subtracted foregrounds using
+                                'dft_matrix' method (see above).
+                                !!!WARNING: dft_matrix method is often numerically
+                                unstable. I don't recommend it!
+                        'dayenu_dpss_matrix', apply dayenu filter to data
+                                 and deconvolve subtracted foregrounds using
+                                 'dpss_matrix' method (see above)
+                        'dayenu_clean', apply dayenu filter to data. Deconvolve
+                                 subtracted foregrounds with 'clean'.
                     filter2d: bool
                         specify whether filtering will be performed in 2d or 1d.
                         If filter is 1d, it will be applied across the -1 axis.
                     fitting_options: dict
                         dictionary with options for fitting techniques.
-                        if 2dfilt, should be a 2-tuple or 2-list
-                        of dictionaries.
-                        The dictionary for each dimension must specify the following.
-                    basis_options: dictionary
-                        method specific options are
+                        if filter2d is true, this should be a 2-tuple or 2-list
+                        of dictionaries. The dictionary for each dimension must
+                        specify the following for each fitting method.
                             * 'dft':
                                 'fundamental_period': float or 2-tuple
                                     the fundamental_period of dft modes to fit. The number of
@@ -122,22 +146,10 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                     equal fw / fundamental_period.
                                     if filter2d, must provide a 2-tuple with fundamental_period
                                     of each dimension.
-                                'method': string
-                                    method to use for dft fitting, options are
-                                    'leastsq' which is iterative or 'matrix'
-                                    which computes and applies a linear leastsq matrix.
-                                    'matrix' involves calculating an inverse and is slower.
                             * 'dayenu':
-                                'deconv_model': string,
-                                    set with a string specifying
-                                    'dft', 'dpss', or 'clean', setting a
-                                    method and/or basis for modeling  the difference
-                                    between data and data with dayenu applied.
-                                    data and dayenu residuals using DPSS,
-                                    DFT, or CLEAN interpolation.
-                                    If this is set to True, user must
-                                    specify options from 'dft' and 'dpss' and/or 'clean'
-                                    listed below.
+                                No parameters necessary if you are only doing 'dayenu'.
+                                For 'dayenu_dpss', 'dayenu_dft', 'dayenu_clean' see below
+                                and use the appropriate fitting options for each method.
                             * 'dpss':
                                 'eigenval_cutoff': array-like
                                     list of sinc_matrix eigenvalue cutoffs to use for included dpss modes.
@@ -152,11 +164,6 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                     to calculate the number of DPSS terms. Similar to edge_supression but instead checks
                                     the suppression of a since vector with equal contributions from all tones inside of the
                                     filter width instead of a single tone.
-                                'method': string
-                                    method to use for dpss fitting, options are
-                                    'leastsq' which is iterative or 'matrix'
-                                    which computes and applies a linear leastsq matrix.
-                                    'matrix' involves calculating an inverse and is slower.
                             *'clean':
                                  'tol': float,
                                     clean tolerance. 1e-9 is standard.
@@ -180,14 +187,12 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                 'add_clean_residual' : bool, if True, adds the CLEAN residual within the CLEAN bounds
                                     in fourier space to the CLEAN model. Note that the residual actually returned is
                                     not the CLEAN residual, but the residual in input data space.
-                                'tol' : CLEAN algorithm convergence tolerance (see aipy.deconv.clean)
                                 'taper' : window function for filtering applied to the filtered axis.
                                     See dspec.gen_window for options. If clean2D, can be fed as a list
                                     specifying the window for each axis in data.
                                 'skip_wgt' : skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
                                     Model is left as 0s, residual is left as data, and info is {'skipped': True} for that
                                     time. Only works properly when all weights are all between 0 and 1.
-                                'maxiter': Maximum number of iterations for aipy.deconv.clean to converge.
                                 'gain': The fraction of a residual used in each iteration. If this is too low, clean takes
                                     unnecessarily long. If it is too high, clean does a poor job of deconvolving.
                                 'alpha': float, if window is 'tukey', this is its alpha parameter.
@@ -205,6 +210,13 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             residual -- difference of data and model, nulled at flagged channels
                         info: dictionary (1D case) or list of dictionaries (2D case) with CLEAN metadata
                    '''
+                   supported_modes=['clean', 'dft_leastsq', 'dpss_leastsq', 'dft_matrix', 'dpss_matrix', 'dayenu',
+                                    'dayenu_dft_leastsq', 'dayenu_dpss_leastsq', 'dayenu_dpss_matrix',
+                                    'dayenu_dft_matrix', 'dayenu_clean']
+                   if not mode in supported_modes:
+                       raise ValueError("Need to supply a mode in supported modes:%s"%(str(supported_modes)))
+
+                   mode = mode.split('_')
                    ndim_data = len(data.shape)
                    ndim_wgts = len(wgts.shape)
                    if not ndim_wgts == ndim_data:
@@ -216,46 +228,52 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                    if not filter2d and filter_dim == 0:
                        data = copy.deepcopy(data).T
                        wgts = copy.deepcopy(wgts).T
-                   if mode == 'dayenu':
+                   if mode[0] == 'dayenu':
                        if filter2d:
                            fd = [0, 1]
                        residual, info = dayenu_filter(x=x, data=data, wgts=wgts, filter_dimensions=fd,
                                                      filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                                                      filter_factors=suppression_factors, cache=cache)
                        model = data - residual
-                       if 'deconv_model' in fitting_options.keys():
-                           model, _, _ = fourier_filter(x=x, data=model, wgts=wgts, filter_centers=filter_centers,
+                       if len(mode) > 1:
+                           model, _, info_deconv = fourier_filter(x=x, data=model, wgts=wgts, filter_centers=filter_centers,
                                                         filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
-                                                        method=fitting_options['deconv_model'], filter2d=filter2d, fitting_options=fitting_options,
+                                                        mode='_'.join(mode[1:]), filter2d=filter2d, fitting_options=fitting_options,
                                                         taper=taper, cache=cache)
-                   elif mode == 'dft' or mode=='dpss':
+                           info = info + info_deconv
+                   elif mode[0] == 'dft' or mode[0] == 'dpss':
                         model = np.zeros_like(data)
-                        residual = np.zeros_like(resid)
-                        fit_method = fitting_options['method']
-                        if not filt2d:
+                        residual = np.zeros_like(data)
+                        if not filter2d:
                             x = [0, x]
                             filter_centers = [[], copy.deepcopy(filter_centers)]
                             filter_half_widths = [[], copy.deepcopy(filter_half_widths)]
                             suppression_factors = [[], copy.deepcopy(suppression_factors)]
                         else:
-                            if mode == 'dft':
+                            if mode[0] == 'dft':
                                 fitting_options = [{'fundamental_period': fp} for fp in fitting_options['fundamental_period']]
-                            elif mode == 'dps':
+                            elif mode[0] == 'dpss':
                                 fitting_options = [copy.deepcopy(fitting_options) for m in range(2)]
+                        fit_method=mode[1]
                         #filter -1 dimension
+                        info = [[],[]]
                         for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
                             model[i], residual[i], _info = fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
                                                             filter_half_widths=filter_half_widths[1],
                                                             suppression_factors=suppression_factors[1],
-                                                            basis_option=fitting_options, method=fit_method, basis=mode, cache=cache)
+                                                            basis_options=fitting_options, method=fit_method,
+                                                            basis=mode[0], cache=cache)
+                            info[1].append(_info)
                         #and if filter2d, filter the 0 dimension. Note that we feed in 'model' here.
                         if filter2d:
                             for i, _y, _w, in zip(range(data.shape[1]), model.T, wgts.T):
                                 model.T[i], residual.T[i], _info = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
                                                                 filter_half_widths=filter_half_widths[0],
                                                                 suppression_factors=suppression_factors[0],
-                                                                basis_option=fitting_options, method=fit_method, basis=mode, cache=cache)
-                   elif mode == 'clean':
+                                                                basis_options=fitting_options, method=fit_method,
+                                                                basis=mode[0], cache=cache)
+                                info[0].append(_info)
+                   elif mode[0] == 'clean':
                         #Unpack all of the clean parameters from
                         #fitting_options. This is to preserve default behavior
                         #in high_pass_fourier_filter and if I had my way,
@@ -312,7 +330,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         #including the data and weights to 1 x N arrays.
                         if not np.all(np.diff(x[0]) == np.mean(np.diff(x[0]))):
                             raise ValueError("Data must be equally spaced for CLEAN mode!")
-                        if not filt2d:
+                        if not filter2d:
                             pad = [0, pad]
                             _x = [np.array([0]), np.fft.fftfreq(len(x), x[1]-x[0])]
                             x = [np.array([0]), x]
@@ -361,7 +379,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         _data = np.fft.ifft2(taper[0] * data_pad * wgts * taper[1])
                         _d_cl = np.zeros_like(_data)
                         _d_res = np.zeros_like(_data)
-                        if not filt2d:
+                        if not filter2d:
                             info = {}
                             for i, _d, _w in zip(range(data.shape[0]), _data, _wgts):
                                 if _w[0] < skip_wgt:
@@ -370,16 +388,22 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                 _d_cl[i], _info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False,
                                                                 maxiter=maxiter, gain=gain)
                                 _d_res = _info['res']
-                                del _info['res']
+                                del(_info['res'])
                                 info.append(_info)
-                        elif filt2d:
+                        elif filter2d:
                                 _d_cl, info = aipy.deconv.clean(_data, _wgts, area=area, tol=tol, stop_if_div=False,
                                                                 maxiter=maxiter, gain=gain)
                                 _d_res = info['res']
                                 del(info['res'])
                         model = np.fft.fft2(_d_cl)
                         residual = np.fft.fft2(_d_res)
-                    #transpose back if filtering the 0th dimension.
+                        #remove padding
+                        model = model[:, pad[-1]:-pad[-1]]
+                        residual = residual[:, pad[-1]:-pad[-1]]
+                        if filter2d:
+                            model = model[pad[0]:-pad[0], :]
+                            residual = residual[pad[0]:-pad[0], :]
+                        #transpose back if filtering the 0th dimension.
                    if not filter2d and filter_dim == 0:
                         model = model.T
                         residual = residual.T
@@ -736,7 +760,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
     return d_mdl, d_res, info
 
 def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_widths, filter_factors,
-                  cache = {}):
+                  cache = {}, return_matrices=True):
     '''Apply a linear delay filter to waterfall data.
         Due to performance reasons, linear filtering only supports separable delay/fringe-rate filters.
     Arguments:
@@ -759,6 +783,8 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
             filter_half_widths. If a float or length-1 list/ndarray is provided,
             the same filter factor will be used in every filter window.
         cache: optional dictionary for storing pre-computed delay filter matrices.
+        return_matrices: bool,
+            if True, return a dict referencing every every filtering matrix used.
     Returns:
         data: array, 2d clean residual with data filtered along the frequency direction.
         info: dictionary with filtering parameters and a list of skipped_times and skipped_channels
@@ -894,6 +920,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
     output = copy.deepcopy(data)
     #this loop iterates through dimensions to iterate over (fs is the non-filter
     #axis).
+    filter_matrices=[{},{}]
     for fs in filter_dimensions:
         if fs == 0:
             _d, _w = output.T, wgts.T
@@ -923,19 +950,22 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                     cache[filter_key] = np.ones((data.shape[fs], data.shape[fs]), dtype=complex) * np.nan
             #if matrix is already cached,
             filter_mat = cache[filter_key]
-            if not np.all(filter_mat == 9e99):
+            if not np.all(np.isnan(filter_mat)):
                 if fs == 0:
                     output[:, sample_num] = np.dot(filter_mat, sample)
                 elif fs == 1:
                     output[sample_num] = np.dot(filter_mat, sample)
             else:
                 skipped[fs-1].append(sample_num)
+            if return_matrices:
+                filter_matrices[fs][sample_num]=filter_mat
 
     #1d data will only be filtered across "channels".
     if data_1d and ntimes == 1:
         output = output[0]
     info['skipped_time_steps'] = skipped[0]
     info['skipped_channels'] = skipped[1]
+    info['filter_matrices'] = filter_matrices
     return output, info
 
 
@@ -1746,10 +1776,10 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
         suppression_vector = np.ones(amat.shape[1])
     else:
         if basis.lower() == 'dft':
-            suppression_vector =  np.hstack([1-sf * np.ones(np.ceil(fw * fit_options['fundamental_period']))\
-                                             for sf,fw in zip(filter_half_widths, suppression_factors)])
+            suppression_vector =  np.hstack([1-sf * np.ones(int(np.ceil(fw * basis_options['fundamental_period'])))\
+                                             for sf,fw in zip(suppression_factors, filter_half_widths)])
         elif basis.lower() == 'dpss':
-            suppression_vector = np.hstack([1-sf * np.ones(nterm) for nterm in nterms])
+            suppression_vector = np.hstack([1-sf * np.ones(nterm) for sf, nterm in zip(suppression_factors, nterms)])
     info['method'] = method
     info['basis'] = basis
     info['filter_centers'] = filter_centers
