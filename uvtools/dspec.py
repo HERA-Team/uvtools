@@ -1797,7 +1797,8 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache={}, eigenval_cuto
         list of floats of half-widths of delay filter windows in nanosec
     cache: dictionary, optional
         dictionary for storing operator matrices with keys
-        (x) + (filter_centers) + (filter_half_widths) + (eigval_cutoff,)
+        tuple(x) + tuple(filter_centers) + tuple(filter_half_widths)\
+         + (series_cutoff_name,) = tuple(series_cutoff_values)
     eigenval_cutoff: list of floats, optional
         list of sinc matrix eigenvalue cutoffs to use for included dpss modes.
     nterms: list of integers, optional
@@ -1823,23 +1824,24 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache={}, eigenval_cuto
         and filter_half_widths
     """
     #conditions for halting.
-    none_criteria_labels = ['eigenval_cutoff', 'nterms', 'edge_suppression', 'avg_suppression']
-    none_criteria = np.asarray([eigenval_cutoff is None, nterms is None,
-    edge_suppression is None, avg_suppression is None]).astype(bool)
+    crit_labels = ['eigenval_cutoff', 'nterms', 'edge_suppression', 'avg_suppression']
+    crit_list = [eigenval_cutoff, nterms, edge_suppression, avg_suppression]
+    crit_provided = np.asarray([not crit is None for crit in crit_list]).astype(bool)
     #only allow the user to specify a single condition for cutting off DPSS modes to fit.
-    if np.count_nonzero(none_criteria) != 1:
-        provided_crit = [ label for m,label in enumerate(none_criteria_labels) if not none_criteria ]
-        raise ValueError('Must only provide a single series cutoff condition. %d were provided: %s '%(str(np.count_nonzero(none_criteria)),
-                                                                                                 str(provided_crit)))
+    crit_provided_name = [ label for m,label in enumerate(crit_labels) if crit_provided[m] ]
+    crit_provided_value = [ crit for m,crit in enumerate(crit_list) if crit_provided[m] ]
+    if np.count_nonzero(crit_provided) != 1:
+        raise ValueError('Must only provide a single series cutoff condition. %d were provided: %s '%(np.count_nonzero(crit_provided),
+                                                                                                 str(crit_provided_name)))
 
-    #check that xs are equally spaced.
-    if not np.all(np.diff(x) == np.mean(np.diff(x))):
-        #for now, don't support DPSS iterpolation unless x is equally spaced.
-        #In principal, I should be able to compute off-grid DPSS points using
-        #the fourier integral of the DPSWF
-        raise ValueError('x values must be equally spaced for DPSS operator!')
-    opkey = ('dpss_operator',) + tuple(x) + tuple(filter_centers) + tuple(filter_half_widths)+(eigenval_cutoff,)
+    opkey = ('dpss_operator',) + tuple(x) + tuple(filter_centers) + (crit_provided_name[0],) + tuple(crit_provided_value[0])
     if not opkey in cache:
+        #check that xs are equally spaced.
+        if not np.all(np.diff(x) == np.mean(np.diff(x))):
+            #for now, don't support DPSS iterpolation unless x is equally spaced.
+            #In principal, I should be able to compute off-grid DPSS points using
+            #the fourier integral of the DPSWF
+            raise ValueError('x values must be equally spaced for DPSS operator!')
         nf = len(x)
         df = x[1]-x[0]
         xg, yg = np.meshgrid(x,x)
@@ -1849,25 +1851,25 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache={}, eigenval_cuto
         if nterms is None:
             nterms = []
             for fn,fw in enumerate(filter_half_widths):
-                dpss_vectors = windows.dpss(nf, bandwidth*fw, nf)
-                if not eigval_cutoff is None:
+                dpss_vectors = windows.dpss(nf, nf * df * fw, nf)
+                if not eigenval_cutoff is None:
                     smat = np.sinc(2 * df * fw * (xg-yg)) * 2 * df * fw
                     eigvals = np.sum((smat @ dpss_vectors.T) * dpss_vectors.T, axis=0)
-                    nterms.append(np.max(np.where(eigvals>=eigval_cutoff[fn])))
-                if not edge_supression is None:
+                    nterms.append(np.max(np.where(eigvals>=eigenval_cutoff[fn])))
+                if not edge_suppression is None:
                     z0=fw * df
                     edge_tone=np.exp(-2j*np.pi*np.arange(nf)*z0)
                     fit_components = dpss_vectors * (dpss_vectors @ edge_tone)
                     #this is a vector of RMS residuals of a tone at the edge of the delay window being fitted between 0 to nf DPSS components.
                     rms_residuals = np.asarray([ np.sqrt(np.mean(np.abs(edge_tone - np.sum(fit_components[:k],axis=0))**2.)) for k in range(nf)])
-                    nterms.append(np.max(np.where(rms_residuals>=edge_supression[fn])))
+                    nterms.append(np.max(np.where(rms_residuals>=edge_suppression[fn])))
                 if not avg_suppression is None:
                     sinc_vector=np.sinc(2 * fw * df * (np.arange(nf)-nf/2.))
                     sinc_vector = sinc_vector / np.sqrt(np.mean(sinc_vector**2.))
                     fit_components = dpss_vectors * (dpss_vectors @ sinc_vector)
                     #this is a vector of RMS residuals of vector with equal contributions from all tones within -fw and fw.
-                    rms_residuals = np.asarray([ np.sqrt(np.mean(np.abs(edge_tone - np.sum(fit_components[:k],axis=0))**2.)) for k in range(nf)])
-                    nterms.append(np.max(np.where(rms_residuals>=edge_supression[fn])))
+                    rms_residuals = np.asarray([ np.sqrt(np.mean(np.abs(sinc_vector - np.sum(fit_components[:k],axis=0))**2.)) for k in range(nf)])
+                    nterms.append(np.max(np.where(rms_residuals>=avg_suppression[fn])))
         #next, construct A matrix.
         amat = []
         for fc, fw, nt in zip(filter_centers,filter_half_widths, nterms):

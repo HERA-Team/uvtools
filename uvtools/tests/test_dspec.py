@@ -5,6 +5,7 @@ import nose.tools as nt
 from pyuvdata import UVData
 from uvtools.data import DATA_PATH
 import os
+import scipy.signal.windows as windows
 import warnings
 random.seed(0)
 
@@ -73,6 +74,15 @@ class TestMethods(unittest.TestCase):
         fop1 = dspec.dft_operator(freqs, 0., 1e-6, fundamental_period=200*1e5)
         np.testing.assert_allclose(fop1, y1)
 
+    #def test_fit_basis_1d():
+        #DPSS tests.
+        #here are some weights with flags
+        #test with edge suppression
+        #test with average suppression
+        #test with eigenval cutoff
+        #test with nterms
+    #    return
+
     def test_dpss_operator(self):
         #test that an error is thrown when we specify more then one
         #termination method.
@@ -82,6 +92,24 @@ class TestMethods(unittest.TestCase):
         freqs_bad = freqs[[0, 12, 14, 18, 22]]
         self.assertRaises(ValueError, dspec.dpss_operator, x=freqs_bad, filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5])
         self.assertRaises(ValueError, dspec.dpss_operator, x = freqs , filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5], avg_suppression=[1e-12])
+        amat1, ncol1 = dspec.dpss_operator(freqs, [0.], [100e-9], eigenval_cutoff=[1e-9])
+        amat2, ncol2 = dspec.dpss_operator(freqs, [0.], [100e-9], edge_suppression=[1e-9])
+        amat3, ncol3 = dspec.dpss_operator(freqs, [0.], [100e-9], avg_suppression=[1e-9])
+        ncols = [ncol1, ncol2, ncol3]
+        ncolmin = np.min(ncols)
+        ncolmax = np.max(ncols)
+        amat4, ncol4 = dspec.dpss_operator(freqs, [0.], [100e-9], nterms=[ncolmax])
+        self.assertTrue(ncol4[0]==ncolmax)
+        #check that all columns of matrices obtained with different methods
+        #of cutoff are identical.
+        for m in range(ncolmin):
+            np.testing.assert_allclose(amat1[:,m], amat2[:,m])
+            np.testing.assert_allclose(amat2[:,m], amat3[:,m])
+            np.testing.assert_allclose(amat3[:,m], amat4[:,m])
+
+        dpss_mat = windows.dpss(NF, NF * DF * 100e-9, ncolmax).T
+        for m in range(ncolmax):
+            np.testing.assert_allclose(amat4[:,m], dpss_mat[:,m])
 
     def test_delay_filter_2D(self):
         NCHAN = 128
