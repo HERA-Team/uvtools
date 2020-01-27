@@ -612,25 +612,24 @@ def test_delay_interpolation_matrix():
 
 def test_fourier_filter():
     # load file
-    uvd = UVData()
-    uvd.read_miriad(os.path.join(DATA_PATH, "zen.2458042.17772.xx.HH.uvXA"), bls=[(24, 25)])
-
-    freqs = uvd.freq_array.squeeze()
-    times = np.unique(uvd.time_array) * 24 * 3600
-    times -= np.mean(times)
-    sdf = np.median(np.diff(freqs))
-    dt = np.median(np.diff(times))
-    frs = np.fft.fftfreq(uvd.Ntimes, d=dt)
-    dlys = np.fft.fftfreq(uvd.Nfreqs, d=sdf) * 1e9
+    dt = 10.7374267578125
+    sdf = 100e3
+    nf = 100
+    ntimes = 120
+    freqs = np.arange(-nf/2, nf/2) * sdf + 150e6
+    times = np.arange(-ntimes/2, ntimes/2) * dt
+    frs = np.fft.fftshift(np.fft.fftfreq(ntimes, d=dt))
+    dfr = np.mean(np.diff(frs))
+    dlys = np.fft.fftshift(np.fft.fftfreq(nf, d=sdf))
+    ddly = np.mean(np.diff(dlys))
     # simulate some data in fringe-rate and delay space
     np.random.seed(0)
     dfr, ddly = frs[1] - frs[0], dlys[1] - dlys[0]
-    d = 200 * np.exp(-2j*np.pi*times[:, None]*(frs[2]+dfr/4) - 2j*np.pi*freqs[None, :]*(dlys[2]+ddly/4)/1e9)
-    d += 50 * np.exp(-2j*np.pi*times[:, None]*(frs[20]) - 2j*np.pi*freqs[None, :]*(dlys[20])/1e9)
-    n = 10 * ((np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes).astype(np.complex) \
-         + 1j * np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes)).reshape(uvd.Ntimes, uvd.Nfreqs))
+    d = 200 * np.exp(-2j*np.pi*times[:, None]*(frs[ntimes//2+2]+dfr/4) - 2j*np.pi*freqs[None, :]*(dlys[nf//2+2]+ddly/4))
+    d += 50 * np.exp(-2j*np.pi*times[:, None]*(frs[ntimes//2-3]) - 2j*np.pi*freqs[None, :]*(dlys[nf//2+3]))
+    n = 10 * ((np.random.normal(0, 1, nf * ntimes).astype(np.complex) \
+         + 1j * np.random.normal(0, 1, nf * ntimes)).reshape(ntimes, nf))
     d += n
-    print(uvd.Nfreqs)
     def get_snr(clean, fftax=1, avgax=0, modes=[2, 20]):
         cfft = np.fft.ifft(clean, axis=fftax)
         cavg = np.median(np.abs(cfft), axis=avgax)
@@ -648,29 +647,30 @@ def test_fourier_filter():
     d[20, :] += 1e3
     f[20, :] = True
     w = (~f).astype(np.float)
-    bl_len = 70.0 / 2.99e8
-
+    bl_len = dlys[nf//2+3]
     # dpss filtering
-    dpss_options1={'eigenval_cutoff':[1e-12]}
+    dpss_options1={'eigenval_cutoff':[1e-6]}
     dft_options1={'fundamental_period':2.*(frs.max()-frs.min())}
     clean_options1={'tol':1e-9, 'maxiter':100, 'pad':0, 'filt2d_mode':'rect',
                     'edgecut_low':0, 'edgecut_hi':0, 'add_clean_residual':False,
                     'taper':'none', 'skip_wgt':0.1, 'gain':0.1, 'alpha':0.5}
-    mdl1, res1, info1 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.],
+    mdl1, res1, info1 = dspec.fourier_filter(x=freqs, data=d, wgts=w, filter_centers=[0.],
+                                             filter_half_widths=[bl_len], suppression_factors=[0.],
                                              mode='dpss_leastsq', filter2d=False, fitting_options=dpss_options1)
-    mdl2, res2, info2 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.],
-                                             mode='dft_leastsq', filter2d=False, fitting_options=dft_options1)
 
+    mdl2, res2, info2 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.],
+                                             mode='dpss_matrix', filter2d=False, fitting_options=dpss_options1)
     #check clean with and without default options gives equivalent answers.
     mdl3, res3, info3 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.],
                                              mode='clean', filter2d=False, fitting_options={})
-    mdl4, res4, info4 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.],
+    mdl4, res4, info4 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.], filter2d=False,
                                              mode='clean', fitting_options=clean_options1)
+
     nt.assert_true(np.all(np.isclose(mdl3, mdl4, atol=1e-6)))
     nt.assert_true(np.all(np.isclose(res3, res4, atol=1e-6)))
 
     nt.assert_true(np.all(np.isclose(mdl1, mdl2, atol=1e-6)))
-    nt.asser_true(np.all(np.isclose(res1, res2)))
+    nt.assert_true(np.all(np.isclose(res1, res2)))
 
 
 
