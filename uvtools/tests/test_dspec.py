@@ -73,16 +73,7 @@ class TestMethods(unittest.TestCase):
         y1 = np.exp(2j * np.pi * fg * dg )
         fop1 = dspec.dft_operator(freqs, 0., 1e-6, fundamental_period=200*1e5)
         np.testing.assert_allclose(fop1, y1)
-
-    #def test_fit_basis_1d():
-        #DPSS tests.
-        #here are some weights with flags
-        #test with edge suppression
-        #test with average suppression
-        #test with eigenval cutoff
-        #test with nterms
-    #    return
-
+        
     def test_dpss_operator(self):
         #test that an error is thrown when we specify more then one
         #termination method.
@@ -92,6 +83,8 @@ class TestMethods(unittest.TestCase):
         freqs_bad = freqs[[0, 12, 14, 18, 22]]
         self.assertRaises(ValueError, dspec.dpss_operator, x=freqs_bad, filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5])
         self.assertRaises(ValueError, dspec.dpss_operator, x = freqs , filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5], avg_suppression=[1e-12])
+        #now calculate DPSS operator matrices using different cutoff criteria. The columns
+        #should be the same up to the minimum number of columns of the three techniques.
         amat1, ncol1 = dspec.dpss_operator(freqs, [0.], [100e-9], eigenval_cutoff=[1e-9])
         amat2, ncol2 = dspec.dpss_operator(freqs, [0.], [100e-9], edge_suppression=[1e-9])
         amat3, ncol3 = dspec.dpss_operator(freqs, [0.], [100e-9], avg_suppression=[1e-9])

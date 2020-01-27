@@ -298,6 +298,10 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             add_clean_residual = False
                         else:
                             add_clean_residual = fitting_options['add_clean_residual']
+                        if not 'filt2d_mode' in fitting_options:
+                            filt2d_mode = 'rect'
+                        else:
+                            filt2d_mode = fitting_options['filt2d_mode']
                         #arguments for 2d clean should be supplied as
                         #2-list. For code economy, we expand 1d arguments to 2d
                         #including the data and weights to 1 x N arrays.
@@ -321,12 +325,31 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         taper = [gen_window(taper_opt, data.shape[m], alpha=alpha,
                                            edgecut_low=edgecut_low[m], edgecut_hi=edgecut_hi[m]) for m in range(2)]
                         taper = [np.pad(taper, [(pad[m], pad[m])], mode='constant') for m in range(2)]
-                        area = np.zeros((len(x[m]) + 2*pad[m] for m in range(2)))
+                        area_vecs = [ np.zeros(len(_x[m])) for m in range(2) ]
                         #set area equal to one inside of filtering regions
                         for m in range(2):
                             for fc, fw in zip(filter_centers[m], filter_half_widths[m]):
-                                area[np.abs(delays - fc)<=fw] = 1.
-                            area = area.T
+                                area_vecs[m][np.abs(_x[m] - fc)<=fw] = 1.
+                            if len(area_vecs[m]) == 1:
+                                area_vecs[m][:] = 1.
+                        if filt2d_mode == 'rect':
+                            area = np.outer(area_vecs[0], area_vecs[1])
+                        elif filt2d_mode == 'plus' and filter2d:
+                            area = np.zeros(data_pad.shape)
+                            #construct and add a 'plus' for each filtering window pair in each direction.
+                            for fc0, fw0 in zip(filter_centers[0], filter_half_widths[0]):
+                                av0 = ((_x[0] - fc0) <= fw0).astype(float)
+                                for fc1, fw1 in zip(filter_centers[1], filter_half_widths[1]):
+                                    area_temp = np.zeros((len(av0), len(av1)))
+                                    if fc0 >= _x[0].min() and fc0 <= _x[0].max():
+                                        area_temp[np.argmin(np.abs(_x[0]-fc0)),(_x[1] - fc1) <= fw1]=1.
+                                    if fc1 >= _x[1].min() and fc1 <= _x[1].max():
+                                        area_temp[(_x[0] - fc0) <= fw0, np.argmin(np.abs(_x[1]-fc1))]=1.
+                                    area += area_temp
+                            area = (area>0.).astype(int)
+                        else:
+                            raise ValueError("%s is not a valid filt2d_mode! choose from ['rect', 'plus']"%(filt2d_mode))
+
                         area=area.T
                         area = np.fft.fftshift(area)
                         _wgts = np.fft.ifft2(taper[0] * wgts_pad * taper[1])
