@@ -697,6 +697,7 @@ def test_fit_basis_1d():
     nt.assert_true(np.all(np.isclose(mod4, mod2, atol=1e-5)))
     nt.assert_true(np.all(np.isclose(mod3, mod4, atol=1e-2)))
 
+    nt.assert_true(np.all(np.isclose((mod2+resid2)*wgts, dw, atol=1e-6)))
 
 def test_vis_filter_dayenu():
     # load file
