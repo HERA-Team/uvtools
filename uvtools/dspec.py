@@ -61,7 +61,7 @@ def calc_width(filter_size, real_delta, nsamples):
     return (uthresh, lthresh)
 
 def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppression_factors,
-                   mode, filter2d, fitting_options, cache={}, filter_dim=1):
+                   mode, filter2d, fitting_options, cache={}, filter_dim=1, skip_wgt=0.1):
                    '''
                    Your one-stop-shop for fourier filtering.
                    We don't use the other filtering functions anymore.
@@ -239,13 +239,13 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                            model, _, info_deconv = fourier_filter(x=x, data=model, wgts=wgts, filter_centers=filter_centers,
                                                         filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
                                                         mode='_'.join(mode[1:]), filter2d=filter2d, fitting_options=fitting_options,
-                                                        taper=taper, cache=cache)
+                                                        taper=taper, cache=cache, skip_wgt=skip_wgt)
                            info = info + info_deconv
                    elif mode[0] == 'dft' or mode[0] == 'dpss':
                         model = np.zeros_like(data)
                         residual = np.zeros_like(data)
                         if not filter2d:
-                            x = [0, x]
+                            x = [np.zeros_like(x), x]
                             filter_centers = [[], copy.deepcopy(filter_centers)]
                             filter_half_widths = [[], copy.deepcopy(filter_half_widths)]
                             suppression_factors = [[], copy.deepcopy(suppression_factors)]
@@ -256,23 +256,27 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                 fitting_options = [copy.deepcopy(fitting_options) for m in range(2)]
                         fit_method=mode[1]
                         #filter -1 dimension
-                        info = [[],[]]
+                        info = [{},{}]
                         for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
-                            model[i], residual[i], _info = fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
-                                                            filter_half_widths=filter_half_widths[1],
-                                                            suppression_factors=suppression_factors[1],
-                                                            basis_options=fitting_options, method=fit_method,
-                                                            basis=mode[0], cache=cache)
-                            info[1].append(_info)
+                            if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt:
+                                model[i], residual[i], info[1][i] = fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
+                                                                filter_half_widths=filter_half_widths[1],
+                                                                suppression_factors=suppression_factors[1],
+                                                                basis_options=fitting_options, method=fit_method,
+                                                                basis=mode[0], cache=cache)
+                            else:
+                                info[1][i] = 'skipped'
                         #and if filter2d, filter the 0 dimension. Note that we feed in 'model' here.
                         if filter2d:
                             for i, _y, _w, in zip(range(data.shape[1]), model.T, wgts.T):
-                                model.T[i], residual.T[i], _info = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
-                                                                filter_half_widths=filter_half_widths[0],
-                                                                suppression_factors=suppression_factors[0],
-                                                                basis_options=fitting_options, method=fit_method,
-                                                                basis=mode[0], cache=cache)
-                                info[0].append(_info)
+                                if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt:
+                                    model.T[i], residual.T[i], info[1][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
+                                                                    filter_half_widths=filter_half_widths[0],
+                                                                    suppression_factors=suppression_factors[0],
+                                                                    basis_options=fitting_options, method=fit_method,
+                                                                    basis=mode[0], cache=cache)
+                                else:
+                                    info[0][i] = 'skipped'
                    elif mode[0] == 'clean':
                         #Unpack all of the clean parameters from
                         #fitting_options. This is to preserve default behavior
@@ -282,11 +286,14 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         #high_pass_fourier_filter default behavior
                         #for those who were raised on it.
                         if not 'tol' in fitting_options:
-                            fitting_options['tol'] = 1e-9
+                            tol = 1e-9
                         else:
                             tol = fitting_options['tol']
                         if not 'taper' in fitting_options:
-                            taper_opt = 'none'
+                            if not filter2d:
+                                taper_opt = 'none'
+                            else:
+                                taper_opt = ['none', 'none']
                         else:
                             taper_opt = fitting_options['taper']
                         if not 'alpha' in fitting_options:
@@ -302,21 +309,23 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         else:
                             gain = fitting_options['gain']
                         if not 'edgecut_low' in fitting_options:
-                            edgecut_low = 0
+                            if filter2d:
+                                edgecut_low = [0,0]
+                            else:
+                                edgecut_low = 0
                         else:
                             edgecut_low = fitting_options['edgecut_low']
                         if not 'edgecut_hi' in fitting_options:
-                            edgecut_hi = 0
+                            if filter2d:
+                                edgecut_hi = [0,0]
+                            else:
+                                edgecut_hi = 0
                         else:
                             edgecut_hi = fitting_options['edgecut_hi']
                         if not 'pad' in fitting_options:
                             pad = 0
                         else:
                             pad = fitting_options['pad']
-                        if not 'skip_wgt' in fitting_options:
-                            skip_wgt = 0.1
-                        else:
-                            skip_wgt = fitting_options['skip_wgt']
                         if not 'add_clean_residual' in fitting_options:
                             add_clean_residual = False
                         else:
@@ -328,34 +337,36 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         #arguments for 2d clean should be supplied as
                         #2-list. For code economy, we expand 1d arguments to 2d
                         #including the data and weights to 1 x N arrays.
-                        if not np.all(np.diff(x[0]) == np.mean(np.diff(x[0]))):
-                            raise ValueError("Data must be equally spaced for CLEAN mode!")
+
                         if not filter2d:
                             pad = [0, pad]
-                            _x = [np.array([0]), np.fft.fftfreq(len(x), x[1]-x[0])]
-                            x = [np.array([0]), x]
+                            _x = [np.zeros(data.shape[0]), np.fft.fftfreq(len(x), x[1]-x[0])]
+                            x = [np.zeros(data.shape[0]), x]
                             edgecut_hi = [ 0, edgecut_hi ]
                             edgecut_low = [ 0, edgecut_low ]
-                            filter_centers = [[], copy.deepcopy(filter_centers)]
-                            filter_half_widths = [[], copy.deepcopy(filter_half_widths)]
+                            filter_centers = [[0.], copy.deepcopy(filter_centers)]
+                            filter_half_widths = [[9e99], copy.deepcopy(filter_half_widths)]
+                            taper_opt = ['none', taper_opt]
                         else:
                             if not np.all(np.diff(x[1]) == np.mean(np.diff(x[1]))):
                                 raise ValueError("Data must be equally spaced for CLEAN mode!")
                             _x = [np.fft.fftfreq(len(x[m]), x[m][1]-x[m][0]) for m in range(2)]
 
+                        for m in range(2):
+                            if not np.all(np.diff(x[m]) == np.mean(np.diff(x[m]))):
+                                raise ValueError("Data must be equally spaced for CLEAN mode!")
                         data_pad = np.pad(data, [(pad[m], pad[m]) for m in range(2)], mode='constant')
                         wgts_pad = np.pad(wgts, [(pad[m], pad[m]) for m in range(2)], mode='constant')
-                        taper = [gen_window(taper_opt, data.shape[m], alpha=alpha,
+                        taper = [gen_window(taper_opt[m], data.shape[m], alpha=alpha, normalization='mean',
                                            edgecut_low=edgecut_low[m], edgecut_hi=edgecut_hi[m]) for m in range(2)]
-                        taper = [np.pad(taper, [(pad[m], pad[m])], mode='constant') for m in range(2)]
+                        taper = [np.pad(taper[m], [(pad[m], pad[m])], mode='constant') for m in range(2)]
+                        taper[0] = np.atleast_2d(taper[0]).T
                         area_vecs = [ np.zeros(len(_x[m])) for m in range(2) ]
                         #set area equal to one inside of filtering regions
-                        for m in range(2):
-                            for fc, fw in zip(filter_centers[m], filter_half_widths[m]):
-                                area_vecs[m][np.abs(_x[m] - fc)<=fw] = 1.
-                            if len(area_vecs[m]) == 1:
-                                area_vecs[m][:] = 1.
                         if filt2d_mode == 'rect':
+                            for m in range(2):
+                                for fc, fw in zip(filter_centers[m], filter_half_widths[m]):
+                                    area_vecs[m][np.abs(_x[m] - fc)<=fw] = 1.
                             #if filtering windows are rectangular,
                             #we can just take outer products
                             area = np.outer(area_vecs[0], area_vecs[1])
@@ -363,7 +374,6 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             area = np.zeros(data_pad.shape)
                             #construct and add a 'plus' for each filtering window pair in each dimension.
                             for fc0, fw0 in zip(filter_centers[0], filter_half_widths[0]):
-                                av0 = ((_x[0] - fc0) <= fw0).astype(float)
                                 for fc1, fw1 in zip(filter_centers[1], filter_half_widths[1]):
                                     area_temp = np.zeros((len(av0), len(av1)))
                                     if fc0 >= _x[0].min() and fc0 <= _x[0].max():
@@ -381,15 +391,15 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         _d_res = np.zeros_like(_data)
                         if not filter2d:
                             info = {}
-                            for i, _d, _w in zip(range(data.shape[0]), _data, _wgts):
+                            for i, _d, _w, _a in zip(np.arange(_data.shape[0]).astype(int), _data, _wgts, area):
                                 if _w[0] < skip_wgt:
                                     _d_cl[i] = 0.
                                     _d_res[i] = _d
-                                _d_cl[i], _info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False,
+                                _d_cl[i], _info = aipy.deconv.clean(_d, _w, area=_a, tol=tol, stop_if_div=False,
                                                                 maxiter=maxiter, gain=gain)
-                                _d_res = _info['res']
+                                _d_res[i] = _info['res']
                                 del(_info['res'])
-                                info.append(_info)
+                                info[i]=_info
                         elif filter2d:
                                 _d_cl, info = aipy.deconv.clean(_data, _wgts, area=area, tol=tol, stop_if_div=False,
                                                                 maxiter=maxiter, gain=gain)
@@ -1915,7 +1925,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache={}, eigenval_cuto
             for fn,fw in enumerate(filter_half_widths):
                 dpss_vectors = windows.dpss(nf, nf * df * fw, nf)
                 if not eigenval_cutoff is None:
-                    smat = np.sinc(2 * df * fw * (xg-yg)) * 2 * df * fw
+                    smat = np.sinc(2 * fw * (xg-yg)) * 2 * df * fw
                     eigvals = np.sum((smat @ dpss_vectors.T) * dpss_vectors.T, axis=0)
                     nterms.append(np.max(np.where(eigvals>=eigenval_cutoff[fn])))
                 if not edge_suppression is None:
