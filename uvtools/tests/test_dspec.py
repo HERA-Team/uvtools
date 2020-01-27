@@ -130,6 +130,13 @@ class TestMethods(unittest.TestCase):
         nt.assert_true(np.all(np.isclose(interp_dft, data, atol=1e-2)))
         #DPSS interpolation is clutch. We can make our standards high.
         nt.assert_true(np.all(np.isclose(interp_dpss, data, atol=1e-6)))
+        #Check Raising of ValueErrors.
+        amat_dft_pc = dspec.dft_operator(fs, [0.], [4. / 50.], fundamental_period=200.)
+        with warnings.catch_warnings(record=True) as w:
+            dspec.fit_solution_matrix(wmat, amat_dft_pc)
+            nt.assert_true(len(w) > 0)
+        self.assertRaises(ValueError, dspec.fit_solution_matrix, wmat[:50], amat_dft_pc)
+        self.assertRaises(ValueError, dspec.fit_solution_matrix, wmat, amat_dft[:-1])
 
     def test_delay_filter_2D(self):
         NCHAN = 128
