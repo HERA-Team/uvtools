@@ -678,15 +678,30 @@ def test_fit_basis_1d():
     mod2, resid2, info2 = dspec.fit_basis_1d(fs, dw, wgts, [0.], [5./50.], basis_options=dpss_opts,
                                     method='matrix', basis='dpss')
     nt.assert_true(np.all(np.isclose(mod1, mod2, atol=1e-6)))
-    #perofrm dpss interpolation ,matrix
-    #compare dpss and
+    #perform dft interpolation, leastsq and matrix and compare results
+    dft_opts={'fundamental_period':200.}
+
+    mod4, resid4, info4 = dspec.fit_basis_1d(fs, dw, wgts, [0.], [5./50.], basis_options=dft_opts,
+                                    method='leastsq', basis='dft')
+    dft_opts={'fundamental_period':140.}
+    #if I use 200, i get a poorly conditioned fitting matrix but fp=140 doesn't filter very well
+    #not sure why this is! -AEW. leastsq does fine though, but we can't get numerically stable
+    #filtering matrices for pspec analysis :(
+    mod3, resid3, info3 = dspec.fit_basis_1d(fs, dw, wgts, [0.], [5./50.], basis_options=dft_opts,
+                                    method='matrix', basis='dft')
+    #DFT interpolation with leastsq does OK.
+    #DFT interpolation with matrix method is problematic.
+    #Matrices with 2B harmonics are poorly conditioned which is
+    #unfortunate since 2B is generally where DFT performance
+    #approaches DPSS performance.
+    nt.assert_true(np.all(np.isclose(mod4, mod2, atol=1e-5)))
+    nt.assert_true(np.all(np.isclose(mod3, mod4, atol=1e-2)))
 
 
 def test_vis_filter_dayenu():
     # load file
     uvd = UVData()
     uvd.read_miriad(os.path.join(DATA_PATH, "zen.2458042.17772.xx.HH.uvXA"), bls=[(24, 25)])
-
     freqs = uvd.freq_array.squeeze()
     times = np.unique(uvd.time_array) * 24 * 3600
     times -= np.mean(times)
