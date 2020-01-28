@@ -317,20 +317,23 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             gain = fitting_options['gain']
                         if not 'edgecut_low' in fitting_options:
                             if filter2d:
-                                edgecut_low = [0,0]
+                                edgecut_low = [0, 0]
                             else:
                                 edgecut_low = 0
                         else:
                             edgecut_low = fitting_options['edgecut_low']
                         if not 'edgecut_hi' in fitting_options:
                             if filter2d:
-                                edgecut_hi = [0,0]
+                                edgecut_hi = [0, 0]
                             else:
                                 edgecut_hi = 0
                         else:
                             edgecut_hi = fitting_options['edgecut_hi']
                         if not 'pad' in fitting_options:
-                            pad = 0
+                            if filter2d:
+                                pad=[0, 0]
+                            else:
+                                pad = 0
                         else:
                             pad = fitting_options['pad']
                         if not 'add_clean_residual' in fitting_options:

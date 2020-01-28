@@ -722,6 +722,18 @@ def test_fourier_filter():
     nt.assert_raises(ValueError, dspec.fourier_filter,x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
                                              mode='dft_leastsq', filter2d=True, fitting_options=dft_options1)
+
+    #try 2d iterative clean and compare to previous results.
+    mdl11, res11, info11 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
+                                             filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
+                                             mode='clean', filter2d=True, fitting_options={'filt2d_mode':'rect'})
+    #see if 2d iterative clean model is close to dft fitted model.                                             
+    nt.assert_true(np.all(np.isclose(mdl10, mdl11, rtol=1e-2)))
+    #try out plus mode. IDK
+    mdl12, res12, info12 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
+                                             filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
+                                             mode='clean', filter2d=True, fitting_options={'filt2d_mode':'plus'})
+
 def test_fit_basis_1d():
     #perform dpss interpolation, leastsq
     fs = np.arange(-50,50)
