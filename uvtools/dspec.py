@@ -230,8 +230,10 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                        wgts = copy.deepcopy(wgts).T
                    if mode[0] == 'dayenu':
                        if filter2d:
-                           fd = [0, 1]
-                       residual, info = dayenu_filter(x=x, data=data, wgts=wgts, filter_dimensions=fd,
+                           filter_dim = [0, 1]
+                       else:
+                           filter_dim = 1
+                       residual, info = dayenu_filter(x=x, data=data, wgts=wgts, filter_dimensions=filter_dim,
                                                      filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                                                      filter_factors=suppression_factors, cache=cache)
                        model = data - residual
@@ -239,8 +241,9 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                            model, _, info_deconv = fourier_filter(x=x, data=model, wgts=wgts, filter_centers=filter_centers,
                                                         filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
                                                         mode='_'.join(mode[1:]), filter2d=filter2d, fitting_options=fitting_options,
-                                                        taper=taper, cache=cache, skip_wgt=skip_wgt)
-                           info = info + info_deconv
+                                                        cache=cache, skip_wgt=skip_wgt)
+                           info = info['info_deconv']=info_deconv
+
                    elif mode[0] == 'dft' or mode[0] == 'dpss':
                         info = {0:{},1:{}}
                         model = np.zeros_like(data)
@@ -253,7 +256,10 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             fitting_options=[[], fitting_options]
                         else:
                             if mode[0] == 'dft':
-                                fitting_options = [{'fundamental_period': fp} for fp in fitting_options['fundamental_period']]
+                                if not isinstance(fitting_options['fundamental_period'],(tuple,list)):
+                                    raise ValueError("'fundamental_period' must be a 2-tuple or list for 2d fitting.")
+                                else:
+                                    fitting_options = [{'fundamental_period': fp} for fp in fitting_options['fundamental_period']]
                             elif mode[0] == 'dpss':
                                 fitting_options = [copy.deepcopy(fitting_options) for m in range(2)]
                         fit_method=mode[1]
@@ -2116,7 +2122,7 @@ def dayenu_mat_inv(x, filter_centers, filter_half_widths,
 
     nchan = len(x)
     filter_key = tuple(x) + tuple(filter_centers) + \
-    tuple(filter_half_widths) + tuple(filter_factors) + (wrap, wrap_interval, nwraps, no_regularization)
+    tuple(filter_half_widths) + tuple(filter_factors) + (wrap, wrap_interval, nwraps, no_regularization, 'dayenu_mat')
 
     if not filter_key in cache:
         fx, fy = np.meshgrid(x,x)
