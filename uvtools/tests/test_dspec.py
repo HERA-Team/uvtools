@@ -627,9 +627,7 @@ def test_fourier_filter():
     dfr, ddly = frs[1] - frs[0], dlys[1] - dlys[0]
     d = 200 * np.exp(-2j*np.pi*times[:, None]*(frs[ntimes//2+2]+dfr/4) - 2j*np.pi*freqs[None, :]*(dlys[nf//2+2]+ddly/4))
     d += 50 * np.exp(-2j*np.pi*times[:, None]*(frs[ntimes//2-3]) - 2j*np.pi*freqs[None, :]*(dlys[nf//2+3]))
-    n = 10 * ((np.random.normal(0, 1, nf * ntimes).astype(np.complex) \
-         + 1j * np.random.normal(0, 1, nf * ntimes)).reshape(ntimes, nf))
-    d += n
+
     def get_snr(clean, fftax=1, avgax=0, modes=[2, 20]):
         cfft = np.fft.ifft(clean, axis=fftax)
         cavg = np.median(np.abs(cfft), axis=avgax)
@@ -647,10 +645,11 @@ def test_fourier_filter():
     d[20, :] += 1e3
     f[20, :] = True
     w = (~f).astype(np.float)
-    bl_len = dlys[nf//2+3]
+    bl_len = dlys[nf//2+4]
+    fr_len = frs[ntimes//2+4]
     # dpss filtering
     dpss_options1={'eigenval_cutoff':[1e-6]}
-    dft_options1={'fundamental_period':2.*(frs.max()-frs.min())}
+    dft_options1={'fundamental_period':2.*(times.max()-times.min())}
     clean_options1={'tol':1e-9, 'maxiter':100, 'pad':0, 'filt2d_mode':'rect',
                     'edgecut_low':0, 'edgecut_hi':0, 'add_clean_residual':False,
                     'taper':'none', 'skip_wgt':0.1, 'gain':0.1, 'alpha':0.5}
@@ -672,6 +671,32 @@ def test_fourier_filter():
     nt.assert_true(np.all(np.isclose(mdl1, mdl2, atol=1e-6)))
     nt.assert_true(np.all(np.isclose(res1, res2)))
 
+    #check error when unsupported mode provided
+    nt.assert_raises(ValueError, dspec.fourier_filter, x=freqs, data=d, wgts=w, filter_centers=[0.],
+                    filter_half_widths=[bl_len], suppression_factors=[0.],
+                    mode='foo', filter2d=False, fitting_options=dpss_options1)
+    #check error when wgt dim does not equal data dim.
+    nt.assert_raises(ValueError, dspec.fourier_filter, x=freqs, data=d, wgts=w[0].squeeze(), filter_centers=[0.],
+                    filter_half_widths=[bl_len], suppression_factors=[0.],
+                    mode='dpss_leastsq', filter2d=False, fitting_options=dpss_options1)
+
+    #check 1d vector support
+    mdl11d, res11d, info11d = dspec.fourier_filter(x=freqs, data=d[0], wgts=w[0], filter_centers=[0.],
+                                             filter_half_widths=[bl_len], suppression_factors=[0.],
+                                             mode='dpss_leastsq', filter2d=False, fitting_options=dpss_options1)
+    nt.assert_true(np.all(np.isclose(mdl1[0], mdl11d, atol=1e-6)))
+    #perform a fringe-rate filter
+    mdl5, res5, info5 = dspec.fourier_filter(x=times, data=d, wgts=w, filter_centers=[0.],
+                                             filter_half_widths=[fr_len], suppression_factors=[0.], filter_dim=0,
+                                             mode='dpss_leastsq', filter2d=False, fitting_options=dpss_options1)
+    #check that fringe rate filter model gives similar results to delay filter.
+    nt.assert_true(np.all(np.isclose(mdl1[~f],mdl5[~f], rtol=1e-2)))
+    #check fringe rate filter with dft mode
+    mdl6, res6, info6 = dspec.fourier_filter(x=times, data=d, wgts=w, filter_centers=[0.],
+                                             filter_half_widths=[fr_len], suppression_factors=[0.], filter_dim=0,
+                                             mode='dft_leastsq', filter2d=False, fitting_options=dft_options1)
+   #check that dft and dpss fringe-rate inpainting give the same results.                                         
+    nt.assert_true(np.all(np.isclose(mdl5, mdl6, rtol=1e-2)))
 
 
 def test_fit_basis_1d():
@@ -732,7 +757,6 @@ def test_vis_filter_dayenu():
     n = 10 * ((np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes).astype(np.complex) \
          + 1j * np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes)).reshape(uvd.Ntimes, uvd.Nfreqs))
     d += n
-    print(uvd.Nfreqs)
     def get_snr(clean, fftax=1, avgax=0, modes=[2, 20]):
         cfft = np.fft.ifft(clean, axis=fftax)
         cavg = np.median(np.abs(cfft), axis=avgax)

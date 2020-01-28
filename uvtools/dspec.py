@@ -123,8 +123,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                  'dpss_leastsq' method (see above)
                         'dayenu_dft_matrix', apply dayenu filter to data
                                  and deconvolve subtracted foregrounds using
-                                'dft_matrix' method (see above).
-                                !!!WARNING: dft_matrix method is often numerically
+                                'dft_matrix' mode (see above).
+                                !!!WARNING: dft_matrix mode is often numerically
                                 unstable. I don't recommend it!
                         'dayenu_dpss_matrix', apply dayenu filter to data
                                  and deconvolve subtracted foregrounds using
@@ -201,7 +201,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         dictionary for caching fitting matrices.
 
                     filter_dim, int optional
-                        specify dimension to filter.
+                        specify dimension to filter. default 1,
+                        and if 2d filter, will use both dimensions.
                     Returns
                     ---------
                         d_mdl: array-like
@@ -215,7 +216,6 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                     'dayenu_dft_matrix', 'dayenu_clean']
                    if not mode in supported_modes:
                        raise ValueError("Need to supply a mode in supported modes:%s"%(str(supported_modes)))
-
                    mode = mode.split('_')
                    ndim_data = len(data.shape)
                    ndim_wgts = len(wgts.shape)
@@ -242,6 +242,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                                         taper=taper, cache=cache, skip_wgt=skip_wgt)
                            info = info + info_deconv
                    elif mode[0] == 'dft' or mode[0] == 'dpss':
+                        info = {0:{},1:{}}
                         model = np.zeros_like(data)
                         residual = np.zeros_like(data)
                         if not filter2d:
@@ -249,6 +250,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             filter_centers = [[], copy.deepcopy(filter_centers)]
                             filter_half_widths = [[], copy.deepcopy(filter_half_widths)]
                             suppression_factors = [[], copy.deepcopy(suppression_factors)]
+                            fitting_options=[[], fitting_options]
                         else:
                             if mode[0] == 'dft':
                                 fitting_options = [{'fundamental_period': fp} for fp in fitting_options['fundamental_period']]
@@ -256,13 +258,12 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                 fitting_options = [copy.deepcopy(fitting_options) for m in range(2)]
                         fit_method=mode[1]
                         #filter -1 dimension
-                        info = [{},{}]
                         for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
                             if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt:
                                 model[i], residual[i], info[1][i] = fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
                                                                 filter_half_widths=filter_half_widths[1],
                                                                 suppression_factors=suppression_factors[1],
-                                                                basis_options=fitting_options, method=fit_method,
+                                                                basis_options=fitting_options[1], method=fit_method,
                                                                 basis=mode[0], cache=cache)
                             else:
                                 info[1][i] = 'skipped'
@@ -273,7 +274,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                     model.T[i], residual.T[i], info[1][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
                                                                     filter_half_widths=filter_half_widths[0],
                                                                     suppression_factors=suppression_factors[0],
-                                                                    basis_options=fitting_options, method=fit_method,
+                                                                    basis_options=fitting_options[0], method=fit_method,
                                                                     basis=mode[0], cache=cache)
                                 else:
                                     info[0][i] = 'skipped'
@@ -1786,7 +1787,7 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
         suppression_vector = np.ones(amat.shape[1])
     else:
         if basis.lower() == 'dft':
-            suppression_vector =  np.hstack([1-sf * np.ones(int(np.ceil(fw * basis_options['fundamental_period'])))\
+            suppression_vector =  np.hstack([1-sf * np.ones(2*int(np.ceil(fw * basis_options['fundamental_period'])))\
                                              for sf,fw in zip(suppression_factors, filter_half_widths)])
         elif basis.lower() == 'dpss':
             suppression_vector = np.hstack([1-sf * np.ones(nterm) for sf, nterm in zip(suppression_factors, nterms)])
@@ -1906,7 +1907,8 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache={}, eigenval_cuto
         raise ValueError('Must only provide a single series cutoff condition. %d were provided: %s '%(np.count_nonzero(crit_provided),
                                                                                                  str(crit_provided_name)))
 
-    opkey = ('dpss_operator',) + tuple(x) + tuple(filter_centers) + (crit_provided_name[0],) + tuple(crit_provided_value[0])
+    opkey = ('dpss_operator',) + tuple(x) + tuple(filter_centers) + tuple(filter_half_widths)\
+                                + (crit_provided_name[0],) + tuple(crit_provided_value[0])
     if not opkey in cache:
         #check that xs are equally spaced.
         if not np.all(np.diff(x) == np.mean(np.diff(x))):
