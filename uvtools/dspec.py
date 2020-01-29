@@ -606,7 +606,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             elif mode=='dft_interp':
                 nmin = int((fcfg[0] - fwfg[0]) * real_delta * fg_deconv_fundamental_period[-1])
                 nmax = int((fcfg[0] + fwfg[0]) * real_delta * fg_deconv_fundamental_period[-1])
-                info['fg_deconv'] = {'method':'dft_interp','nmin':nmin, 'nmax':nmax}
+                info ={'fg_deconv': {'method':'dft_interp','nmin':nmin, 'nmax':nmax}}
                 d_cl, _, _ = delay_filter_leastsq_1d( (data * wgts * win ).squeeze(), flags=(wgts==0.).squeeze(), sigma=1.,
                                                     nmax=(nmin, nmax), freq_units=True, even_modes=True, fundamental_period=fg_deconv_fundamental_period[-1])
                 _d_cl = np.fft.ifft(d_cl)

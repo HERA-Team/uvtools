@@ -735,6 +735,11 @@ def test_fourier_filter():
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
                                              mode='clean', filter2d=True, fitting_options={'filt2d_mode':'plus','tol':1e-5})
 
+    #test error when cleaning with invalid filt2d mode. 
+    nt.assert_raises(ValueError, dspec.fourier_filter,x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
+                                                 filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
+                                                 mode='clean', filter2d=True, fitting_options={'filt2d_mode':'bargh','tol':1e-5})
+
 def test_fit_basis_1d():
     #perform dpss interpolation, leastsq
     fs = np.arange(-50,50)
@@ -818,6 +823,7 @@ def test_vis_filter_dayenu():
 
     mdl2, res2, info2 = dspec.delay_filter(d[0], w[0], bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.,
                                              tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, mode='dayenu', deconv_dayenu_foregrounds=True, fg_deconv_method='clean')
+
     #residuals should be same
     nt.assert_true(np.isclose(res1 - res2, 0.0, atol=10).all())
 
@@ -932,11 +938,17 @@ def test_vis_filter_dft_interp():
     w = (~f).astype(np.float)
     bl_len = 70.0 / 2.99e8
 
+    #make sure to cover 1d case
+    mdl0, res0, info0 = dspec.delay_filter(d[0], w[0], bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.,
+                                             tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, mode='dft_interp',
+                                             deconv_dayenu_foregrounds=True, fg_deconv_method='leastsq')
 
     # delay filter basic execution with leastsq
     mdl, res, info = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.,
                                              tol=1e-8, window='none', skip_wgt=0.1, gain=1e-1, mode='dft_interp',
                                              deconv_dayenu_foregrounds=True, fg_deconv_method='leastsq')
+
+    nt.assert_true(np.all(np.isclose(mdl0, mdl[0],atol=1e-6)))
     cln = mdl + res
 
     snrs = get_snr(cln, fftax=1, avgax=0)
