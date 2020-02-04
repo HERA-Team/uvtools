@@ -97,6 +97,10 @@ class TestDiffPlotters(unittest.TestCase):
         sim.add_eor("noiselike_eor")
         self.uvd2 = copy.deepcopy(sim.data)
         # now just make some things with metadata that will raise exceptions
+
+        # make the visibility units disagree
+        sim.data.vis_units = 'mK'
+        self.uvd_bad_vis_units = copy.deepcopy(sim.data)
         # mismatched baselines
         sim = hera_sim.Simulator(n_freq=10, n_times=10, 
                                  antennas=offset_ants,
@@ -137,11 +141,70 @@ class TestDiffPlotters(unittest.TestCase):
         # choose an antenna pair and polarization for later
         self.antpairpol = (0, 1, "xx")
 
+        # make a simulation for the plot_diff_1d test
+        sim = hera_sim.Simulator(
+            n_freq=100, n_times=2, antennas=antennas
+        )
+        sim.add_eor("noiselike_eor")
+        self.sim = sim
+
     def tearDown(self):
         pass
 
     def runTest(self):
         pass
+
+    def test_plot_diff_1d(self):
+        # list possible plot types and dimensions
+        plot_types = ("normal", "fourier", "both")
+        dimensions = ("time", "freq")
+        duals = {"time" : "fringe rate", "freq" : "delay"}
+
+        # loop over all the choices
+        for plot_type in plot_types:
+            Nplots = 6 if plot_type == "both" else 3
+            elements = [(plt.Subplot, Nplots),]
+            for dimension in dimensions:
+                fig = uvt.plot.plot_diff_1d(
+                    self.uvd1, self.uvd2, self.antpairpol, 
+                    plot_type=plot_type, dimension=dimension
+                )
+
+                # check the number of plots is correct
+                self.assertTrue(axes_contains(fig, elements))
+
+                # check that the plots are labeled correctly
+                for i, ax in enumerate(fig.axes):
+                    xlabel = ax.get_xlabel().lower()
+
+                    # find out what the dimension should be
+                    if plot_type == "normal":
+                        dim = dimension
+                    elif plot_type == "fourier":
+                        dim = duals[dimension]
+                    else:
+                        dim = dimension if i // 3 == 0 else duals[dimension]
+                    
+                    # account for the fact that it plots against lst if
+                    # plotting along the time axis
+                    dim = "lst" if dim == "time" else dim
+
+                    # make sure that the label is correct
+                    self.assertTrue(xlabel.startswith(dim))
+
+        plt.close(fig)
+
+        # now test the auto-dimension-choosing feature
+
+        # make just one row of plots
+        fig = uvt.plot.plot_diff_1d(
+            self.sim.data, self.sim.data, self.antpairpol, plot_type="normal"
+        )
+
+        # make sure that it's plotting in frequency space
+        ax = fig.axes[0]
+        xlabel = ax.get_xlabel().lower()
+        self.assertTrue(xlabel.startswith('freq'))
 
     def test_plot_diff_uv(self):
         # plot something
@@ -236,7 +299,7 @@ class TestDiffPlotters(unittest.TestCase):
             if not attr.startswith("uvd_bad"):
                 continue
             print("testing on: {}".format(attr))
-            nt.assert_raises(AssertionError, 
+            nt.assert_raises(uvt.utils.MetadataError, 
                              uvt.plot.plot_diff_uv,
                              self.uvd1, value,
                              check_metadata=True)

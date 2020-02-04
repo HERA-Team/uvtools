@@ -755,3 +755,212 @@ def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, bins=50):
         fig.colorbar(cax)
 
     return fig
+
+def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both", 
+                 check_metadata=True, dimension=None,
+                 average_mode=None, **kwargs):
+    """Produce plots of visibility differences along a single axis.
+
+    Parameters
+    ----------
+    uvd1, uvd2 : pyuvdata.UVData
+        UVData objects which store visibilities to be differenced and their
+        associated metadata. They should have the same number of frequencies,
+        same baselines, and same times as each other.
+
+    antpairpol : tuple
+        Tuple specifying which baseline and polarization to use to compare 
+        visibility waterfalls. See pyuvdata.UVData.get_data method docstring 
+        for information on accepted tuples.
+    
+    plot_type : str, optional
+        A string identifying which quantities to plot. Accepted values are 
+        as follows:
+            - normal
+                - Single row of plots in the usual basis (time or frequency).
+            - fourier
+                - Single row of plots in Fourier space (fringe rate or delay).
+            - both
+                - Two rows of plots in the usual and Fourier domains.
+        Default behavior is to use the 'both' setting.
+
+    check_metadata : bool, optional
+        Whether to check that the metadata for `uvd1` and `uvd2` match.
+        See ``utils.check_uvd_pair_metadata`` docstring for details on 
+        how the metadata are compared. If `check_metadata` is set to 
+        False, but the metadata don't agree, then the plotter may or 
+        may not error out, depending on how the metadata disagree. 
+        Default behavior is to check the metadata.
+    
+    dimension : str, optional
+        String specifying which dimension is used for the normal domain. This 
+        may be either 'time' or 'freq'. Default is to determine which axis has
+        more entries and to use that axis.
+
+    average_mode : str, optional
+        String specifying which ``numpy`` averaging function to use. Default 
+        behavior is to use ``np.mean``.
+
+    **kwargs
+        These are passed directly to the averaging function used. Refer to 
+        the documentation of the averaging function you want to use for 
+        information regarding what parameters may be specified here.
+
+    Returns
+    -------
+    fig : matplotlib.pyplot.Figure
+        Figure object containing the plots. The plots have their axes and 
+        titles automatically set depending on what quantities are being 
+        plotted.
+
+    Notes
+    -----
+    This function extracts the visibility waterfall corresponding to the 
+    provided antpairpol and flattens it by taking the average along the axis 
+    not being used. The averaging function used may be specified with the 
+    `average_mode` parameter, and weights (or optional parameters to be 
+    passed to the averaging function) may be specified in the variable 
+    keyword parameter `kwargs`. Any flags relevant for the data are 
+    currently ignored, but this functionality may be introduced in a future 
+    update.
+    """
+    if check_metadata:
+        utils.check_uvd_pair_metadata(uvd1, uvd2)
+
+    if plot_type not in ("normal", "fourier", "both"):
+        raise ValueError(
+            "You must specify whether to make one or two plots with "
+            "the ``plot_type`` parameter. You may choose to plot the "
+            "visibility difference as a function of frequency/time by "
+            "setting ``plot_type`` to 'normal', or you can choose to "
+            "plot the difference in Fourier space by setting "
+            "``plot_type`` to 'fourier'. If you would like to plot both, "
+            "then set ``plot_type`` to 'both'."
+        )
+
+    dimensions_to_duals = {"time" : "fr", "freq" : "dly"} 
+
+    if dimension is None:
+        dimension = "time" if uvd1.Ntimes > uvd1.Nfreqs else "freq"
+        if uvd1.Ntimes == uvd1.Nfreqs:
+            warnings.warn(
+                "The UVData objects passed have the same number of " \
+                "times as they do frequencies. You did not specify " \
+                "which dimension to use, so the difference plots " \
+                "will be made along the time axis."
+            )
+
+    if dimension not in ("time", "freq"):
+        raise ValueError(
+            "You must specify whether the visibilities are a function "
+            "of time or frequency by setting the ``dimension`` "
+            "parameter to 'time' or 'freq', respectively."
+        )
+    
+    dual = dimensions_to_duals[dimension]
+
+    use_axis = 0 if dimension == "time" else 1
+    proj_axis = (use_axis + 1) % 2
+
+    # choose an averaging function
+    if average_mode is not None:
+        try:
+            average = getattr(np, average_mode)
+        except AttributeError as err:
+            err_msg = err.args[0] + "\nDefaulting to using np.mean"
+            warnings.warn(err_msg)
+        finally:
+            average = np.mean
+    else:
+        average = np.mean
+
+    # get visibility data
+    vis1 = average(uvd1.get_data(antpairpol), axis=proj_axis, **kwargs)
+    vis2 = average(uvd2.get_data(antpairpol), axis=proj_axis, **kwargs)
+
+    # use same approach as in plot_diff_waterfall
+    # get important metadata
+    times = np.unique(uvd1.time_array) # days
+    lsts = np.unique(uvd1.lst_array) # radians
+    freqs = np.unique(uvd1.freq_array) # Hz
+
+    # import astropy for unit conversions
+    import astropy.units as u
+    frs = utils.fourier_freqs(times * u.day.to('s')) # Hz
+    dlys = utils.fourier_freqs(freqs) # s
+
+    # make dictionary of plotting parameters
+    plot_params = {"time" : lsts, # radians
+                   "freq" : freqs / 1e6, # MHz
+                   "fr" : frs * 1e3, # mHz
+                   "dly" : dlys * 1e9 # ns
+                   }
+
+    # now do the same for abscissa labels
+    labels = {"time" : "LST [radians]",
+              "freq" : "Frequency [MHz]",
+              "fr" : "Fringe Rate [mHz]",
+              "dly" : "Delay [ns]"
+              }
+
+    # and now for ordinate labels
+    vis_labels = {"time" : r"$V(t)$ [{vis_units}]",
+                  "freq" : r"$V(\nu)$ [{vis_units}]",
+                  "fr" : r"$\tilde{V}(f)$ [{vis_units}$\cdot$s]",
+                  "dly" : r"$\tilde{V}(\tau)$ [{vis_units}$\cdot$Hz]"
+                  }
+
+    # make some mappings for plot types
+    plot_types = {dimension : lambda data : data, # no fft
+                  dual : lambda data : utils.FFT(data, 0)
+                  }
+
+    # update the plot_type parameter to something useful
+    if plot_type == "normal":
+        plot_type = (dimension,)
+    elif plot_type == "fourier":
+        plot_type = (dual,)
+    else:
+        plot_type = (dimension, dual)
+
+    # make a dictionary of visibilities to plot
+    visibilities = {
+        plot : [xform(vis) for vis in (vis1, vis2)]
+        for plot, xform in plot_types.items()
+        if plot in plot_type
+    }
+
+    # XXX make a helper function for this
+    # now setup the figure
+    import matplotlib.pyplot as plt
+    figsize = (4 * 3, 3 * len(plot_type))
+    fig = plt.figure(figsize=figsize)
+    axes = fig.subplots(len(plot_type), 3)
+    axes = [axes,] if axes.ndim == 1 else axes
+    axes[0][0].set_title("Amplitude Difference", fontsize=12)
+    axes[0][1].set_title("Phase Difference", fontsize=12)
+    axes[0][2].set_title("Amplitude of Complex Difference", fontsize=12)
+
+    # plot the visibilities
+    for i, item in enumerate(visibilities.items()):
+        # get the differences
+        visA, visB = item[1]
+        diffs = (
+            utils.diff(visA, visB, 'abs'),
+            utils.diff(visA, visB, 'phs'),
+            utils.diff(visA, visB, 'complex')
+        )
+
+        xdim = item[0]
+        xlabel = labels[xdim]
+        # to ensure appropriate LaTeX formatting and visibility units
+        ylabel = vis_labels[xdim].format(V="{V}", vis_units=uvd1.vis_units)
+
+        # actually plot it
+        for ax, diff in zip(axes[i], diffs):
+            ax.set_xlabel(xlabel, fontsize=12)
+            ax.set_ylabel(ylabel, fontsize=12)
+
+            ax.plot(plot_params[xdim], diff, marker='o', color='k', lw=0)
+
+    return fig
