@@ -758,6 +758,7 @@ def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, bins=50):
 
 def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both", 
                  check_metadata=True, dimension=None,
+                 taper=None, taper_kwargs=None,
                  average_mode=None, **kwargs):
     """Produce plots of visibility differences along a single axis.
 
@@ -796,6 +797,15 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
         String specifying which dimension is used for the normal domain. This 
         may be either 'time' or 'freq'. Default is to determine which axis has
         more entries and to use that axis.
+
+    taper : str, optional
+        Sting specifying which taper to use; must be a taper supported by 
+        ``dspec.gen_window``. Default is to use no taper.
+
+    taper_kwargs : dict, optional
+        Dictionary of keyword arguments and their values, passed downstream to 
+        ``dspec.gen_window``. Default is to use an empty dictionary (i.e. 
+        default parameter values for whatever window is generated).
 
     average_mode : str, optional
         String specifying which ``numpy`` averaging function to use. Default 
@@ -869,7 +879,6 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
         except AttributeError as err:
             err_msg = err.args[0] + "\nDefaulting to using np.mean"
             warnings.warn(err_msg)
-        finally:
             average = np.mean
     else:
         average = np.mean
@@ -910,9 +919,12 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
                   "dly" : r"$\tilde{V}(\tau)$ [{vis_units}$\cdot$Hz]"
                   }
 
+    # make sure the taper kwargs are a dictionary
+    taper_kwargs = taper_kwargs or {}
+
     # make some mappings for plot types
     plot_types = {dimension : lambda data : data, # no fft
-                  dual : lambda data : utils.FFT(data, 0)
+                  dual : lambda data : utils.FFT(data, 0, taper, **taper_kwargs)
                   }
 
     # update the plot_type parameter to something useful
