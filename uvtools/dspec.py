@@ -105,11 +105,15 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         'dpss_matrix', dpss fitting using direct lin-lsq matrix
                                        computation. Slower then lsq but provides linear
                                        operator that can be used to propagate
-                                       statistics.
+                                       statistics and the matrix is cached so
+                                       on average, can be faster for data with
+                                       many similar flagging patterns.
                         'dft_matrix', dft fitting using direct lin-lsq matrix
                                       computation. Slower then lsq but provides
                                       linear operator that can be used to propagate
-                                      statistics.
+                                      statistics and the matrix is cached so
+                                      on average, can be faster for data with
+                                      many similar flagging patterns.
                                       !!!WARNING: In my experience,
                                       'dft_matrix' option is numerical unstable.!!!
                                       'dpss_matrix' works much better.
@@ -1826,7 +1830,13 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
         res = lsq_linear(a, w * y)
         cn_out = res.x
     elif method == 'matrix':
-        fmat = fit_solution_matrix(wmat, amat, cache=cache)
+        fm_key = (basis,) + tuple(filter_centers) + tuple(filter_half_widths) + tuple(suppression_vector)\
+        + tuple(x) + tuple(w)
+        if basis.lower() == 'dft':
+            fm_key = fm_key + (basis_options['fundamental_period'], )
+        elif basis.lower() == 'dpss':
+            fm_key = fm_key + tuple(nterms)
+        fmat = fit_solution_matrix(wmat, amat, cache=cache, fit_mat_key=fm_key)
         info['fitting_matrix'] = fmat
         cn_out = fmat @ y
     else:
@@ -1835,7 +1845,7 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     resid = y - model
     return model, resid, info
 
-def fit_solution_matrix(weights, design_matrix, cache=None):
+def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit_mat_key=None):
     """
     Calculate the linear least squares solution matrix
     from a design matrix, A and a weights matrix W
@@ -1849,6 +1859,12 @@ def fit_solution_matrix(weights, design_matrix, cache=None):
         ndata x n_fit_params matrix transforming fit_parameters to data
     cache: optional dictionary
         optional dictionary storing pre-computed fitting matrix.
+    hash_decimals: int optional
+        the number of decimals to use in hash for caching. default is 10
+    fit_mat_key: optional hashable variable
+        optional key. If none is used, hash fit matrix against design and
+        weighting matrix.
+
 
     Returns
     -----------
@@ -1863,9 +1879,12 @@ def fit_solution_matrix(weights, design_matrix, cache=None):
         raise ValueError("weights must be a square matrix")
     if not design_matrix.shape[0] == ndata:
         raise ValueError("weights matrix incompatible with design_matrix!")
-    opkey = ('fitting_matrix',)\
-    +tuple(weights.flatten())\
-    +tuple(design_matrix.flatten())
+    if fit_mat_key is None:
+            opkey = ('fitting_matrix',) + tuple(np.round(weights.flatten(), hash_decimal))\
+                    +tuple(np.round(design_matrix.flatten(), hash_decimal))
+    else:
+        opkey = fit_mat_key
+
     if not opkey in cache:
         #check condition number
         cmat = design_matrix.T @ weights @ design_matrix
