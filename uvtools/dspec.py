@@ -61,7 +61,8 @@ def calc_width(filter_size, real_delta, nsamples):
     return (uthresh, lthresh)
 
 def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppression_factors,
-                   mode, filter2d, fitting_options, cache=None, filter_dim=1, skip_wgt=0.1):
+                   mode, filter2d, fitting_options, cache=None, filter_dim=1, skip_wgt=0.1,
+                   max_contiguous_edge_flags=10):
                    '''
                    Your one-stop-shop for fourier filtering.
                    We don't use the other filtering functions anymore.
@@ -207,6 +208,10 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                     filter_dim, int optional
                         specify dimension to filter. default 1,
                         and if 2d filter, will use both dimensions.
+
+                    max_contiguous_edge_flags : int, optional
+                        if the number of contiguous samples at the edge is greater then this
+                        at either side, skip .
                     Returns
                     ---------
                         d_mdl: array-like
@@ -271,7 +276,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         fit_method=mode[1]
                         #filter -1 dimension
                         for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
-                            if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt:
+                            if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
+                                                                            and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
                                 model[i], residual[i], info[1][i] = fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
                                                                 filter_half_widths=filter_half_widths[1],
                                                                 suppression_factors=suppression_factors[1],
@@ -282,7 +288,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         #and if filter2d, filter the 0 dimension. Note that we feed in 'model' here.
                         if filter2d:
                             for i, _y, _w, in zip(range(data.shape[1]), model.T, wgts.T):
-                                if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt:
+                                if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
+                                                                                and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
                                     model.T[i], residual.T[i], info[1][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
                                                                     filter_half_widths=filter_half_widths[0],
                                                                     suppression_factors=suppression_factors[0],
