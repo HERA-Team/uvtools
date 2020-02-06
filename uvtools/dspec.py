@@ -1842,7 +1842,7 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     else:
         raise ValueError("Provided 'method', '%s', is not in ['leastsq', 'matrix']."%(method))
     model = amat @ (suppression_vector * cn_out)
-    resid = y - model
+    resid = (y - model) * (np.abs(wgts) > 0.) #suppress flagged residuals (such as RFI)
     return model, resid, info
 
 def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit_mat_key=None):
