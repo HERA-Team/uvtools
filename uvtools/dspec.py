@@ -1897,11 +1897,13 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
         cmat = design_matrix.T @ weights @ design_matrix
         if np.linalg.cond(cmat)>=1e9:
             warn('Warning!!!!: Poorly conditioned matrix! Your linear inpainting IS WRONG!')
-        try:
-            cache[opkey] = np.linalg.inv(cmat) @ design_matrix.T @ weights
-        except np.linalg.LinAlgError as error:
-            print(error)
-            cache[opkey] = np.ones_like(cmat) * np.nan @ design_matrix.T @ weights
+            cache[opkey] = np.linalg.pinv(cmat) @ design_matrix.T @ weights
+        else:
+            try:
+                cache[opkey] = np.linalg.inv(cmat) @ design_matrix.T @ weights
+            except np.linalg.LinAlgError as error:
+                print(error)
+                cache[opkey] = np.ones_like(cmat) * np.nan @ design_matrix.T @ weights
     return cache[opkey]
 
 
