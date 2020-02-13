@@ -421,11 +421,12 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                 if _w[0] < skip_wgt:
                                     _d_cl[i] = 0.
                                     _d_res[i] = _d
-                                _d_cl[i], _info = aipy.deconv.clean(_d, _w, area=_a, tol=tol, stop_if_div=False,
-                                                                maxiter=maxiter, gain=gain)
-                                _d_res[i] = _info['res']
-                                del(_info['res'])
-                                info[i]=_info
+                                else:
+                                    _d_cl[i], _info = aipy.deconv.clean(_d, _w, area=_a, tol=tol, stop_if_div=False,
+                                                                    maxiter=maxiter, gain=gain)
+                                    _d_res[i] = _info['res']
+                                    del(_info['res'])
+                                    info[i]=_info
                         elif filter2d:
                                 _d_cl, info = aipy.deconv.clean(_data, _wgts, area=area, tol=tol, stop_if_div=False,
                                                                 maxiter=maxiter, gain=gain)
