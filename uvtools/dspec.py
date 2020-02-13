@@ -342,13 +342,13 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                 edgecut_hi = 0
                         else:
                             edgecut_hi = fitting_options['edgecut_hi']
-                        if not 'pad' in fitting_options:
+                        if not 'zeropad' in fitting_options:
                             if filter2d:
                                 pad=[0, 0]
                             else:
                                 pad = 0
                         else:
-                            pad = fitting_options['pad']
+                            pad = fitting_options['zeropad']
                         if not 'add_clean_residual' in fitting_options:
                             add_clean_residual = False
                         else:
@@ -363,7 +363,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
 
                         if not filter2d:
                             pad = [0, pad]
-                            _x = [np.zeros(data.shape[0]), np.fft.fftfreq(len(x), x[1]-x[0])]
+                            _x = [np.zeros(data.shape[0]), np.fft.fftfreq(len(x) + 2 * pad[1], x[1]-x[0])]
                             x = [np.zeros(data.shape[0]), x]
                             edgecut_hi = [ 0, edgecut_hi ]
                             edgecut_low = [ 0, edgecut_low ]
@@ -373,8 +373,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         else:
                             if not np.all(np.diff(x[1]) == np.mean(np.diff(x[1]))):
                                 raise ValueError("Data must be equally spaced for CLEAN mode!")
-                            _x = [np.fft.fftfreq(len(x[m]), x[m][1]-x[m][0]) for m in range(2)]
-
+                            _x = [np.fft.fftfreq(len(x[m]) + 2 * pad[m], x[m][1]-x[m][0]) for m in range(2)]
                         for m in range(2):
                             if not np.all(np.diff(x[m]) == np.mean(np.diff(x[m]))):
                                 raise ValueError("Data must be equally spaced for CLEAN mode!")
@@ -386,7 +385,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         taper[0] = np.atleast_2d(taper[0]).T
                         area_vecs = [ np.zeros(len(_x[m])) for m in range(2) ]
                         #set area equal to one inside of filtering regions
-                        if filt2d_mode == 'rect':
+
+                        if filt2d_mode == 'rect' or not filter2d:
                             for m in range(2):
                                 for fc, fw in zip(filter_centers[m], filter_half_widths[m]):
                                     area_vecs[m][np.abs(_x[m] - fc)<=fw] = 1.
@@ -407,8 +407,12 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             area = (area>0.).astype(int)
                         else:
                             raise ValueError("%s is not a valid filt2d_mode! choose from ['rect', 'plus']"%(filt2d_mode))
-                        _wgts = np.fft.ifft2(taper[0] * wgts_pad * taper[1])
-                        _data = np.fft.ifft2(taper[0] * data_pad * wgts * taper[1])
+                        if filter2d:
+                            _wgts = np.fft.ifft2(taper[0] * wgts_pad * taper[1])
+                            _data = np.fft.ifft2(taper[0] * data_pad * wgts_pad * taper[1])
+                        else:
+                            _wgts = np.fft.ifft(taper[0] * wgts_pad * taper[1], axis=1)
+                            _data = np.fft.ifft(taper[0] * wgts_pad * data_pad * taper[1], axis=1)
                         _d_cl = np.zeros_like(_data)
                         _d_res = np.zeros_like(_data)
                         if not filter2d:
@@ -427,8 +431,12 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                                                 maxiter=maxiter, gain=gain)
                                 _d_res = info['res']
                                 del(info['res'])
-                        model = np.fft.fft2(_d_cl)
-                        residual = np.fft.fft2(_d_res)
+                        if filter2d:
+                            model = np.fft.fft2(_d_cl)
+                            residual = np.fft.fft2(_d_res)
+                        else:
+                            model = np.fft.fft(_d_cl, axis=1)
+                            residual = np.fft.fft(_d_res, axis=1)
                         #remove padding
                         model = model[:, pad[1]:data.shape[1]+pad[-1]]
                         residual = residual[:, pad[1]:data.shape[1]+pad[1]]
