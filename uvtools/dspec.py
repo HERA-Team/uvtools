@@ -249,13 +249,6 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                                      filter_factors=suppression_factors, cache=cache)
                        model = data - residual
                        if len(mode) > 1:
-                           """
-                           model, _, info_deconv = fourier_filter(x=x, data=model, wgts=wgts, filter_centers=filter_centers, filter_dim=filter_dim_d,
-                                                        filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
-                                                        mode='_'.join(mode[1:]), filter2d=filter2d, fitting_options=fitting_options,
-                                                        cache=cache, skip_wgt=skip_wgt)
-
-                            """
                            model, _, info_deconv = fit_basis_2d(x=x, data=model, filter_centers=filter_centers, filter_dims=filter_dim_d,
                                                                  skip_wgt=skip_wgt, basis=mode[1], method=mode[2], wgts=wgts, basis_options=fitting_options,
                                                                  filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
@@ -268,52 +261,9 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         else:
                             filter_dim_d = [1]
                         model, residual, info = fit_basis_2d(x=x, data=data, filter_centers=filter_centers, filter_dims=filter_dim_d,
-                                                            skip_wgt=skip_wgt, basis=mode[0], method=mode[1], wgts=wgts, basis_options = fitting_options,
+                                                            skip_wgt=skip_wgt, basis=mode[0], method=mode[1], wgts=wgts, basis_options=fitting_options,
                                                             filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
                                                             cache=cache, max_contiguous_edge_flags=max_contiguous_edge_flags)
-                        '''
-                        info = {0:{},1:{}}
-                        model = np.zeros_like(data)
-                        residual = np.zeros_like(data)
-                        if not filter2d:
-                            x = [np.zeros_like(x), x]
-                            filter_centers = [[], copy.deepcopy(filter_centers)]
-                            filter_half_widths = [[], copy.deepcopy(filter_half_widths)]
-                            suppression_factors = [[], copy.deepcopy(suppression_factors)]
-                            fitting_options=[[], fitting_options]
-                        else:
-                            if mode[0] == 'dft':
-                                if not isinstance(fitting_options['fundamental_period'],(tuple,list)):
-                                    raise ValueError("'fundamental_period' must be a 2-tuple or list for 2d fitting.")
-                                else:
-                                    fitting_options = [{'fundamental_period': fp} for fp in fitting_options['fundamental_period']]
-                            elif mode[0] == 'dpss':
-                                fitting_options = [copy.deepcopy(fitting_options) for m in range(2)]
-                        fit_method=mode[1]
-                        #filter -1 dimension
-                        for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
-                            if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
-                                                                            and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
-                                model[i], residual[i], info[1][i] = fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
-                                                                filter_half_widths=filter_half_widths[1],
-                                                                suppression_factors=suppression_factors[1],
-                                                                basis_options=fitting_options[1], method=fit_method,
-                                                                basis=mode[0], cache=cache)
-                            else:
-                                info[1][i] = 'skipped'
-                        #and if filter2d, filter the 0 dimension. Note that we feed in 'model' here.
-                        if filter2d:
-                            for i, _y, _w, in zip(range(data.shape[1]), model.T, wgts.T):
-                                if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
-                                                                                and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
-                                    model.T[i], residual.T[i], info[1][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
-                                                                    filter_half_widths=filter_half_widths[0],
-                                                                    suppression_factors=suppression_factors[0],
-                                                                    basis_options=fitting_options[0], method=fit_method,
-                                                                    basis=mode[0], cache=cache)
-                                else:
-                                    info[0][i] = 'skipped'
-                        '''
                    elif mode[0] == 'clean':
                         #Unpack all of the clean parameters from
                         #fitting_options. This is to preserve default behavior
@@ -1833,15 +1783,14 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     if cache is None:
         cache = {}
     info = copy.deepcopy(basis_options)
-    basis_options['cache'] = cache
     if basis.lower() == 'dft':
         amat = dft_operator(x, filter_centers=filter_centers,
                             filter_half_widths=filter_half_widths,
-                            **basis_options)
+                            cache=cache, **basis_options)
     elif basis.lower() == 'dpss':
         amat, nterms = dpss_operator(x, filter_centers=filter_centers,
                                      filter_half_widths=filter_half_widths,
-                                     **basis_options)
+                                     cache=cache, **basis_options)
         info['nterms'] = nterms
     else:
         raise ValueError("Specify a fitting basis in supported bases: ['dft', 'dpss']")
@@ -1959,6 +1908,8 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                     'fitting_matrix' with the matrix used for deriving the model
                     from the data.
         """
+        if cache is None:
+            cache={}
         info = {0:{},1:{}}
         model = np.zeros_like(data)
         residual = np.zeros_like(data)
@@ -2169,7 +2120,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
 
 
 def dft_operator(x, filter_centers, filter_half_widths,
-                                 cache=None, fundamental_period=None, xc=None):
+                cache=None, fundamental_period=None, xc=None):
     """
     Discrete Fourier operator with multiple flexible delay windows to fit data, potentially with arbitrary
     user provided frequencies.
