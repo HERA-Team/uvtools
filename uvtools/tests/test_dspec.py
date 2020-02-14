@@ -652,8 +652,8 @@ def test_fourier_filter():
     # dpss filtering
     dpss_options1={'eigenval_cutoff':[1e-6]}
     dft_options1={'fundamental_period':2.*(times.max()-times.min())}
-    dft_options2={'fundamental_period':[2.*(times.max()-times.min()),
-                                        2.*(dlys.max()-dlys.min())]}
+    dft_options2={'fundamental_period':2.*(times.max()-times.min())}
+    dft_options3={'fundamental_period':2.*(dlys.max()-dlys.min())}
     clean_options1={'tol':1e-9, 'maxiter':100, 'pad':0, 'filt2d_mode':'rect',
                     'edgecut_low':0, 'edgecut_hi':0, 'add_clean_residual':False,
                     'taper':'none', 'skip_wgt':0.1, 'gain':0.1, 'alpha':0.5}
@@ -688,6 +688,7 @@ def test_fourier_filter():
     mdl11d, res11d, info11d = dspec.fourier_filter(x=freqs, data=d[0], wgts=w[0], filter_centers=[0.],
                                              filter_half_widths=[bl_len], suppression_factors=[0.],
                                              mode='dpss_leastsq', filter2d=False, fitting_options=dpss_options1)
+
     nt.assert_true(np.all(np.isclose(mdl1[0], mdl11d, atol=1e-6)))
     #perform a fringe-rate filter
     mdl5, res5, info5 = dspec.fourier_filter(x=times, data=d, wgts=w, filter_centers=[0.],
@@ -715,12 +716,15 @@ def test_fourier_filter():
 
     mdl9, res9, info9 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[1e-8],[1e-8]],
-                                             mode='dayenu_dpss_leastsq', filter2d=True, fitting_options=dpss_options1)
+                                             mode='dayenu_dpss_leastsq', filter2d=True, fitting_options=[dpss_options1, dpss_options1])
 
+    nt.assert_raises(ValueError, dspec.fourier_filter, x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
+                                             filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[1e-8],[1e-8]],
+                                             mode='dayenu_dpss_leastsq', filter2d=True, fitting_options=dpss_options1)
 
     mdl10, res10, info10 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[1e-8],[1e-8]],
-                                             mode='dayenu_dft_leastsq', filter2d=True, fitting_options=dft_options2)
+                                             mode='dayenu_dft_leastsq', filter2d=True, fitting_options=[dft_options2,dft_options3])
    #check 2d filter dft fundamental period error.
     nt.assert_raises(ValueError, dspec.fourier_filter,x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
@@ -735,7 +739,7 @@ def test_fourier_filter():
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
                                              mode='clean', filter2d=True, fitting_options={'filt2d_mode':'plus','tol':1e-5})
 
-    #test error when cleaning with invalid filt2d mode. 
+    #test error when cleaning with invalid filt2d mode.
     nt.assert_raises(ValueError, dspec.fourier_filter,x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                                  filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
                                                  mode='clean', filter2d=True, fitting_options={'filt2d_mode':'bargh','tol':1e-5})

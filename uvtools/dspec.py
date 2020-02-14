@@ -2000,7 +2000,7 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                                                     basis=basis, cache=cache)
                 else:
                     info[0][i] = 'skipped'
-        if filter_dims[0] == 1:
+        if filter_dims[0] == 0:
             data = data.T
             wgts = wgts.T
             model = model.T
