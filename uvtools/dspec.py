@@ -237,25 +237,41 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                        data = np.asarray([data])
                        wgts = np.asarray([wgts])
                    if not filter2d and filter_dim == 0:
-                       data = copy.deepcopy(data).T
-                       wgts = copy.deepcopy(wgts).T
+                       data = data.T
+                       wgts = wgts.T
                    if mode[0] == 'dayenu':
                        if filter2d:
                            filter_dim_d = [0, 1]
                        else:
-                           filter_dim_d = 1
+                           filter_dim_d = [1]
                        residual, info = dayenu_filter(x=x, data=data, wgts=wgts, filter_dimensions=filter_dim_d,
                                                      filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                                                      filter_factors=suppression_factors, cache=cache)
                        model = data - residual
                        if len(mode) > 1:
+                           """
                            model, _, info_deconv = fourier_filter(x=x, data=model, wgts=wgts, filter_centers=filter_centers, filter_dim=filter_dim_d,
                                                         filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
                                                         mode='_'.join(mode[1:]), filter2d=filter2d, fitting_options=fitting_options,
                                                         cache=cache, skip_wgt=skip_wgt)
+
+                            """
+                           model, _, info_deconv = fit_basis_2d(x=x, data=model, filter_centers=filter_centers, filter_dims=filter_dim_d,
+                                                                 skip_wgt=skip_wgt, basis=mode[1], method=mode[2], wgts=wgts, basis_options=fitting_options,
+                                                                 filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
+                                                                 cache=cache, max_contiguous_edge_flags=max_contiguous_edge_flags)
                            info = info['info_deconv']=info_deconv
 
                    elif mode[0] == 'dft' or mode[0] == 'dpss':
+                        if filter2d:
+                            filter_dim_d = [0, 1]
+                        else:
+                            filter_dim_d = [1]
+                        model, residual, info = fit_basis_2d(x=x, data=data, filter_centers=filter_centers, filter_dims=filter_dim_d,
+                                                            skip_wgt=skip_wgt, basis=mode[0], method=mode[1], wgts=wgts, basis_options = fitting_options,
+                                                            filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
+                                                            cache=cache, max_contiguous_edge_flags=max_contiguous_edge_flags)
+                        '''
                         info = {0:{},1:{}}
                         model = np.zeros_like(data)
                         residual = np.zeros_like(data)
@@ -297,6 +313,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                                                     basis=mode[0], cache=cache)
                                 else:
                                     info[0][i] = 'skipped'
+                        '''
                    elif mode[0] == 'clean':
                         #Unpack all of the clean parameters from
                         #fitting_options. This is to preserve default behavior
@@ -448,6 +465,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                    if not filter2d and filter_dim == 0:
                         model = model.T
                         residual = residual.T
+                        data = data.T
+                        wgts = wgts.T
                    return model, residual, info
 
 
@@ -1860,6 +1879,135 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     model = amat @ (suppression_vector * cn_out)
     resid = (y - model) * (np.abs(w) > 0.) #suppress flagged residuals (such as RFI)
     return model, resid, info
+
+def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
+                    basis_options, suppression_factors=None,
+                    method='leastsq', basis='dft', cache=None,
+                    filter_dims = [1], skip_wgt=0.1, max_contiguous_edge_flags=5):
+        """
+        A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
+        y_model = A @ c
+        where A is a design matrix encoding our choice for a basis functions
+        and y_model
+
+        Parameters:
+            x: array-like or 2-tuple/2-list
+                x-axis of data to fit.
+                if more then one filter_dim, must provide 2-tuple or 2-list with x
+            data: array-like
+                data to fit, should be an Ntimes x Nfreqs array.
+            wgts: array-like
+                data weights.
+            filter_centers': array-like
+                list of floats specifying the centers of fourier windows with which to fit signals
+            filter_half_widths': array-like
+                list of floats specifying the half-widths of fourier windows to model.
+            suprression_factors: array-like, optional
+                list of floats for each basis function denoting the fraction of
+                of each basis element that should be present in the fitted model
+                If none provided, model will include 100% of each mode.
+                It is sometimes useful, for renormalization reversability
+                to only include 1-\epsilon where \epsilon is a small number of
+                each mode in the model.
+            basis_options: dictionary or 2-tuple
+                basis specific options for fitting. The two bases currently supported are dft and dpss whose options
+                are as follows:
+                    * 'dft':
+                        * 'fundamental_period': float
+                            the fundamental_period of dft modes to fit. The number of
+                            modes fit within each window in 'filter_half_widths' will
+                            equal fw / fundamental_period
+                    * 'dpss':
+                        The basis_options must include one and only one of the four options
+                        for specifying how to terminate the dpss series in each filter window.
+                        *'eigenval_cutoff': array-like
+                            list of sinc_matrix eigenvalue cutoffs to use for included dpss modes.
+                        *'nterms': array-like
+                            list of integers specifying the order of the dpss sequence to use in each
+                            filter window.
+                        *'edge_supression': array-like
+                            specifies the degree of supression that must occur to tones at the filter edges
+                            to calculate the number of DPSS terms to fit in each sub-window.
+                        *'avg_suppression': list of floats, optional
+                            specifies the average degree of suppression of tones inside of the filter edges
+                            to calculate the number of DPSS terms. Similar to edge_supression but instead checks
+                            the suppression of a since vector with equal contributions from all tones inside of the
+                            filter width instead of a single tone.
+            method: string
+                specifies the fitting method to use. We currently support.
+                    *'leastsq' to perform iterative leastsquares fit to derive model.
+                        using scipy.optimize.leastsq
+                    *'matrix' derive model by directly calculate the fitting matrix
+                        [A^T W A]^{-1} A^T W and applying it to the y vector.
+
+            filter_dim, int optional
+                specify dimension to filter. default 1,
+                and if 2d filter, will use both dimensions.
+
+            max_contiguous_edge_flags : int, optional
+                if the number of contiguous samples at the edge is greater then this
+                at either side, skip .
+
+            Returns:
+                model: array-like
+                    Ndata array of complex floats equal to interpolated model
+                resid: array-like
+                    Ndata array of complex floats equal to y - model
+                info:
+                    dictionary containing fitting arguments for reference.
+                    if 'matrix' method is used, info also contains
+                    'fitting_matrix' with the matrix used for deriving the model
+                    from the data.
+        """
+        info = {0:{},1:{}}
+        model = np.zeros_like(data)
+        residual = np.zeros_like(data)
+        filter2d = (0 in filter_dims and 1 in filter_dims)
+        filter_dims = sorted(filter_dims)[::-1]
+        if filter_dims[0] == 0:
+            data = data.T
+            wgts = wgts.T
+        if not filter2d:
+            x = [np.zeros_like(x), x]
+            filter_centers = [[], copy.deepcopy(filter_centers)]
+            filter_half_widths = [[], copy.deepcopy(filter_half_widths)]
+            suppression_factors = [[], copy.deepcopy(suppression_factors)]
+            basis_options=[{}, basis_options]
+        else:
+            if not isinstance(basis_options, (tuple,list)) or not len(basis_options) == 2:
+                raise ValueError("basis_options must be 2-tuple or 2-list for 2d filtering.")
+        #filter -1 dimension
+        for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
+            if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
+                                                            and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
+                model[i], residual[i], info[1][i] = fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
+                                                filter_half_widths=filter_half_widths[1],
+                                                suppression_factors=suppression_factors[1],
+                                                basis_options=basis_options[1], method=method,
+                                                basis=basis, cache=cache)
+            else:
+                info[1][i] = 'skipped'
+        #and if filter2d, filter the 0 dimension. Note that we feed in 'model'
+        #and residual here.
+        if filter2d:
+            for i, _y, _w, in zip(range(data.shape[1]), (model + residual).T, wgts.T):
+                if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
+                                                                and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
+                    model.T[i], residual.T[i], info[1][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
+                                                    filter_half_widths=filter_half_widths[0],
+                                                    suppression_factors=suppression_factors[0],
+                                                    basis_options=basis_options[0], method=method,
+                                                    basis=basis, cache=cache)
+                else:
+                    info[0][i] = 'skipped'
+        if filter_dims[0] == 1:
+            data = data.T
+            wgts = wgts.T
+            model = model.T
+            residual = residual.T
+            info = {0:info[1], 1:{}}
+        return model, residual, info
+
 
 def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit_mat_key=None):
     """
