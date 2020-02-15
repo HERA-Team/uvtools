@@ -309,13 +309,6 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                 edgecut_hi = 0
                         else:
                             edgecut_hi = fitting_options['edgecut_hi']
-                        if not 'zeropad' in fitting_options:
-                            if filter2d:
-                                pad=[0, 0]
-                            else:
-                                pad = 0
-                        else:
-                            pad = fitting_options['zeropad']
                         if not 'add_clean_residual' in fitting_options:
                             add_clean_residual = False
                         else:
@@ -329,8 +322,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         #including the data and weights to 1 x N arrays.
 
                         if not filter2d:
-                            pad = [0, pad]
-                            _x = [np.zeros(data.shape[0]), np.fft.fftfreq(len(x) + 2 * pad[1], x[1]-x[0])]
+                            #pad = [0, pad]
+                            _x = [np.zeros(data.shape[0]), np.fft.fftfreq(len(x), x[1]-x[0])]
                             x = [np.zeros(data.shape[0]), x]
                             edgecut_hi = [ 0, edgecut_hi ]
                             edgecut_low = [ 0, edgecut_low ]
@@ -340,15 +333,12 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         else:
                             if not np.all(np.diff(x[1]) == np.mean(np.diff(x[1]))):
                                 raise ValueError("Data must be equally spaced for CLEAN mode!")
-                            _x = [np.fft.fftfreq(len(x[m]) + 2 * pad[m], x[m][1]-x[m][0]) for m in range(2)]
+                            _x = [np.fft.fftfreq(len(x[m]), x[m][1]-x[m][0]) for m in range(2)]
                         for m in range(2):
                             if not np.all(np.diff(x[m]) == np.mean(np.diff(x[m]))):
                                 raise ValueError("Data must be equally spaced for CLEAN mode!")
-                        data_pad = np.pad(data, [(pad[m], pad[m]) for m in range(2)], mode='constant')
-                        wgts_pad = np.pad(wgts, [(pad[m], pad[m]) for m in range(2)], mode='constant')
                         taper = [gen_window(taper_opt[m], data.shape[m], alpha=alpha, normalization='mean',
                                            edgecut_low=edgecut_low[m], edgecut_hi=edgecut_hi[m]) for m in range(2)]
-                        taper = [np.pad(taper[m], [(pad[m], pad[m])], mode='constant') for m in range(2)]
                         taper[0] = np.atleast_2d(taper[0]).T
                         area_vecs = [ np.zeros(len(_x[m])) for m in range(2) ]
                         #set area equal to one inside of filtering regions
@@ -361,7 +351,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             #we can just take outer products
                             area = np.outer(area_vecs[0], area_vecs[1])
                         elif filt2d_mode == 'plus' and filter2d:
-                            area = np.zeros(data_pad.shape)
+                            area = np.zeros(data.shape)
                             #construct and add a 'plus' for each filtering window pair in each dimension.
                             for fc0, fw0 in zip(filter_centers[0], filter_half_widths[0]):
                                 for fc1, fw1 in zip(filter_centers[1], filter_half_widths[1]):
@@ -375,11 +365,11 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         else:
                             raise ValueError("%s is not a valid filt2d_mode! choose from ['rect', 'plus']"%(filt2d_mode))
                         if filter2d:
-                            _wgts = np.fft.ifft2(taper[0] * wgts_pad * taper[1])
-                            _data = np.fft.ifft2(taper[0] * data_pad * wgts_pad * taper[1])
+                            _wgts = np.fft.ifft2(taper[0] * wgts * taper[1])
+                            _data = np.fft.ifft2(taper[0] * data * wgts * taper[1])
                         else:
-                            _wgts = np.fft.ifft(taper[0] * wgts_pad * taper[1], axis=1)
-                            _data = np.fft.ifft(taper[0] * wgts_pad * data_pad * taper[1], axis=1)
+                            _wgts = np.fft.ifft(taper[0] * wgts * taper[1], axis=1)
+                            _data = np.fft.ifft(taper[0] * wgts * data * taper[1], axis=1)
                         _d_cl = np.zeros_like(_data)
                         _d_res = np.zeros_like(_data)
                         if not filter2d:
@@ -405,12 +395,6 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         else:
                             model = np.fft.fft(_d_cl, axis=1)
                             residual = np.fft.fft(_d_res, axis=1)
-                        #remove padding
-                        model = model[:, pad[1]:data.shape[1]+pad[-1]]
-                        residual = residual[:, pad[1]:data.shape[1]+pad[1]]
-                        if filter2d:
-                            model = model[pad[0]:data.shape[0]+pad[0], :]
-                            residual = residual[pad[0]:data.shape[0]+pad[0], :]
                         #transpose back if filtering the 0th dimension.
                    if not filter2d and filter_dim == 0:
                         model = model.T
