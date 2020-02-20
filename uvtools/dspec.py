@@ -253,7 +253,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                                                  skip_wgt=skip_wgt, basis=mode[1], method=mode[2], wgts=wgts, basis_options=fitting_options,
                                                                  filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
                                                                  cache=cache, max_contiguous_edge_flags=max_contiguous_edge_flags)
-                           info = info['info_deconv']=info_deconv
+                           info['info_deconv']=info_deconv
 
                    elif mode[0] == 'dft' or mode[0] == 'dpss':
                         if filter2d:
@@ -1986,16 +1986,17 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
 
     if not opkey in cache:
         #check condition number
-        cmat = design_matrix.T @ weights @ design_matrix
+        cmat = np.conj(design_matrix.T) @ weights @ design_matrix
+        #should there be a conjugation!?!
         if np.linalg.cond(cmat)>=1e9:
             warn('Warning!!!!: Poorly conditioned matrix! Your linear inpainting IS WRONG!')
-            cache[opkey] = np.linalg.pinv(cmat) @ design_matrix.T @ weights
+            cache[opkey] = np.linalg.pinv(cmat) @ np.conj(design_matrix.T) @ weights
         else:
             try:
-                cache[opkey] = np.linalg.inv(cmat) @ design_matrix.T @ weights
+                cache[opkey] = np.linalg.inv(cmat) @ np.conj(design_matrix.T) @ weights
             except np.linalg.LinAlgError as error:
                 print(error)
-                cache[opkey] = np.ones_like(cmat) * np.nan @ design_matrix.T @ weights
+                cache[opkey] = np.ones_like(cmat) * np.nan @ np.conj(design_matrix.T) @ weights
     return cache[opkey]
 
 
