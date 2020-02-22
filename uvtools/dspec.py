@@ -2069,7 +2069,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
             #the fourier integral of the DPSWF
             raise ValueError('x values must be equally spaced for DPSS operator!')
         nf = len(x)
-        df = x[1]-x[0]
+        df = np.abs(x[1]-x[0])
         xg, yg = np.meshgrid(x,x)
         if xc is None:
             xc = x[nf//2]
