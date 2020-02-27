@@ -9,4 +9,5 @@ dependencies:
   - pyuvdata
   - scipy
   - pip
-
+    - git+https://github.com/HERA-Team/hera_sim
+    - git+https://github.com/RadioAstronomySoftwareGroup/pyradiosky
