@@ -146,7 +146,28 @@ class TestDiffPlotters(unittest.TestCase):
             n_freq=100, n_times=2, antennas=antennas
         )
         sim.add_eor("noiselike_eor")
-        self.sim = sim
+        self.sim = copy.deepcopy(sim)
+
+        # make some UVData objects collapsed along a single axis
+        sim = hera_sim.Simulator(n_freq=10, n_times=1,
+                                 antennas=antennas,
+                                 integration_time=dt1,
+                                 channel_width=df1)
+        self.uvd_1d_times = copy.deepcopy(sim.data)
+
+        sim = hera_sim.Simulator(n_freq=1, n_times=10,
+                                 antennas=antennas,
+                                 integration_time=dt1,
+                                 channel_width=df1)
+        self.uvd_1d_freqs = copy.deepcopy(sim.data)
+
+        antennas_ = {0 : [0, 0, 0], 1 : [10, 0, 0]}
+        sim = hera_sim.Simulator(n_freq=10, n_times=1,
+                                 antennas=antennas_,
+                                 integration_time=dt1,
+                                 channel_width=df1,
+                                 no_autos=True)
+        self.uvd_1d_uvws = copy.deepcopy(sim.data)
 
     def tearDown(self):
         pass
@@ -284,8 +305,11 @@ class TestDiffPlotters(unittest.TestCase):
             # now close the figure
             plt.close(fig)
 
-    def test_bad_metadata(self):
+    def test_check_metadata(self):
         for attr, value in self.__dict__.items():
+            if attr.startswith("uvd_1d"):
+                uvt.utils.check_uvd_pair_metadata(value, value)
+                continue
             if not attr.startswith("uvd_bad"):
                 continue
             print("testing on: {}".format(attr))
@@ -293,7 +317,6 @@ class TestDiffPlotters(unittest.TestCase):
                              uvt.plot.plot_diff_uv,
                              self.uvd1, value,
                              check_metadata=True)
-
 
 
 if __name__ == '__main__':

@@ -182,24 +182,29 @@ def check_uvd_pair_metadata(uvd1, uvd2):
 
     t1vals = np.unique(uvd1.time_array)
     t2vals = np.unique(uvd2.time_array)
-    if not np.all(
-        np.isclose(t1vals, t2vals, rtol=0, atol=dx(t1vals, t2vals))
-    ):
-        raise MetadataError(
-            "Time values disagree more than the mean integration time."
-        )
+    if not (t1vals.size == 1 or t2vals.size == 1):
+        if not np.all(
+            np.isclose(t1vals, t2vals, rtol=0, atol=dx(t1vals, t2vals))
+        ):
+            raise MetadataError(
+                "Time values disagree more than the mean integration time."
+            )
 
     f1vals = uvd1.freq_array[0]
     f2vals = uvd2.freq_array[0]
-    if not np.all(np.isclose(f1vals, f2vals, atol=dx(f1vals, f2vals))):
-        raise MetadataError(
-            "Frequency values disagree more than the mean channel width."
-        )
+    if not (f1vals.size == 1 or f2vals.size == 1):
+        if not np.all(np.isclose(f1vals, f2vals, atol=dx(f1vals, f2vals))):
+            raise MetadataError(
+                "Frequency values disagree more than the mean channel width."
+            )
 
     bls1 = uvd1.uvw_array
     bls2 = uvd2.uvw_array
-    if not np.all(np.isclose(bls1, bls2)):
-        raise MetadataError("Baseline arrays do not agree.")
+    if not (bls1.shape[0] == 1 or bls2.shape[0] == 1):
+        if not np.all(np.isclose(bls1, bls2)):
+            raise MetadataError(
+                "Baseline arrays do not agree or are not correctly phased."
+            )
 
     if not uvd1.vis_units == uvd2.vis_units:
         raise MetadataError("The visibility units do not agree.")
