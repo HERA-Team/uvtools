@@ -171,10 +171,10 @@ def check_uvd_pair_metadata(uvd1, uvd2):
         have sufficiently similar metadata.
     """
     # make sure that both UVData objects have the same number of blts/freqs
-    if not uvd1.time_array.size == uvd2.time_array.size:
+    if not uvd1.Nblts == uvd2.Nblts:
         raise MetadataError("The number of baseline-times disagree.")
 
-    if not uvd1.freq_array.size == uvd2.freq_array.size:
+    if not uvd1.Nfreqs == uvd2.Nfreqs:
         raise MetadataError("The number of frequencies disagree.")
 
     # helper function; mean separation in array values for two arrays x1, x2
@@ -182,7 +182,7 @@ def check_uvd_pair_metadata(uvd1, uvd2):
 
     t1vals = np.unique(uvd1.time_array)
     t2vals = np.unique(uvd2.time_array)
-    if not (t1vals.size == 1 or t2vals.size == 1):
+    if not (uvd1.Ntimes == 1 or uvd2.Ntimes == 1):
         if not np.all(
             np.isclose(t1vals, t2vals, rtol=0, atol=dx(t1vals, t2vals))
         ):
@@ -192,7 +192,7 @@ def check_uvd_pair_metadata(uvd1, uvd2):
 
     f1vals = uvd1.freq_array[0]
     f2vals = uvd2.freq_array[0]
-    if not (f1vals.size == 1 or f2vals.size == 1):
+    if not (uvd1.Nfreqs == 1 or uvd2.Nfreqs == 1):
         if not np.all(np.isclose(f1vals, f2vals, atol=dx(f1vals, f2vals))):
             raise MetadataError(
                 "Frequency values disagree more than the mean channel width."
@@ -200,11 +200,10 @@ def check_uvd_pair_metadata(uvd1, uvd2):
 
     bls1 = uvd1.uvw_array
     bls2 = uvd2.uvw_array
-    if not (bls1.shape[0] == 1 or bls2.shape[0] == 1):
-        if not np.all(np.isclose(bls1, bls2)):
-            raise MetadataError(
-                "Baseline arrays do not agree or are not correctly phased."
-            )
+    if not np.all(np.isclose(bls1, bls2)):
+        raise MetadataError(
+            "Baseline arrays do not agree or are not correctly phased."
+        )
 
     if not uvd1.vis_units == uvd2.vis_units:
         raise MetadataError("The visibility units do not agree.")
