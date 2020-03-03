@@ -227,6 +227,12 @@ class TestDiffPlotters(unittest.TestCase):
         xlabel = ax.get_xlabel().lower()
         self.assertTrue(xlabel.startswith('freq'))
 
+        # check that it works when an axis has length 1
+        fig = uvt.plot.plot_diff_1d(
+                self.uvd_1d_freqs, self.uvd_1d_freqs, self.antpairpol, 
+                plot_type="normal"
+        )
+
     def test_plot_diff_uv(self):
         # plot something
         fig = uvt.plot.plot_diff_uv(self.uvd1, self.uvd2)
@@ -312,7 +318,6 @@ class TestDiffPlotters(unittest.TestCase):
                 continue
             if not attr.startswith("uvd_bad"):
                 continue
-            print("testing on: {}".format(attr))
             nt.assert_raises(uvt.utils.MetadataError, 
                              uvt.plot.plot_diff_uv,
                              self.uvd1, value,
