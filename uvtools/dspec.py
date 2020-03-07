@@ -64,12 +64,13 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                    mode, filter2d, fitting_options, cache=None, filter_dim=1, skip_wgt=0.1,
                    max_contiguous_edge_flags=10):
                    '''
-                   Your one-stop-shop for fourier filtering.
-                   We don't use the other filtering functions anymore.
+                   A filtering function that tries to wrap up all functionality of high_pass_fourier_filter
+                   and add support for additional linear fitting options.
                    It can filter 1d or 2d data with x-axis(es) x and wgts in fourier domain
                    rectangular windows centered at filter_centers or filter_half_widths
                    perform filtering along any of 2 dimensions in 2d or 1d!
                    the 'dft' and 'dayenu' modes support irregularly sampled data.
+                   Parameters
                    -----------
                    x: array-like
                       Array of floats giving x-values of data. Depending on the chosen method, this data may need to be equally spaced.
@@ -267,11 +268,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                    elif mode[0] == 'clean':
                         #Unpack all of the clean parameters from
                         #fitting_options. This is to preserve default behavior
-                        #in high_pass_fourier_filter and if I had my way,
-                        #I'd get rid of them.
-                        #However, keeping them preserves
-                        #high_pass_fourier_filter default behavior
-                        #for those who were raised on it.
+                        #in high_pass_fourier_filter
                         if not 'tol' in fitting_options:
                             tol = 1e-9
                         else:
@@ -551,11 +548,11 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         # run clean
         if dndim == 1:
             # For 1D data array run once
-            if mode=='clean':
+            if mode == 'clean':
                 _d_cl, info = aipy.deconv.clean(_d, _w, area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
                 _d_res = info['res']
                 del info['res']
-            elif mode=='dayenu':
+            elif mode == 'dayenu':
                 d_r, info = dayenu_filter(np.arange(len(data))-len(data)/2*real_delta,
                                          data * wgts * win, wgts * win,
                                          filter_dimensions = [1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache)
@@ -596,13 +593,13 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                     _d_res[i] = _d[i]
                     info.append({'skipped': True})
                 else:
-                    if mode=='clean':
+                    if mode == 'clean':
                         _cl, info_here = aipy.deconv.clean(_d[i], _w[i], area=area, tol=tol, stop_if_div=False, maxiter=maxiter, gain=gain)
                         _d_cl[i] = _cl
                         _d_res[i] = info_here['res']
                         del info_here['res']
                         info.append(info_here)
-                    elif mode=='dayenu':
+                    elif mode == 'dayenu':
                         d_r, info_here = dayenu_filter(np.arange(len(data[i]))*real_delta,
                                                        data[i] * wgts[i] * win, wgts[i] * win,
                                                         filter_dimensions=[1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache)
@@ -625,7 +622,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                             _d_cl[i] = _d[i] - _d_res[i]
                         info.append(info_here)
 
-                    elif mode=='dft_interp':
+                    elif mode == 'dft_interp':
                         info_here = {}
                         nmin = int((fcfg[0] - fwfg[0]) * real_delta * fg_deconv_fundamental_period[-1])
                         nmax = int((fcfg[0] + fwfg[0]) * real_delta * fg_deconv_fundamental_period[-1])
@@ -689,7 +686,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         if filt2d_mode == 'plus':
             _area = np.zeros(data.shape, dtype=np.int)
             _area_fg = np.zeros_like(_area)
-            if not mode=='dayenu':
+            if not mode == 'dayenu':
                 _area[:, 0] = area[:, 0]
                 _area[0, :] = area[0, :]
                 _area_fg[:, 0] = area_fg[:, 0]
@@ -750,7 +747,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         d_mdl = np.fft.fft(_d_cl)
         d_res = np.fft.fft(_d_res)
     # get residual in data space
-    if mode =='clean' or mode == 'dft_interp':
+    if mode == 'clean' or mode == 'dft_interp':
         d_res = (data - d_mdl) * ~np.isclose(wgts * win, 0.0)
 
     return d_mdl, d_res, info
@@ -1701,9 +1698,12 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
     y_model = A @ c
     where A is a design matrix encoding our choice for a basis functions
-    and y_model
-
-    Parameters:
+    and y_model is a fitted version of the data and c is a set of fitting coefficients determined by
+    c = [A^T w A]^{-1} A^T w y
+    where y is the original data and w is a diagonal matrix of weights for each channel in y.
+    Currently supports fitting of dpss and dft modes.
+    Parameters
+    ----------
         x: array-like
             x-axis of data to fit.
         y: array-like
@@ -2124,7 +2124,7 @@ def dft_operator(x, filter_centers, filter_half_widths,
 
     Parameters
     ----------
-    x:
+    x: array-like floats. 
         x values to evaluate operator at
     filter_centers: float or list
         float or list of floats of centers of delay filter windows in nanosec
