@@ -331,11 +331,11 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             filter_half_widths = [[9e99], copy.deepcopy(filter_half_widths)]
                             taper_opt = ['none', taper_opt]
                         else:
-                            if not np.all(np.diff(x[1]) == np.mean(np.diff(x[1]))):
+                            if not np.all(np.isclose(np.diff(x[1]), np.mean(np.diff(x[1])))):
                                 raise ValueError("Data must be equally spaced for CLEAN mode!")
                             _x = [np.fft.fftfreq(len(x[m]), x[m][1]-x[m][0]) for m in range(2)]
                         for m in range(2):
-                            if not np.all(np.diff(x[m]) == np.mean(np.diff(x[m]))):
+                            if not np.all(np.isclose(np.diff(x[m]), np.mean(np.diff(x[m])))):
                                 raise ValueError("Data must be equally spaced for CLEAN mode!")
                         taper = [gen_window(taper_opt[m], data.shape[m], alpha=alpha, normalization='mean',
                                            edgecut_low=edgecut_low[m], edgecut_hi=edgecut_hi[m]) for m in range(2)]
@@ -2069,7 +2069,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
                                 + (crit_provided_name[0],) + tuple(crit_provided_value[0])
     if not opkey in cache:
         #check that xs are equally spaced.
-        if not np.all(np.diff(x) == np.mean(np.diff(x))):
+        if not np.all(np.isclose(np.diff(x), np.mean(np.diff(x)))):
             #for now, don't support DPSS iterpolation unless x is equally spaced.
             #In principal, I should be able to compute off-grid DPSS points using
             #the fourier integral of the DPSWF
