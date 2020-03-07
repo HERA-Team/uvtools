@@ -1915,26 +1915,27 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
         for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
             if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
                                                             and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
-                model[i], residual[i], info[1][i] = fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
+                model[i], _, info[1][i] = fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
                                                 filter_half_widths=filter_half_widths[1],
                                                 suppression_factors=suppression_factors[1],
                                                 basis_options=basis_options[1], method=method,
                                                 basis=basis, cache=cache)
             else:
                 info[1][i] = 'skipped'
-        #and if filter2d, filter the 0 dimension. Note that we feed in 'model'
-        #and residual here.
+        #and if filter2d, filter the 0 dimension. Note that we feed in the 'model'
+        #only. The net impact is
         if filter2d:
-            for i, _y, _w, in zip(range(data.shape[1]), (model + residual).T, wgts.T):
+            for i, _y, _w, in zip(range(data.shape[1]), model.T, wgts.T):
                 if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
                                                                 and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
-                    model.T[i], residual.T[i], info[1][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
+                    model.T[i], _, info[1][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
                                                     filter_half_widths=filter_half_widths[0],
                                                     suppression_factors=suppression_factors[0],
                                                     basis_options=basis_options[0], method=method,
                                                     basis=basis, cache=cache)
                 else:
                     info[0][i] = 'skipped'
+        residual = (data - model) * (np.abs(wgts) > 0).astype(float)
         if filter_dims[0] == 0:
             data = data.T
             wgts = wgts.T
