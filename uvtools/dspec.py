@@ -1924,8 +1924,13 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                 info[1][i] = 'skipped'
         #and if filter2d, filter the 0 dimension. Note that we feed in the 'model'
         #only. The net impact is
+        #set wgts for time filtering to happen on skipped rows
         if filter2d:
-            for i, _y, _w, in zip(range(data.shape[1]), model.T, wgts.T):
+            wgts_time = np.ones_like(wgts)
+            for i in range(data.shape[0]):
+                if info[1][i] == 'skipped':
+                    wgts_time[i] = 0.
+            for i, _y, _w, in zip(range(data.shape[1]), model.T, wgts_time.T):
                 if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
                                                                 and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
                     model.T[i], _, info[1][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
