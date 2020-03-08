@@ -2105,7 +2105,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         #next, construct A matrix.
         amat = []
         for fc, fw, nt in zip(filter_centers,filter_half_widths, nterms):
-            amat.append(np.exp(-2j * np.pi * (yg[:,:nt]-xc) * fc ) * windows.dpss(nf, nf * df * fw, nt).T )
+            amat.append(np.exp(2j * np.pi * (yg[:,:nt]-xc) * fc ) * windows.dpss(nf, nf * df * fw, nt).T )
         cache[opkey] = ( np.hstack(amat), nterms )
     return cache[opkey]
 
@@ -2124,7 +2124,7 @@ def dft_operator(x, filter_centers, filter_half_widths,
 
     Parameters
     ----------
-    x: array-like floats. 
+    x: array-like floats.
         x values to evaluate operator at
     filter_centers: float or list
         float or list of floats of centers of delay filter windows in nanosec
