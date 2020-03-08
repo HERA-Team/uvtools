@@ -1926,20 +1926,30 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
         #only. The net impact is
         #set wgts for time filtering to happen on skipped rows
         if filter2d:
-            wgts_time = np.ones_like(wgts)
+
+            #fringe-filter the model in smooth basis space!
+            #This is to avoid any spectral fitting noise!
+            amat = info[1][0]['amat']
+            wgts_time = np.ones((model.shape[0],amat.shape[1]))
             for i in range(data.shape[0]):
                 if info[1][i] == 'skipped':
                     wgts_time[i] = 0.
-            for i, _y, _w, in zip(range(data.shape[1]), model.T, wgts_time.T):
+            model_basis = np.asarray([amat.T @ m for m in model])
+            model_basis_fit = np.zeros_like(model_basis.T)
+
+            for i, _y, _w, in zip(range(data.shape[1]), model_basis.T, wgts_time.T):
                 if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
                                                                 and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
-                    model.T[i], _, info[1][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
+                    model_basis_fit[i], _, info[0][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
                                                     filter_half_widths=filter_half_widths[0],
                                                     suppression_factors=suppression_factors[0],
                                                     basis_options=basis_options[0], method=method,
                                                     basis=basis, cache=cache)
                 else:
                     info[0][i] = 'skipped'
+            #set model equal to transform of smoothly-time interpolated fit coefficients.
+            model_basis_fit = model_basis_fit.T
+            model = np.asarray([amat @ mf for mf in model_basis_fit])
         residual = (data - model) * (np.abs(wgts) > 0).astype(float)
         if filter_dims[0] == 0:
             data = data.T
