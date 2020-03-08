@@ -1937,7 +1937,7 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
             model_basis = np.asarray([amat.T @ m for m in model])
             model_basis_fit = np.zeros_like(model_basis.T)
 
-            for i, _y, _w, in zip(range(data.shape[1]), model_basis.T, wgts_time.T):
+            for i, _y, _w, in zip(range(model_basis.shape[1]), model_basis.T, wgts_time.T):
                 if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
                                                                 and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
                     model_basis_fit[i], _, info[0][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
@@ -1948,8 +1948,7 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                 else:
                     info[0][i] = 'skipped'
             #set model equal to transform of smoothly-time interpolated fit coefficients.
-            model_basis_fit = model_basis_fit.T
-            model = np.asarray([amat @ mf for mf in model_basis_fit])
+            model = np.asarray([amat @ mf for mf in model_basis_fit.T])
         residual = (data - model) * (np.abs(wgts) > 0).astype(float)
         if filter_dims[0] == 0:
             data = data.T
