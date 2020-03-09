@@ -778,7 +778,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
         cache: optional dictionary for storing pre-computed delay filter matrices.
         return_matrices: bool,
             if True, return a dict referencing every every filtering matrix used.
-        hash_decimal: number of decimals to hash x to 
+        hash_decimal: number of decimals to hash x to
     Returns:
         data: array, 2d clean residual with data filtered along the frequency direction.
         info: dictionary with filtering parameters and a list of skipped_times and skipped_channels
@@ -1930,7 +1930,7 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
             #
             #TODO: Future PR, experiment with fitting frequency coefficients in time
             #      instead of individual frequencies. Also add an option to
-            #      filter times before frequencies OR perform time-filter in delay space. 
+            #      filter times before frequencies OR perform time-filter in delay space.
             #
             #fringe-filter the model in smooth basis space!
             #This is to avoid any spectral fitting noise!
@@ -1958,7 +1958,7 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
             wgts_time = np.ones_like(wgts)
             for i in range(data.shape[0]):
                 if info[1][i] == 'skipped':
-                    wgts_time[i] = 0. 
+                    wgts_time[i] = 0.
             for i, _y, _w, in zip(range(model.shape[1]), model.T, wgts_time.T):
                 if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
                    and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
@@ -2312,8 +2312,9 @@ def dayenu_mat_inv(x, filter_centers, filter_half_widths,
 
     nchan = len(x)
     #
-    filter_key = tuple(np.round(x, hash_decimal)) + tuple(filter_centers) + \
-    tuple(filter_half_widths) + tuple(filter_factors) + (wrap, wrap_interval, nwraps, no_regularization, 'dayenu_mat')
+    filter_key = tuple(np.round(x, hash_decimal)) + tuple(np.round(filter_centers, hash_decimal)) + \
+    tuple(np.round(filter_half_widths, hash_decimal)) + tuple(np.round(filter_factors, hash_decimal))\
+     + (wrap, wrap_interval, nwraps, no_regularization, 'dayenu_mat')
 
     if not filter_key in cache:
         fx, fy = np.meshgrid(x,x)
