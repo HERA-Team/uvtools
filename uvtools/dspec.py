@@ -753,7 +753,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
     return d_mdl, d_res, info
 
 def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_widths, filter_factors,
-                  cache = {}, return_matrices=True):
+                  cache = {}, return_matrices=True, hash_decimal=10):
     '''Apply a linear delay filter to waterfall data.
         Due to performance reasons, linear filtering only supports separable delay/fringe-rate filters.
     Arguments:
@@ -778,6 +778,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
         cache: optional dictionary for storing pre-computed delay filter matrices.
         return_matrices: bool,
             if True, return a dict referencing every every filtering matrix used.
+        hash_decimal: number of decimals to hash x to 
     Returns:
         data: array, 2d clean residual with data filtered along the frequency direction.
         info: dictionary with filtering parameters and a list of skipped_times and skipped_channels
@@ -928,7 +929,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
         #if the axis orthogonal to the iteration axis is to be filtered, then
         #filter it!.
         for sample_num, sample, wght in zip(range(data.shape[fs-1]), _d, _w):
-            filter_key = (data.shape[fs], ) + tuple(x[fs]) + tuple(filter_centers[fs]) + \
+            filter_key = (data.shape[fs], ) + tuple(np.round(x[fs],hash_decimal)) + tuple(filter_centers[fs]) + \
             tuple(filter_half_widths[fs]) + tuple(filter_factors[fs]) + tuple(wght.tolist()) + ('inverse',)
             if not filter_key in cache:
                 #only calculate filter matrix and psuedo-inverse explicitly if they are not already cached
@@ -1895,10 +1896,10 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
         if cache is None:
             cache={}
         info = {0:{},1:{}}
-        model = np.zeros_like(data)
         residual = np.zeros_like(data)
         filter2d = (0 in filter_dims and 1 in filter_dims)
         filter_dims = sorted(filter_dims)[::-1]
+        #this will only happen if filter_dims is only zero!
         if filter_dims[0] == 0:
             data = data.T
             wgts = wgts.T
@@ -1912,6 +1913,7 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
             if not isinstance(basis_options, (tuple,list)) or not len(basis_options) == 2:
                 raise ValueError("basis_options must be 2-tuple or 2-list for 2d filtering.")
         #filter -1 dimension
+        model = np.zeros_like(data)
         for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
             if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
                                                             and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
@@ -1923,33 +1925,53 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
             else:
                 info[1][i] = 'skipped'
         #and if filter2d, filter the 0 dimension. Note that we feed in the 'model'
-        #only. The net impact is
         #set wgts for time filtering to happen on skipped rows
         if filter2d:
-
+            #
+            #TODO: Future PR, experiment with fitting frequency coefficients in time
+            #      instead of individual frequencies. Also add an option to
+            #      filter times before frequencies OR perform time-filter in delay space. 
+            #
             #fringe-filter the model in smooth basis space!
             #This is to avoid any spectral fitting noise!
-            amat = info[1][0]['amat']
-            wgts_time = np.ones((model.shape[0],amat.shape[1]))
+            #if time_filter_coefficients:
+            #    amat = info[1][0]['amat']
+            #    wgts_time = np.ones((model.shape[0],amat.shape[1]))
+            #    for i in range(data.shape[0]):
+            #        if info[1][i] == 'skipped':
+            #        wgts_time[i] = 0.
+            #    model_basis = np.asarray([np.conj(amat.T) @ m for m in model])
+            #    model_basis_fit = np.zeros_like(model_basis.T)
+            #    for i, _y, _w, in zip(range(model_basis.shape[1]), model_basis.T, wgts_time.T):
+            #        if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
+            #           and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
+            #            model_basis_fit[i], _, info[0][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
+            #                                                             filter_half_widths=filter_half_widths[0],
+            #                                                             suppression_factors=suppression_factors[0],
+            #                                                             basis_options=basis_options[0], method=method,
+            #                                                             basis=basis, cache=cache)
+            #    else:
+            #        info[0][i] = 'skipped'
+                #set model equal to transform of smoothly-time interpolated fit coefficients.
+            #    model = np.asarray([amat @ mf for mf in model_basis_fit.T])
+            #else:
+            wgts_time = np.ones_like(wgts)
             for i in range(data.shape[0]):
                 if info[1][i] == 'skipped':
-                    wgts_time[i] = 0.
-            model_basis = np.asarray([amat.T @ m for m in model])
-            model_basis_fit = np.zeros_like(model_basis.T)
-
-            for i, _y, _w, in zip(range(model_basis.shape[1]), model_basis.T, wgts_time.T):
+                    wgts_time[i] = 0. 
+            for i, _y, _w, in zip(range(model.shape[1]), model.T, wgts_time.T):
                 if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
-                                                                and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
-                    model_basis_fit[i], _, info[0][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
-                                                    filter_half_widths=filter_half_widths[0],
-                                                    suppression_factors=suppression_factors[0],
-                                                    basis_options=basis_options[0], method=method,
-                                                    basis=basis, cache=cache)
+                   and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
+                    model.T[i], _, info[0][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
+                                                                     filter_half_widths=filter_half_widths[0],
+                                                                     suppression_factors=suppression_factors[0],
+                                                                     basis_options=basis_options[0], method=method,
+                                                                     basis=basis, cache=cache)
                 else:
                     info[0][i] = 'skipped'
-            #set model equal to transform of smoothly-time interpolated fit coefficients.
-            model = np.asarray([amat @ mf for mf in model_basis_fit.T])
+
         residual = (data - model) * (np.abs(wgts) > 0).astype(float)
+        #this will only happen if filter_dims is only zero!
         if filter_dims[0] == 0:
             data = data.T
             wgts = wgts.T
@@ -2240,7 +2262,7 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
 
 def dayenu_mat_inv(x, filter_centers, filter_half_widths,
                             filter_factors, cache=None, wrap=False, wrap_interval=1,
-                            nwraps=1000, no_regularization=False):
+                            nwraps=1000, no_regularization=False, hash_decimal=10):
     """
     Computes the inverse of sinc weights for a baseline.
     This form of weighting is diagonal in delay-space and down-weights tophat regions.
@@ -2257,8 +2279,10 @@ def dayenu_mat_inv(x, filter_centers, filter_half_widths,
     filter_factors: float or list
         float or list of floats of filtering factors.
     cache: dictionary, optional dictionary storing filter matrices with keys
+    hash_decimal int, number of decimals to consider when hashing x
     tuple(x) + (filter_centers) + (filter_half_widths) + \
     (filter_factors)
+
 
 
     !!!-------------
@@ -2287,7 +2311,8 @@ def dayenu_mat_inv(x, filter_centers, filter_half_widths,
         filter_half_widths = [filter_half_widths]
 
     nchan = len(x)
-    filter_key = tuple(x) + tuple(filter_centers) + \
+    #
+    filter_key = tuple(np.round(x, hash_decimal)) + tuple(filter_centers) + \
     tuple(filter_half_widths) + tuple(filter_factors) + (wrap, wrap_interval, nwraps, no_regularization, 'dayenu_mat')
 
     if not filter_key in cache:
