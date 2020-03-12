@@ -920,7 +920,8 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
         for fv in ff:
             if fv <= 0.:
                 raise ValueError("All filter factors must be greater than zero! You provided %.2e :(!"%(fv))
-
+    info[1]={}
+    info[0]={}
     for fs in filter_dimensions:
         if fs == 0:
             _d, _w = output.T, wgts.T
@@ -955,11 +956,13 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                     output[:, sample_num] = np.dot(filter_mat, sample)
                 elif fs == 1:
                     output[sample_num] = np.dot(filter_mat, sample)
+                info[fs][sample_num] = 'success'
             else:
                 skipped[fs-1].append(sample_num)
+                info[fs][sample_num] = 'skipped'
             if return_matrices:
                 filter_matrices[fs][sample_num]=filter_mat
-
+            
     #1d data will only be filtered across "channels".
     if data_1d and ntimes == 1:
         output = output[0]
