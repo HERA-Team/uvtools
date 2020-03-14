@@ -386,6 +386,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                                                 maxiter=maxiter, gain=gain)
                                 _d_res = info['res']
                                 del(info['res'])
+                        if add_clean_residual:
+                            _d_cl = _d_cl + _d_res * area
                         if filter2d:
                             model = np.fft.fft2(_d_cl)
                             residual = np.fft.fft2(_d_res)
@@ -962,7 +964,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                 info[fs][sample_num] = 'skipped'
             if return_matrices:
                 filter_matrices[fs][sample_num]=filter_mat
-            
+
     #1d data will only be filtered across "channels".
     if data_1d and ntimes == 1:
         output = output[0]
