@@ -370,17 +370,19 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         _d_cl = np.zeros_like(_data)
                         _d_res = np.zeros_like(_data)
                         if not filter2d:
-                            info = {}
+                            info = []
                             for i, _d, _w, _a in zip(np.arange(_data.shape[0]).astype(int), _data, _wgts, area):
                                 if _w[0] < skip_wgt:
                                     _d_cl[i] = 0.
                                     _d_res[i] = _d
+                                    info.append({'skipped':True})
                                 else:
                                     _d_cl[i], _info = aipy.deconv.clean(_d, _w, area=_a, tol=tol, stop_if_div=False,
                                                                     maxiter=maxiter, gain=gain)
                                     _d_res[i] = _info['res']
+                                    _info['skipped'] = False
                                     del(_info['res'])
-                                    info[i]=_info
+                                    info.append(_info)
                         elif filter2d:
                                 _d_cl, info = aipy.deconv.clean(_data, _wgts, area=area, tol=tol, stop_if_div=False,
                                                                 maxiter=maxiter, gain=gain)
@@ -604,7 +606,8 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                     elif mode == 'dayenu':
                         d_r, info_here = dayenu_filter(np.arange(len(data[i]))*real_delta,
                                                        data[i] * wgts[i] * win, wgts[i] * win,
-                                                        filter_dimensions=[1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache)
+                                                       filter_dimensions=[1], filter_centers=fc,
+                                                       filter_half_widths=fw, filter_factors=ff, cache=cache)
                         _d_res[i] = np.fft.ifft(d_r)
                         if deconv_dayenu_foregrounds:
                             if fg_deconv_method == 'clean':
@@ -1920,7 +1923,7 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
         #filter -1 dimension
         model = np.zeros_like(data)
         for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
-            if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
+            if 1 - np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
                                                             and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
                 model[i], _, info[1][i] = fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
                                                 filter_half_widths=filter_half_widths[1],
@@ -1932,40 +1935,12 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
         #and if filter2d, filter the 0 dimension. Note that we feed in the 'model'
         #set wgts for time filtering to happen on skipped rows
         if filter2d:
-            #
-            #TODO: Future PR, experiment with fitting frequency coefficients in time
-            #      instead of individual frequencies. Also add an option to
-            #      filter times before frequencies OR perform time-filter in delay space.
-            #
-            #fringe-filter the model in smooth basis space!
-            #This is to avoid any spectral fitting noise!
-            #if time_filter_coefficients:
-            #    amat = info[1][0]['amat']
-            #    wgts_time = np.ones((model.shape[0],amat.shape[1]))
-            #    for i in range(data.shape[0]):
-            #        if info[1][i] == 'skipped':
-            #        wgts_time[i] = 0.
-            #    model_basis = np.asarray([np.conj(amat.T) @ m for m in model])
-            #    model_basis_fit = np.zeros_like(model_basis.T)
-            #    for i, _y, _w, in zip(range(model_basis.shape[1]), model_basis.T, wgts_time.T):
-            #        if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
-            #           and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
-            #            model_basis_fit[i], _, info[0][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
-            #                                                             filter_half_widths=filter_half_widths[0],
-            #                                                             suppression_factors=suppression_factors[0],
-            #                                                             basis_options=basis_options[0], method=method,
-            #                                                             basis=basis, cache=cache)
-            #    else:
-            #        info[0][i] = 'skipped'
-                #set model equal to transform of smoothly-time interpolated fit coefficients.
-            #    model = np.asarray([amat @ mf for mf in model_basis_fit.T])
-            #else:
             wgts_time = np.ones_like(wgts)
             for i in range(data.shape[0]):
                 if info[1][i] == 'skipped':
                     wgts_time[i] = 0.
             for i, _y, _w, in zip(range(model.shape[1]), model.T, wgts_time.T):
-                if 1 - np.count_nonzero(_w)/len(_w) <= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
+                if 1 - np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
                    and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
                     model.T[i], _, info[0][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
                                                                      filter_half_widths=filter_half_widths[0],
