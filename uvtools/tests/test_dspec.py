@@ -656,7 +656,7 @@ def test_fourier_filter():
     dft_options3={'fundamental_period':2.*(dlys.max()-dlys.min())}
     clean_options1={'tol':1e-9, 'maxiter':100, 'pad':0, 'filt2d_mode':'rect',
                     'edgecut_low':0, 'edgecut_hi':0, 'add_clean_residual':False,
-                    'taper':'none', 'skip_wgt':0.1, 'gain':0.1, 'alpha':0.5}
+                    'window':'none', 'skip_wgt':0.1, 'gain':0.1, 'alpha':0.5}
     mdl1, res1, info1 = dspec.fourier_filter(x=freqs, data=d, wgts=w, filter_centers=[0.],
                                              filter_half_widths=[bl_len], suppression_factors=[0.],
                                              mode='dpss_leastsq', filter2d=False, fitting_options=dpss_options1)

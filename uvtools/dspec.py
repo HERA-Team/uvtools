@@ -13,11 +13,11 @@ from scipy.optimize import leastsq, lsq_linear
 import copy
 
 #DEFAULT PARAMETERS FOR CLEANs
-CLEAN_DEFAULTS={'tol':1e-9, 'taper':{False:'none',True:['none', 'none']},
+CLEAN_DEFAULTS={'tol':1e-9, 'window':{False:'none',True:['none', 'none']},
  'alpha':.5, 'maxiter':100, 'gain':0.1,
  'edgecut_low':{True:[0, 0],False:0}, 'edgecut_hi':{True:[0, 0],False:0},
  'add_clean_residual':False, 'filt2d_mode':'rect','add_clean_residual':False}
-DEFAULT_FILT2D = ['edgecut_hi', 'edgecut_low', 'taper']
+DEFAULT_FILT2D = ['edgecut_hi', 'edgecut_low', 'window']
 def wedge_width(bl_len, sdf, nchan, standoff=0., horizon=1.):
     '''Return the (upper,lower) delay bins that geometrically correspond to the sky.
     Variable names preserved for backward compatability with capo/PAPER analysis.
@@ -181,10 +181,6 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                     clean tolerance. 1e-9 is standard.
                                  'maxiter' : int
                                     maximum number of clean iterations. 100 is standard.
-                                 'pad': int or array-like
-                                    if filt2d is false, just an integer specifing the number of channels
-                                    to pad for CLEAN (sets Fourier interpolation resolution).
-                                    if filt2d is true, specify 2-tuple in both dimensions.
                                  'filt2d_mode' : string
                                     if 'rect', clean withing a rectangular region of Fourier space given
                                     by the intersection of each set of windows.
@@ -199,7 +195,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                 'add_clean_residual' : bool, if True, adds the CLEAN residual within the CLEAN bounds
                                     in fourier space to the CLEAN model. Note that the residual actually returned is
                                     not the CLEAN residual, but the residual in input data space.
-                                'taper' : window function for filtering applied to the filtered axis.
+                                'window' : window function for filtering applied to the filtered axis.
                                     See dspec.gen_window for options. If clean2D, can be fed as a list
                                     specifying the window for each axis in data.
                                 'skip_wgt' : skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
@@ -294,20 +290,20 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             edgecut_low = [ 0, fitting_options['edgecut_low']]
                             filter_centers = [[0.], copy.deepcopy(filter_centers)]
                             filter_half_widths = [[9e99], copy.deepcopy(filter_half_widths)]
-                            taper_opt = ['none', fitting_options['taper']]
+                            window_opt = ['none', fitting_options['window']]
                         else:
                             if not np.all(np.isclose(np.diff(x[1]), np.mean(np.diff(x[1])))):
                                 raise ValueError("Data must be equally spaced for CLEAN mode!")
                             _x = [np.fft.fftfreq(len(x[m]), x[m][1]-x[m][0]) for m in range(2)]
                             edgecut_hi = fitting_options['edgecut_hi']
                             edgecut_low = fitting_options['edgecut_low']
-                            taper_opt = fitting_options['taper']
+                            window_opt = fitting_options['window']
                         for m in range(2):
                             if not np.all(np.isclose(np.diff(x[m]), np.mean(np.diff(x[m])))):
                                 raise ValueError("Data must be equally spaced for CLEAN mode!")
-                        taper = [gen_window(taper_opt[m], data.shape[m], alpha=fitting_options['alpha'], normalization='mean',
+                        window = [gen_window(window_opt[m], data.shape[m], alpha=fitting_options['alpha'], normalization='mean',
                                            edgecut_low=edgecut_low[m], edgecut_hi=edgecut_hi[m]) for m in range(2)]
-                        taper[0] = np.atleast_2d(taper[0]).T
+                        window[0] = np.atleast_2d(window[0]).T
                         area_vecs = [ np.zeros(len(_x[m])) for m in range(2) ]
                         #set area equal to one inside of filtering regions
                         tol = fitting_options['tol']
@@ -337,11 +333,11 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         else:
                             raise ValueError("%s is not a valid filt2d_mode! choose from ['rect', 'plus']"%(filt2d_mode))
                         if filter2d:
-                            _wgts = np.fft.ifft2(taper[0] * wgts * taper[1])
-                            _data = np.fft.ifft2(taper[0] * data * wgts * taper[1])
+                            _wgts = np.fft.ifft2(window[0] * wgts * window[1])
+                            _data = np.fft.ifft2(window[0] * data * wgts * window[1])
                         else:
-                            _wgts = np.fft.ifft(taper[0] * wgts * taper[1], axis=1)
-                            _data = np.fft.ifft(taper[0] * wgts * data * taper[1], axis=1)
+                            _wgts = np.fft.ifft(window[0] * wgts * window[1], axis=1)
+                            _data = np.fft.ifft(window[0] * wgts * data * window[1], axis=1)
                         _d_cl = np.zeros_like(_data)
                         _d_res = np.zeros_like(_data)
                         if not filter2d:
@@ -2155,7 +2151,7 @@ def dft_operator(x, filter_centers, filter_half_widths,
 
 
 
-def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cache=None, taper='none'):
+def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cache=None, window='none'):
     """
     Compute a foreground interpolation matrix.
 
@@ -2193,8 +2189,8 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
         I find that 2 x nchan gives the best results (AEW).
     cache: dict, optional
         optional cache holding pre-computed matrices
-    taper: string, optional
-        use a taper to fit.
+    window: string, optional
+        use a window to fit.
     Returns
     ----------
     (nchan, nchan) numpy array
@@ -2211,7 +2207,7 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
     matkey = (nchan, ndelay, fundamental_period) + tuple(wgts)
     amat = dft_operator(x=np.arange(nchan)-nchan/2., filter_centers=[0.], filter_half_widths=[ndelay/fundamental_period],
                                           cache=cache, fundamental_period=fundamental_period)
-    wmat = np.diag(wgts * gen_window(taper, nchan)).astype(complex)
+    wmat = np.diag(wgts * gen_window(window, nchan)).astype(complex)
     return amat @ fit_solution_matrix(wmat, amat)
 
 
