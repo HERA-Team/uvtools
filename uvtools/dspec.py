@@ -12,6 +12,12 @@ from warnings import warn
 from scipy.optimize import leastsq, lsq_linear
 import copy
 
+#DEFAULT PARAMETERS FOR CLEANs
+CLEAN_DEFAULTS={'tol':1e-9, 'taper':{False:'none',True:['none', 'none']},
+ 'alpha':.5, 'maxiter':100, 'gain':0.1,
+ 'edgecut_low':{True:[0, 0],False:0}, 'edgecut_hi':{True:[0, 0],False:0},
+ 'add_clean_residual':False, 'filt2d_mode':'rect','add_clean_residual':False}
+DEFAULT_FILT2D = ['edgecut_hi', 'edgecut_low', 'taper']
 def wedge_width(bl_len, sdf, nchan, standoff=0., horizon=1.):
     '''Return the (upper,lower) delay bins that geometrically correspond to the sky.
     Variable names preserved for backward compatability with capo/PAPER analysis.
@@ -269,51 +275,13 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         #Unpack all of the clean parameters from
                         #fitting_options. This is to preserve default behavior
                         #in high_pass_fourier_filter
-                        if not 'tol' in fitting_options:
-                            tol = 1e-9
-                        else:
-                            tol = fitting_options['tol']
-                        if not 'taper' in fitting_options:
-                            if not filter2d:
-                                taper_opt = 'none'
-                            else:
-                                taper_opt = ['none', 'none']
-                        else:
-                            taper_opt = fitting_options['taper']
-                        if not 'alpha' in fitting_options:
-                            alpha = 0.5
-                        else:
-                            alpha = fitting_options['alpha']
-                        if not 'maxiter' in fitting_options:
-                            maxiter = 100
-                        else:
-                            maxiter = fitting_options['maxiter']
-                        if not 'gain' in fitting_options:
-                            gain = 0.1
-                        else:
-                            gain = fitting_options['gain']
-                        if not 'edgecut_low' in fitting_options:
-                            if filter2d:
-                                edgecut_low = [0, 0]
-                            else:
-                                edgecut_low = 0
-                        else:
-                            edgecut_low = fitting_options['edgecut_low']
-                        if not 'edgecut_hi' in fitting_options:
-                            if filter2d:
-                                edgecut_hi = [0, 0]
-                            else:
-                                edgecut_hi = 0
-                        else:
-                            edgecut_hi = fitting_options['edgecut_hi']
-                        if not 'add_clean_residual' in fitting_options:
-                            add_clean_residual = False
-                        else:
-                            add_clean_residual = fitting_options['add_clean_residual']
-                        if not 'filt2d_mode' in fitting_options:
-                            filt2d_mode = 'rect'
-                        else:
-                            filt2d_mode = fitting_options['filt2d_mode']
+                        for param in CLEAN_DEFAULTS:
+                            if not param in fitting_options:
+                                if not param in DEFAULT_FILT2D:
+                                    fitting_options[param] = CLEAN_DEFAULTS[param]
+                                else:
+                                    fitting_options[param] = CLEAN_DEFAULTS[param][filter2d]
+
                         #arguments for 2d clean should be supplied as
                         #2-list. For code economy, we expand 1d arguments to 2d
                         #including the data and weights to 1 x N arrays.
@@ -322,24 +290,31 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             #pad = [0, pad]
                             _x = [np.zeros(data.shape[0]), np.fft.fftfreq(len(x), x[1]-x[0])]
                             x = [np.zeros(data.shape[0]), x]
-                            edgecut_hi = [ 0, edgecut_hi ]
-                            edgecut_low = [ 0, edgecut_low ]
+                            edgecut_hi = [ 0, fitting_options['edgecut_hi'] ]
+                            edgecut_low = [ 0, fitting_options['edgecut_low']]
                             filter_centers = [[0.], copy.deepcopy(filter_centers)]
                             filter_half_widths = [[9e99], copy.deepcopy(filter_half_widths)]
-                            taper_opt = ['none', taper_opt]
+                            taper_opt = ['none', fitting_options['taper']]
                         else:
                             if not np.all(np.isclose(np.diff(x[1]), np.mean(np.diff(x[1])))):
                                 raise ValueError("Data must be equally spaced for CLEAN mode!")
                             _x = [np.fft.fftfreq(len(x[m]), x[m][1]-x[m][0]) for m in range(2)]
+                            edgecut_hi = fitting_options['edgecut_hi']
+                            edgecut_low = fitting_options['edgecut_low']
+                            taper_opt = fitting_options['taper']
                         for m in range(2):
                             if not np.all(np.isclose(np.diff(x[m]), np.mean(np.diff(x[m])))):
                                 raise ValueError("Data must be equally spaced for CLEAN mode!")
-                        taper = [gen_window(taper_opt[m], data.shape[m], alpha=alpha, normalization='mean',
+                        taper = [gen_window(taper_opt[m], data.shape[m], alpha=fitting_options['alpha'], normalization='mean',
                                            edgecut_low=edgecut_low[m], edgecut_hi=edgecut_hi[m]) for m in range(2)]
                         taper[0] = np.atleast_2d(taper[0]).T
                         area_vecs = [ np.zeros(len(_x[m])) for m in range(2) ]
                         #set area equal to one inside of filtering regions
-
+                        tol = fitting_options['tol']
+                        maxiter = fitting_options['maxiter']
+                        gain = fitting_options['gain']
+                        add_clean_residual = fitting_options['add_clean_residual']
+                        filt2d_mode = fitting_options['filt2d_mode']
                         if filt2d_mode == 'rect' or not filter2d:
                             for m in range(2):
                                 for fc, fw in zip(filter_centers[m], filter_half_widths[m]):
