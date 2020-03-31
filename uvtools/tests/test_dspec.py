@@ -654,9 +654,9 @@ def test_fourier_filter():
     dft_options1={'fundamental_period':2.*(times.max()-times.min())}
     dft_options2={'fundamental_period':2.*(times.max()-times.min())}
     dft_options3={'fundamental_period':2.*(dlys.max()-dlys.min())}
-    clean_options1={'tol':1e-9, 'maxiter':100, 'pad':0, 'filt2d_mode':'rect',
+    clean_options1={'tol':1e-9, 'maxiter':100, 'filt2d_mode':'rect',
                     'edgecut_low':0, 'edgecut_hi':0, 'add_clean_residual':False,
-                    'window':'none', 'skip_wgt':0.1, 'gain':0.1, 'alpha':0.5}
+                    'window':'none', 'gain':0.1, 'alpha':0.5}
     mdl1, res1, info1 = dspec.fourier_filter(x=freqs, data=d, wgts=w, filter_centers=[0.],
                                              filter_half_widths=[bl_len], suppression_factors=[0.],
                                              mode='dpss_leastsq', filter2d=False, fitting_options=dpss_options1)
@@ -668,6 +668,12 @@ def test_fourier_filter():
                                              mode='clean', filter2d=False, fitting_options={})
     mdl4, res4, info4 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.], filter2d=False,
                                              mode='clean', fitting_options=clean_options1)
+    clean_options_typo = {'tol':1e-9, 'maxiter':100, 'filt2d_mode':'rect',
+                    'edgecut_low':0, 'edgecut_hi':0, 'add_clean_residual':False,
+                    'window':'none', 'gain':0.1, 'alphae':0.5}
+    #check that a ValueError is returned if we include a bad parameter name.
+    nt.assert_raises(ValueError, dspec.fourier_filter, freqs, d, w, [0.], [bl_len], [0.], filter2d=False,
+                     mode='clean', fitting_options=clean_options_typo)
 
     nt.assert_true(np.all(np.isclose(mdl3, mdl4, atol=1e-6)))
     nt.assert_true(np.all(np.isclose(res3, res4, atol=1e-6)))

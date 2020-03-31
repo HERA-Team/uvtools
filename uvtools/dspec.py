@@ -18,6 +18,7 @@ CLEAN_DEFAULTS={'tol':1e-9, 'window':{False:'none',True:['none', 'none']},
  'edgecut_low':{True:[0, 0],False:0}, 'edgecut_hi':{True:[0, 0],False:0},
  'add_clean_residual':False, 'filt2d_mode':'rect','add_clean_residual':False}
 DEFAULT_FILT2D = ['edgecut_hi', 'edgecut_low', 'window']
+CLEAN_KEYS = list(CLEAN_DEFAULTS.keys())
 def wedge_width(bl_len, sdf, nchan, standoff=0., horizon=1.):
     '''Return the (upper,lower) delay bins that geometrically correspond to the sky.
     Variable names preserved for backward compatability with capo/PAPER analysis.
@@ -271,6 +272,11 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         #Unpack all of the clean parameters from
                         #fitting_options. This is to preserve default behavior
                         #in high_pass_fourier_filter
+                        #check that fittig options are in allowed keys
+                        for param in fitting_options:
+                            if not param in CLEAN_KEYS:
+                                raise ValueError("Invalid CLEAN param provided: %s\n"
+                                                 "Valid params are %s"%(param, str(CLEAN_KEYS)))
                         for param in CLEAN_DEFAULTS:
                             if not param in fitting_options:
                                 if not param in DEFAULT_FILT2D:
