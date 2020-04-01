@@ -455,7 +455,10 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
              -horizon flagging side-lobes and restoring them will introduce spurious structure.
         fg_deconv_fundamental_period: int, optional
             fundamental period of Fourier modes to fit too.
-            if none, default to length of data vector.
+            this sets the resolution in Fourier space. A standard DFT has a resolution
+            of 1/N_{FP} = 1/N between fourier modes so that the DFT operator is
+            D_{mn} = e^{-2 \pi i m n / N_{FP}}. fg_deconv_fundamental_period
+            is N_{FP}.
 
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
@@ -1019,7 +1022,10 @@ def delay_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
             -horizon flagging side-lobes and restoring them will introduce spurious structure.
         fg_deconv_fundamental_period: int, optional
             fundamental period of Fourier modes to fit too.
-            if none, default to length of data vector.
+            this sets the resolution in Fourier space. A standard DFT has a resolution
+            of 1/N_{FP} = 1/N between fourier modes so that the DFT operator is
+            D_{mn} = e^{-2 \pi i m n / N_{FP}}. fg_deconv_fundamental_period
+            is N_{FP}.
 
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
@@ -1106,7 +1112,10 @@ def fringe_filter(data, wgts, max_frate, dt, tol=1e-4, skip_wgt=0.5, maxiter=100
             -horizon flagging side-lobes and restoring them will introduce spurious structure.
         fg_deconv_fundamental_period: int, optional
             fundamental period of Fourier modes to fit too.
-            if none, default to length of data vector.
+            this sets the resolution in Fourier space. A standard DFT has a resolution
+            of 1/N_{FP} = 1/N between fourier modes so that the DFT operator is
+            D_{mn} = e^{-2 \pi i m n / N_{FP}}. fg_deconv_fundamental_period
+            is N_{FP}.
 
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
@@ -1191,7 +1200,10 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
             -horizon flagging side-lobes and restoring them will introduce spurious structure.
         fg_deconv_fundamental_period: int, optional
             fundamental period of Fourier modes to fit too.
-            if none, default to length of data vector.
+            this sets the resolution in Fourier space. A standard DFT has a resolution
+            of 1/N_{FP} = 1/N between fourier modes so that the DFT operator is
+            D_{mn} = e^{-2 \pi i m n / N_{FP}}. fg_deconv_fundamental_period
+            is N_{FP}.
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
         d_res: CLEAN residual -- difference of data and d_mdl, nulled at flagged channels
@@ -2206,9 +2218,11 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
         in addition, wgts should have more nonezero values then there are
         degrees of freedom (delay modes) to solve for.
     fundamental_period: float, optional
-        the fundamental period of reconstructed delays. Default: nchan,
-        tends to give well conditioned matrices.
-        I find that 2 x nchan gives the best results (AEW).
+            fundamental period of Fourier modes to fit too.
+            this sets the resolution in Fourier space. A standard DFT has a resolution
+            of 1/N_{FP} = 1/N between fourier modes so that the DFT operator is
+            D_{mn} = e^{-2 \pi i m n / N_{FP}}. fg_deconv_fundamental_period
+            is N_{FP}. 
     cache: dict, optional
         optional cache holding pre-computed matrices
     window: string, optional
