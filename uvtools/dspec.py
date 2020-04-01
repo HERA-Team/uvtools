@@ -203,9 +203,6 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                 'window' : window function for filtering applied to the filtered axis.
                                     See dspec.gen_window for options. If clean2D, can be fed as a list
                                     specifying the window for each axis in data.
-                                'skip_wgt' : skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
-                                    Model is left as 0s, residual is left as data, and info is {'skipped': True} for that
-                                    time. Only works properly when all weights are all between 0 and 1.
                                 'gain': The fraction of a residual used in each iteration. If this is too low, clean takes
                                     unnecessarily long. If it is too high, clean does a poor job of deconvolving.
                                 'alpha': float, if window is 'tukey', this is its alpha parameter.
@@ -219,7 +216,10 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
 
                     max_contiguous_edge_flags : int, optional
                         if the number of contiguous samples at the edge is greater then this
-                        at either side, skip .
+                        at either side, skip.
+                    skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
+                        Model is left as 0s, residual is left as data, and info is {'skipped': True} for that
+                        time. Only works properly when all weights are all between 0 and 1.
                     Returns
                     ---------
                         d_mdl: array-like
@@ -1928,7 +1928,7 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
         #filter -1 dimension
         model = np.zeros_like(data)
         for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
-            if 1 - np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
+            if np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
                                                             and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
                 model[i], _, info[1][i] = fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
                                                 filter_half_widths=filter_half_widths[1],
@@ -1945,7 +1945,7 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                 if info[1][i] == 'skipped':
                     wgts_time[i] = 0.
             for i, _y, _w, in zip(range(model.shape[1]), model.T, wgts_time.T):
-                if 1 - np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
+                if np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
                    and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
                     model.T[i], _, info[0][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
                                                                      filter_half_widths=filter_half_widths[0],
@@ -2222,7 +2222,7 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
             this sets the resolution in Fourier space. A standard DFT has a resolution
             of 1/N_{FP} = 1/N between fourier modes so that the DFT operator is
             D_{mn} = e^{-2 \pi i m n / N_{FP}}. fg_deconv_fundamental_period
-            is N_{FP}. 
+            is N_{FP}.
     cache: dict, optional
         optional cache holding pre-computed matrices
     window: string, optional
