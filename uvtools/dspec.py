@@ -1891,6 +1891,10 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                 specify dimension to filter. default 1,
                 and if 2d filter, will use both dimensions.
 
+            skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
+                Model is left as 0s, residual is left as data, and info is {'skipped': True} for that
+                time. Only works properly when all weights are all between 0 and 1.
+
             max_contiguous_edge_flags : int, optional
                 if the number of contiguous samples at the edge is greater then this
                 at either side, skip .
