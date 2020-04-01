@@ -154,9 +154,13 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         specify the following for each fitting method.
                             * 'dft':
                                 'fundamental_period': float or 2-tuple
-                                    the fundamental_period of dft modes to fit. The number of
+                                    The fundamental_period of dft modes to fit. This is the
+                                    Fourier resoltion of fitted fourier modes equal to
+                                    1/FP where FP is the fundamental period. For a standard
+                                    delay DFT FP = B where B is the visibility bandwidth
+                                    FP also sets the number of
                                     modes fit within each window in 'filter_half_widths' will
-                                    equal fw / fundamental_period.
+                                    equal fw / fundamental_period where fw is the filter width.
                                     if filter2d, must provide a 2-tuple with fundamental_period
                                     of each dimension.
                             * 'dayenu':
@@ -1711,10 +1715,16 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
             basis specific options for fitting. The two bases currently supported are dft and dpss whose options
             are as follows:
                 * 'dft':
-                    * 'fundamental_period': float
-                        the fundamental_period of dft modes to fit. The number of
-                        modes fit within each window in 'filter_half_widths' will
-                        equal fw / fundamental_period
+                   *'fundamental_period': float or 2-tuple
+                    The fundamental_period of dft modes to fit. This is the
+                    Fourier resoltion of fitted fourier modes equal to
+                    1/FP where FP is the fundamental period. For a standard
+                    delay DFT FP = B where B is the visibility bandwidth
+                    FP also sets the number of
+                    modes fit within each window in 'filter_half_widths' will
+                    equal fw / fundamental_period where fw is the filter width.
+                    if filter2d, must provide a 2-tuple with fundamental_period
+                    of each dimension.
                 * 'dpss':
                     The basis_options must include one and only one of the four options
                     for specifying how to terminate the dpss series in each filter window.
@@ -1832,10 +1842,16 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                 basis specific options for fitting. The two bases currently supported are dft and dpss whose options
                 are as follows:
                     * 'dft':
-                        * 'fundamental_period': float
-                            the fundamental_period of dft modes to fit. The number of
-                            modes fit within each window in 'filter_half_widths' will
-                            equal fw / fundamental_period
+                      *'fundamental_period': float or 2-tuple
+                        The fundamental_period of dft modes to fit. This is the
+                        Fourier resoltion of fitted fourier modes equal to
+                        1/FP where FP is the fundamental period. For a standard
+                        delay DFT FP = B where B is the visibility bandwidth
+                        FP also sets the number of
+                        modes fit within each window in 'filter_half_widths' will
+                        equal fw / fundamental_period where fw is the filter width.
+                        if filter2d, must provide a 2-tuple with fundamental_period
+                        of each dimension.
                     * 'dpss':
                         The basis_options must include one and only one of the four options
                         for specifying how to terminate the dpss series in each filter window.
