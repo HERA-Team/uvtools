@@ -1921,65 +1921,65 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
             if 'matrix' method is used, info also contains
             'fitting_matrix' with the matrix used for deriving the model
             from the data.
-        """
-        if cache is None:
-            cache={}
-        info = {0:{},1:{}}
-        residual = np.zeros_like(data)
-        filter2d = (0 in filter_dims and 1 in filter_dims)
-        filter_dims = sorted(filter_dims)[::-1]
-        #this will only happen if filter_dims is only zero!
-        if filter_dims[0] == 0:
-            data = data.T
-            wgts = wgts.T
-        if not filter2d:
-            x = [np.zeros_like(x), x]
-            filter_centers = [[], copy.deepcopy(filter_centers)]
-            filter_half_widths = [[], copy.deepcopy(filter_half_widths)]
-            suppression_factors = [[], copy.deepcopy(suppression_factors)]
-            basis_options=[{}, basis_options]
+    """
+    if cache is None:
+        cache={}
+    info = {0:{},1:{}}
+    residual = np.zeros_like(data)
+    filter2d = (0 in filter_dims and 1 in filter_dims)
+    filter_dims = sorted(filter_dims)[::-1]
+    #this will only happen if filter_dims is only zero!
+    if filter_dims[0] == 0:
+        data = data.T
+        wgts = wgts.T
+    if not filter2d:
+        x = [np.zeros_like(x), x]
+        filter_centers = [[], copy.deepcopy(filter_centers)]
+        filter_half_widths = [[], copy.deepcopy(filter_half_widths)]
+        suppression_factors = [[], copy.deepcopy(suppression_factors)]
+        basis_options=[{}, basis_options]
+    else:
+        if not isinstance(basis_options, (tuple,list)) or not len(basis_options) == 2:
+            raise ValueError("basis_options must be 2-tuple or 2-list for 2d filtering.")
+    #filter -1 dimension
+    model = np.zeros_like(data)
+    for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
+        if np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
+                                                        and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
+            model[i], _, info[1][i] = fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
+                                            filter_half_widths=filter_half_widths[1],
+                                            suppression_factors=suppression_factors[1],
+                                            basis_options=basis_options[1], method=method,
+                                            basis=basis, cache=cache)
         else:
-            if not isinstance(basis_options, (tuple,list)) or not len(basis_options) == 2:
-                raise ValueError("basis_options must be 2-tuple or 2-list for 2d filtering.")
-        #filter -1 dimension
-        model = np.zeros_like(data)
-        for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
+            info[1][i] = 'skipped'
+    #and if filter2d, filter the 0 dimension. Note that we feed in the 'model'
+    #set wgts for time filtering to happen on skipped rows
+    if filter2d:
+        wgts_time = np.ones_like(wgts)
+        for i in range(data.shape[0]):
+            if info[1][i] == 'skipped':
+                wgts_time[i] = 0.
+        for i, _y, _w, in zip(range(model.shape[1]), model.T, wgts_time.T):
             if np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
-                                                            and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
-                model[i], _, info[1][i] = fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
-                                                filter_half_widths=filter_half_widths[1],
-                                                suppression_factors=suppression_factors[1],
-                                                basis_options=basis_options[1], method=method,
-                                                basis=basis, cache=cache)
+               and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
+                model.T[i], _, info[0][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
+                                                                 filter_half_widths=filter_half_widths[0],
+                                                                 suppression_factors=suppression_factors[0],
+                                                                 basis_options=basis_options[0], method=method,
+                                                                 basis=basis, cache=cache)
             else:
-                info[1][i] = 'skipped'
-        #and if filter2d, filter the 0 dimension. Note that we feed in the 'model'
-        #set wgts for time filtering to happen on skipped rows
-        if filter2d:
-            wgts_time = np.ones_like(wgts)
-            for i in range(data.shape[0]):
-                if info[1][i] == 'skipped':
-                    wgts_time[i] = 0.
-            for i, _y, _w, in zip(range(model.shape[1]), model.T, wgts_time.T):
-                if np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
-                   and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
-                    model.T[i], _, info[0][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
-                                                                     filter_half_widths=filter_half_widths[0],
-                                                                     suppression_factors=suppression_factors[0],
-                                                                     basis_options=basis_options[0], method=method,
-                                                                     basis=basis, cache=cache)
-                else:
-                    info[0][i] = 'skipped'
+                info[0][i] = 'skipped'
 
-        residual = (data - model) * (np.abs(wgts) > 0).astype(float)
-        #this will only happen if filter_dims is only zero!
-        if filter_dims[0] == 0:
-            data = data.T
-            wgts = wgts.T
-            model = model.T
-            residual = residual.T
-            info = {0:info[1], 1:{}}
-        return model, residual, info
+    residual = (data - model) * (np.abs(wgts) > 0).astype(float)
+    #this will only happen if filter_dims is only zero!
+    if filter_dims[0] == 0:
+        data = data.T
+        wgts = wgts.T
+        model = model.T
+        residual = residual.T
+        info = {0:info[1], 1:{}}
+    return model, residual, info
 
 
 def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit_mat_key=None):
@@ -2166,7 +2166,7 @@ def dft_operator(x, filter_centers, filter_half_widths,
     B: fundamental period of fourier modes to use for fitting. units of 1/x. For standard DFT, this is bandwidth.
 
     Returns
-    -------- 
+    --------
     Ndata x (Nfilter_window * nterm) design matrix transforming DFT coefficients
     to data.
 
