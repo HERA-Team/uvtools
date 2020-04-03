@@ -16,7 +16,12 @@ import copy
 CLEAN_DEFAULTS={'tol':1e-9, 'window':{False:'none',True:['none', 'none']},
  'alpha':.5, 'maxiter':100, 'gain':0.1,
  'edgecut_low':{True:[0, 0],False:0}, 'edgecut_hi':{True:[0, 0],False:0},
- 'add_clean_residual':False, 'filt2d_mode':'rect','add_clean_residual':False}
+ 'add_clean_residual':False, 'filt2d_mode':'rect'}
+ #In the above dictionary, some fields are different depending on whether
+ #filter2d is True or False (whether we do 2d filtering or not). These parameters,
+ #are listed below in DEFAULT_FILT2D. In CLEAN_DEFAULTS they are set to a dictionary
+ #where True references default param values for 2d filtering and False references
+ #default param values for 1d filtering.
 DEFAULT_FILT2D = ['edgecut_hi', 'edgecut_low', 'window']
 CLEAN_KEYS = list(CLEAN_DEFAULTS.keys())
 def wedge_width(bl_len, sdf, nchan, standoff=0., horizon=1.):
@@ -152,60 +157,61 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         if filter2d is true, this should be a 2-tuple or 2-list
                         of dictionaries. The dictionary for each dimension must
                         specify the following for each fitting method.
-                            * 'dft':
-                                'fundamental_period': float or 2-tuple
-                                    The fundamental_period of dft modes to fit. This is the
-                                    Fourier resoltion of fitted fourier modes equal to
-                                    1/FP where FP is the fundamental period. For a standard
-                                    delay DFT FP = B where B is the visibility bandwidth
-                                    FP also sets the number of
-                                    modes fit within each window in 'filter_half_widths' will
-                                    equal fw / fundamental_period where fw is the filter width.
-                                    if filter2d, must provide a 2-tuple with fundamental_period
-                                    of each dimension.
-                            * 'dayenu':
-                                No parameters necessary if you are only doing 'dayenu'.
-                                For 'dayenu_dpss', 'dayenu_dft', 'dayenu_clean' see below
-                                and use the appropriate fitting options for each method.
-                            * 'dpss':
-                                'eigenval_cutoff': array-like
-                                    list of sinc_matrix eigenvalue cutoffs to use for included dpss modes.
-                                'nterms': array-like
-                                    list of integers specifying the order of the dpss sequence to use in each
-                                    filter window.
-                                'edge_supression': array-like
-                                    specifies the degree of supression that must occur to tones at the filter edges
-                                    to calculate the number of DPSS terms to fit in each sub-window.
-                                'avg_suppression': list of floats, optional
-                                    specifies the average degree of suppression of tones inside of the filter edges
-                                    to calculate the number of DPSS terms. Similar to edge_supression but instead checks
-                                    the suppression of a since vector with equal contributions from all tones inside of the
-                                    filter width instead of a single tone.
-                            *'clean':
-                                 'tol': float,
-                                    clean tolerance. 1e-9 is standard.
-                                 'maxiter' : int
-                                    maximum number of clean iterations. 100 is standard.
-                                 'filt2d_mode' : string
-                                    if 'rect', clean withing a rectangular region of Fourier space given
-                                    by the intersection of each set of windows.
-                                    if 'plus' only clean the plus-shaped shape along
-                                    zero-delay and fringe rate.
-                                'edgecut_low' : int, number of bins to consider zero-padded at low-side of the FFT axis,
-                                    such that the windowing function smoothly approaches zero. For 2D cleaning, can
-                                    be fed as a tuple specifying edgecut_low for first and second FFT axis.
-                                'edgecut_hi' : int, number of bins to consider zero-padded at high-side of the FFT axis,
-                                    such that the windowing function smoothly approaches zero. For 2D cleaning, can
-                                    be fed as a tuple specifying edgecut_hi for first and second FFT axis.
-                                'add_clean_residual' : bool, if True, adds the CLEAN residual within the CLEAN bounds
-                                    in fourier space to the CLEAN model. Note that the residual actually returned is
-                                    not the CLEAN residual, but the residual in input data space.
-                                'window' : window function for filtering applied to the filtered axis.
-                                    See dspec.gen_window for options. If clean2D, can be fed as a list
-                                    specifying the window for each axis in data.
-                                'gain': The fraction of a residual used in each iteration. If this is too low, clean takes
-                                    unnecessarily long. If it is too high, clean does a poor job of deconvolving.
-                                'alpha': float, if window is 'tukey', this is its alpha parameter.
+                        * 'dft':
+                            'fundamental_period': float or 2-tuple
+                                The fundamental_period of dft modes to fit. This is the
+                                Fourier resolution of fitted fourier modes equal to
+                                1/FP where FP is the fundamental period. For a standard
+                                delay DFT FP = B where B is the visibility bandwidth
+                                FP also sets the number of
+                                modes fit within each window in 'filter_half_widths' will
+                                equal fw / fundamental_period where fw is the filter width.
+                                if filter2d, must provide a 2-tuple with fundamental_period
+                                of each dimension.
+                        * 'dayenu':
+                            No parameters necessary if you are only doing 'dayenu'.
+                            For 'dayenu_dpss', 'dayenu_dft', 'dayenu_clean' see below
+                            and use the appropriate fitting options for each method.
+                        * 'dpss':
+                            'eigenval_cutoff': array-like
+                                list of sinc_matrix eigenvalue cutoffs to use for included dpss modes.
+                            'nterms': array-like
+                                list of integers specifying the order of the dpss sequence to use in each
+                                filter window.
+                            'edge_supression': array-like
+                                specifies the degree of supression that must occur to tones at the filter edges
+                                to calculate the number of DPSS terms to fit in each sub-window.
+                            'avg_suppression': list of floats, optional
+                                specifies the average degree of suppression of tones inside of the filter edges
+                                to calculate the number of DPSS terms. Similar to edge_supression but instead checks
+                                the suppression of a since vector with equal contributions from all tones inside of the
+                                filter width instead of a single tone.
+                        *'clean':
+                             defaults can be accessed in dspec.CLEAN_DEFAULTS
+                             'tol': float,
+                                clean tolerance. 1e-9 is standard.
+                             'maxiter' : int
+                                maximum number of clean iterations. 100 is standard.
+                             'filt2d_mode' : string
+                                if 'rect', clean withing a rectangular region of Fourier space given
+                                by the intersection of each set of windows.
+                                if 'plus' only clean the plus-shaped shape along
+                                zero-delay and fringe rate.
+                            'edgecut_low' : int, number of bins to consider zero-padded at low-side of the FFT axis,
+                                such that the windowing function smoothly approaches zero. For 2D cleaning, can
+                                be fed as a tuple specifying edgecut_low for first and second FFT axis.
+                            'edgecut_hi' : int, number of bins to consider zero-padded at high-side of the FFT axis,
+                                such that the windowing function smoothly approaches zero. For 2D cleaning, can
+                                be fed as a tuple specifying edgecut_hi for first and second FFT axis.
+                            'add_clean_residual' : bool, if True, adds the CLEAN residual within the CLEAN bounds
+                                in fourier space to the CLEAN model. Note that the residual actually returned is
+                                not the CLEAN residual, but the residual in input data space.
+                            'window' : window function for filtering applied to the filtered axis.
+                                See dspec.gen_window for options. If clean2D, can be fed as a list
+                                specifying the window for each axis in data.
+                            'gain': The fraction of a residual used in each iteration. If this is too low, clean takes
+                                unnecessarily long. If it is too high, clean does a poor job of deconvolving.
+                            'alpha': float, if window is 'tukey', this is its alpha parameter.
 
                     cache: dict, optional
                         dictionary for caching fitting matrices.
@@ -604,7 +610,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                                 nmin = int((fcfg[0] - fwfg[0]) * real_delta * fg_deconv_fundamental_period[-1])
                                 nmax = int((fcfg[0] + fwfg[0]) * real_delta * fg_deconv_fundamental_period[-1])
                                 info_here['fg_deconv'] = {'method':'leastsq','nmin':nmin, 'nmax':nmax}
-                                d_cl, _, _ = delay_filter_leastsq_1d( (data[i] * wgts[i] * win - d_r).squeeze(), flags=(wgts[i]==0.).squeeze(), sigma=1.,
+                                d_cl, _, _ = delay_filter_leastsq_1d( (data[i] * wgts[i] * win - d_r).squeeze(), flags=np.isclose(wgts[i], 0).squeeze(), sigma=1.,
                                                                     nmax=(nmin, nmax), freq_units=True, even_modes=True, fundamental_period=fg_deconv_fundamental_period[-1])
                                 _d_cl[i] = np.fft.ifft(d_cl)
                         else:
@@ -616,7 +622,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                         nmin = int((fcfg[0] - fwfg[0]) * real_delta * fg_deconv_fundamental_period[-1])
                         nmax = int((fcfg[0] + fwfg[0]) * real_delta * fg_deconv_fundamental_period[-1])
                         info_here['fg_deconv'] = {'method':'dft_interp','nmin':nmin, 'nmax':nmax}
-                        d_cl, _, _ = delay_filter_leastsq_1d( (data[i] * wgts[i] * win ).squeeze(), flags=(wgts[i]==0.).squeeze(), sigma=1.,
+                        d_cl, _, _ = delay_filter_leastsq_1d( (data[i] * wgts[i] * win ).squeeze(), flags=np.isclose(wgts[i], 0).squeeze(), sigma=1.,
                                                             nmax=(nmin, nmax), freq_units=True, even_modes=True, fundamental_period=fg_deconv_fundamental_period[-1])
                         _d_cl[i] = np.fft.ifft(d_cl)
                         _d_res[i] = _d[i] - _d_cl[i]
@@ -743,35 +749,39 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
 
 def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_widths, filter_factors,
                   cache = {}, return_matrices=True, hash_decimal=10):
-    '''Apply a linear delay filter to waterfall data.
-        Due to performance reasons, linear filtering only supports separable delay/fringe-rate filters.
-    Arguments:
-        x: array-like or length-2 list/tuples that are array-like
-            x-values for each data point in dimension to be filtered.
-        data: 1D or 2D (real or complex) numpy array where last dimension is frequency.
-        Does not assume that weights have already been multiplied!
-        wgts: real numpy array of linear multiplicative weights with the same shape as the data.
-        delta_data: float, list
-            the width of data bins. Typically Hz: float. if 2d clean, should be 2-tuple or 2-list
-        filter_dimensions: list
-            list of integers indicating data dimensions to filter. Must be 0, 1, or -1
-        filter_centers: float, list, or 1d numpy array of delays at which to center filter windows
-            Typically in units of (seconds)
-        filter_half_widths: float, list, or 1d numpy array of half-widths of each delay filtere window
-            with centers specified by filter_centers.
-            Typically in units of (seconds)
-        filter_factors: float, list, or 1d numpy array of factors by which filtering should be
-            applied within each filter window specified in filter_centers and
-            filter_half_widths. If a float or length-1 list/ndarray is provided,
-            the same filter factor will be used in every filter window.
-        cache: optional dictionary for storing pre-computed delay filter matrices.
-        return_matrices: bool,
-            if True, return a dict referencing every every filtering matrix used.
-        hash_decimal: number of decimals to hash x to
-    Returns:
-        data: array, 2d clean residual with data filtered along the frequency direction.
-        info: dictionary with filtering parameters and a list of skipped_times and skipped_channels
+    '''
+    Apply a linear delay filter to waterfall data.
+    Due to performance reasons, linear filtering only supports separable delay/fringe-rate filters.
 
+    Arguments
+    ---------
+    x: array-like or length-2 list/tuples that are array-like
+        x-values for each data point in dimension to be filtered.
+    data: 1D or 2D (real or complex) numpy array where last dimension is frequency.
+    Does not assume that weights have already been multiplied!
+    wgts: real numpy array of linear multiplicative weights with the same shape as the data.
+    delta_data: float, list
+        the width of data bins. Typically Hz: float. if 2d clean, should be 2-tuple or 2-list
+    filter_dimensions: list
+        list of integers indicating data dimensions to filter. Must be 0, 1, or -1
+    filter_centers: float, list, or 1d numpy array of delays at which to center filter windows
+        Typically in units of (seconds)
+    filter_half_widths: float, list, or 1d numpy array of half-widths of each delay filtere window
+        with centers specified by filter_centers.
+        Typically in units of (seconds)
+    filter_factors: float, list, or 1d numpy array of factors by which filtering should be
+        applied within each filter window specified in filter_centers and
+        filter_half_widths. If a float or length-1 list/ndarray is provided,
+        the same filter factor will be used in every filter window.
+    cache: optional dictionary for storing pre-computed delay filter matrices.
+    return_matrices: bool,
+        if True, return a dict referencing every every filtering matrix used.
+    hash_decimal: number of decimals to hash x to
+
+    Returns
+    -------
+    data: array, 2d clean residual with data filtered along the frequency direction.
+    info: dictionary with filtering parameters and a list of skipped_times and skipped_channels
     '''
     # check that data and weight shapes are consistent.
     d_shape = data.shape
@@ -1706,71 +1716,71 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     Currently supports fitting of dpss and dft modes.
     Parameters
     ----------
-        x: array-like
-            x-axis of data to fit.
-        y: array-like
-            y-axis of data to fit.
-        w: array-like
-            data weights.
-        filter_centers': array-like
-            list of floats specifying the centers of fourier windows with which to fit signals
-        filter_half_widths': array-like
-            list of floats specifying the half-widths of fourier windows to model.
-        suprression_factors: array-like, optional
-            list of floats for each basis function denoting the fraction of
-            of each basis element that should be present in the fitted model
-            If none provided, model will include 100% of each mode.
-            It is sometimes useful, for renormalization reversability
-            to only include 1-\epsilon where \epsilon is a small number of
-            each mode in the model.
-        basis_options: dictionary
-            basis specific options for fitting. The two bases currently supported are dft and dpss whose options
-            are as follows:
-                * 'dft':
-                   *'fundamental_period': float or 2-tuple
-                    The fundamental_period of dft modes to fit. This is the
-                    Fourier resoltion of fitted fourier modes equal to
-                    1/FP where FP is the fundamental period. For a standard
-                    delay DFT FP = B where B is the visibility bandwidth
-                    FP also sets the number of
-                    modes fit within each window in 'filter_half_widths' will
-                    equal fw / fundamental_period where fw is the filter width.
-                    if filter2d, must provide a 2-tuple with fundamental_period
-                    of each dimension.
-                * 'dpss':
-                    The basis_options must include one and only one of the four options
-                    for specifying how to terminate the dpss series in each filter window.
-                    *'eigenval_cutoff': array-like
-                        list of sinc_matrix eigenvalue cutoffs to use for included dpss modes.
-                    *'nterms': array-like
-                        list of integers specifying the order of the dpss sequence to use in each
-                        filter window.
-                    *'edge_supression': array-like
-                        specifies the degree of supression that must occur to tones at the filter edges
-                        to calculate the number of DPSS terms to fit in each sub-window.
-                    *'avg_suppression': list of floats, optional
-                        specifies the average degree of suppression of tones inside of the filter edges
-                        to calculate the number of DPSS terms. Similar to edge_supression but instead checks
-                        the suppression of a since vector with equal contributions from all tones inside of the
-                        filter width instead of a single tone.
-        method: string
-            specifies the fitting method to use. We currently support.
-                *'leastsq' to perform iterative leastsquares fit to derive model.
-                    using scipy.optimize.leastsq
-                *'matrix' derive model by directly calculate the fitting matrix
-                    [A^T W A]^{-1} A^T W and applying it to the y vector.
+    x: array-like
+        x-axis of data to fit.
+    y: array-like
+        y-axis of data to fit.
+    w: array-like
+        data weights.
+    filter_centers': array-like
+        list of floats specifying the centers of fourier windows with which to fit signals
+    filter_half_widths': array-like
+        list of floats specifying the half-widths of fourier windows to model.
+    suprression_factors: array-like, optional
+        list of floats for each basis function denoting the fraction of
+        of each basis element that should be present in the fitted model
+        If none provided, model will include 100% of each mode.
+        It is sometimes useful, for renormalization reversability
+        to only include 1-\epsilon where \epsilon is a small number of
+        each mode in the model.
+    basis_options: dictionary
+        basis specific options for fitting. The two bases currently supported are dft and dpss whose options
+        are as follows:
+            * 'dft':
+               *'fundamental_period': float or 2-tuple
+                The fundamental_period of dft modes to fit. This is the
+                Fourier resoltion of fitted fourier modes equal to
+                1/FP where FP is the fundamental period. For a standard
+                delay DFT FP = B where B is the visibility bandwidth
+                FP also sets the number of
+                modes fit within each window in 'filter_half_widths' will
+                equal fw / fundamental_period where fw is the filter width.
+                if filter2d, must provide a 2-tuple with fundamental_period
+                of each dimension.
+            * 'dpss':
+                The basis_options must include one and only one of the four options
+                for specifying how to terminate the dpss series in each filter window.
+                *'eigenval_cutoff': array-like
+                    list of sinc_matrix eigenvalue cutoffs to use for included dpss modes.
+                *'nterms': array-like
+                    list of integers specifying the order of the dpss sequence to use in each
+                    filter window.
+                *'edge_supression': array-like
+                    specifies the degree of supression that must occur to tones at the filter edges
+                    to calculate the number of DPSS terms to fit in each sub-window.
+                *'avg_suppression': list of floats, optional
+                    specifies the average degree of suppression of tones inside of the filter edges
+                    to calculate the number of DPSS terms. Similar to edge_supression but instead checks
+                    the suppression of a since vector with equal contributions from all tones inside of the
+                    filter width instead of a single tone.
+    method: string
+        specifies the fitting method to use. We currently support.
+            *'leastsq' to perform iterative leastsquares fit to derive model.
+                using scipy.optimize.leastsq
+            *'matrix' derive model by directly calculate the fitting matrix
+                [A^T W A]^{-1} A^T W and applying it to the y vector.
 
 
-        Returns:
-            model: array-like
-                Ndata array of complex floats equal to interpolated model
-            resid: array-like
-                Ndata array of complex floats equal to y - model
-            info:
-                dictionary containing fitting arguments for reference.
-                if 'matrix' method is used, info also contains
-                'fitting_matrix' with the matrix used for deriving the model
-                from the data.
+    Returns:
+        model: array-like
+            Ndata array of complex floats equal to interpolated model
+        resid: array-like
+            Ndata array of complex floats equal to y - model
+        info:
+            dictionary containing fitting arguments for reference.
+            if 'matrix' method is used, info also contains
+            'fitting_matrix' with the matrix used for deriving the model
+            from the data.
     """
     if cache is None:
         cache = {}
@@ -1822,93 +1832,95 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     return model, resid, info
 
 def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
-                    basis_options, suppression_factors=None,
-                    method='leastsq', basis='dft', cache=None,
-                    filter_dims = [1], skip_wgt=0.1, max_contiguous_edge_flags=5):
-        """
-        A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
-        y_model = A @ c
-        where A is a design matrix encoding our choice for a basis functions
-        and y_model
+                basis_options, suppression_factors=None,
+                method='leastsq', basis='dft', cache=None,
+                filter_dims = [1], skip_wgt=0.1, max_contiguous_edge_flags=5):
+    """
+    A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
+    y_model = A @ c
+    where A is a design matrix encoding our choice for a basis functions
+    and y_model
 
-        Parameters:
-            x: array-like or 2-tuple/2-list
-                x-axis of data to fit.
-                if more then one filter_dim, must provide 2-tuple or 2-list with x
-            data: array-like
-                data to fit, should be an Ntimes x Nfreqs array.
-            wgts: array-like
-                data weights.
-            filter_centers': array-like
-                list of floats specifying the centers of fourier windows with which to fit signals
-            filter_half_widths': array-like
-                list of floats specifying the half-widths of fourier windows to model.
-            suprression_factors: array-like, optional
-                list of floats for each basis function denoting the fraction of
-                of each basis element that should be present in the fitted model
-                If none provided, model will include 100% of each mode.
-                It is sometimes useful, for renormalization reversability
-                to only include 1-\epsilon where \epsilon is a small number of
-                each mode in the model.
-            basis_options: dictionary or 2-tuple
-                basis specific options for fitting. The two bases currently supported are dft and dpss whose options
-                are as follows:
-                    * 'dft':
-                      *'fundamental_period': float or 2-tuple
-                        The fundamental_period of dft modes to fit. This is the
-                        Fourier resoltion of fitted fourier modes equal to
-                        1/FP where FP is the fundamental period. For a standard
-                        delay DFT FP = B where B is the visibility bandwidth
-                        FP also sets the number of
-                        modes fit within each window in 'filter_half_widths' will
-                        equal fw / fundamental_period where fw is the filter width.
-                        if filter2d, must provide a 2-tuple with fundamental_period
-                        of each dimension.
-                    * 'dpss':
-                        The basis_options must include one and only one of the four options
-                        for specifying how to terminate the dpss series in each filter window.
-                        *'eigenval_cutoff': array-like
-                            list of sinc_matrix eigenvalue cutoffs to use for included dpss modes.
-                        *'nterms': array-like
-                            list of integers specifying the order of the dpss sequence to use in each
-                            filter window.
-                        *'edge_supression': array-like
-                            specifies the degree of supression that must occur to tones at the filter edges
-                            to calculate the number of DPSS terms to fit in each sub-window.
-                        *'avg_suppression': list of floats, optional
-                            specifies the average degree of suppression of tones inside of the filter edges
-                            to calculate the number of DPSS terms. Similar to edge_supression but instead checks
-                            the suppression of a since vector with equal contributions from all tones inside of the
-                            filter width instead of a single tone.
-            method: string
-                specifies the fitting method to use. We currently support.
-                    *'leastsq' to perform iterative leastsquares fit to derive model.
-                        using scipy.optimize.leastsq
-                    *'matrix' derive model by directly calculate the fitting matrix
-                        [A^T W A]^{-1} A^T W and applying it to the y vector.
+    Parameters
+    ----------
+    x: array-like or 2-tuple/2-list
+        x-axis of data to fit.
+        if more then one filter_dim, must provide 2-tuple or 2-list with x
+    data: array-like
+        data to fit, should be an Ntimes x Nfreqs array.
+    wgts: array-like
+        data weights.
+    filter_centers': array-like
+        list of floats specifying the centers of fourier windows with which to fit signals
+    filter_half_widths': array-like
+        list of floats specifying the half-widths of fourier windows to model.
+    suppression_factors: array-like, optional
+        list of floats for each basis function denoting the fraction of
+        of each basis element that should be present in the fitted model
+        If none provided, model will include 100% of each mode.
+        It is sometimes useful, for renormalization reversability
+        to only include 1-\epsilon where \epsilon is a small number of
+        each mode in the model.
+    basis_options: dictionary or 2-tuple
+        basis specific options for fitting. The two bases currently supported are dft and dpss whose options
+        are as follows:
+            * 'dft':
+              *'fundamental_period': float or 2-tuple
+                The fundamental_period of dft modes to fit. This is the
+                Fourier resoltion of fitted fourier modes equal to
+                1/FP where FP is the fundamental period. For a standard
+                delay DFT FP = B where B is the visibility bandwidth
+                FP also sets the number of
+                modes fit within each window in 'filter_half_widths' will
+                equal fw / fundamental_period where fw is the filter width.
+                if filter2d, must provide a 2-tuple with fundamental_period
+                of each dimension.
+            * 'dpss':
+                The basis_options must include one and only one of the four options
+                for specifying how to terminate the dpss series in each filter window.
+                *'eigenval_cutoff': array-like
+                    list of sinc_matrix eigenvalue cutoffs to use for included dpss modes.
+                *'nterms': array-like
+                    list of integers specifying the order of the dpss sequence to use in each
+                    filter window.
+                *'edge_supression': array-like
+                    specifies the degree of supression that must occur to tones at the filter edges
+                    to calculate the number of DPSS terms to fit in each sub-window.
+                *'avg_suppression': list of floats, optional
+                    specifies the average degree of suppression of tones inside of the filter edges
+                    to calculate the number of DPSS terms. Similar to edge_supression but instead checks
+                    the suppression of a since vector with equal contributions from all tones inside of the
+                    filter width instead of a single tone.
+    method: string
+        specifies the fitting method to use. We currently support.
+            *'leastsq' to perform iterative leastsquares fit to derive model.
+                using scipy.optimize.leastsq
+            *'matrix' derive model by directly calculate the fitting matrix
+                [A^T W A]^{-1} A^T W and applying it to the y vector.
 
-            filter_dim, int optional
-                specify dimension to filter. default 1,
-                and if 2d filter, will use both dimensions.
+    filter_dim, int optional
+        specify dimension to filter. default 1,
+        and if 2d filter, will use both dimensions.
 
-            skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
-                Model is left as 0s, residual is left as data, and info is {'skipped': True} for that
-                time. Only works properly when all weights are all between 0 and 1.
+    skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
+        Model is left as 0s, residual is left as data, and info is {'skipped': True} for that
+        time. Only works properly when all weights are all between 0 and 1.
 
-            max_contiguous_edge_flags : int, optional
-                if the number of contiguous samples at the edge is greater then this
-                at either side, skip .
+    max_contiguous_edge_flags : int, optional
+        if the number of contiguous samples at the edge is greater then this
+        at either side, skip .
 
-            Returns:
-                model: array-like
-                    Ndata array of complex floats equal to interpolated model
-                resid: array-like
-                    Ndata array of complex floats equal to y - model
-                info:
-                    dictionary containing fitting arguments for reference.
-                    if 'matrix' method is used, info also contains
-                    'fitting_matrix' with the matrix used for deriving the model
-                    from the data.
+    Returns
+    -------
+        model: array-like
+            Ndata array of complex floats equal to interpolated model
+        resid: array-like
+            Ndata array of complex floats equal to y - model
+        info:
+            dictionary containing fitting arguments for reference.
+            if 'matrix' method is used, info also contains
+            'fitting_matrix' with the matrix used for deriving the model
+            from the data.
         """
         if cache is None:
             cache={}
@@ -1989,7 +2001,6 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
     fit_mat_key: optional hashable variable
         optional key. If none is used, hash fit matrix against design and
         weighting matrix.
-
 
     Returns
     -----------
@@ -2155,8 +2166,7 @@ def dft_operator(x, filter_centers, filter_half_widths,
     B: fundamental period of fourier modes to use for fitting. units of 1/x. For standard DFT, this is bandwidth.
 
     Returns
-    --------
-
+    -------- 
     Ndata x (Nfilter_window * nterm) design matrix transforming DFT coefficients
     to data.
 
@@ -2222,11 +2232,11 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
         in addition, wgts should have more nonezero values then there are
         degrees of freedom (delay modes) to solve for.
     fundamental_period: float, optional
-            fundamental period of Fourier modes to fit too.
-            this sets the resolution in Fourier space. A standard DFT has a resolution
-            of 1/N_{FP} = 1/N between fourier modes so that the DFT operator is
-            D_{mn} = e^{-2 \pi i m n / N_{FP}}. fg_deconv_fundamental_period
-            is N_{FP}.
+        fundamental period of Fourier modes to fit too.
+        this sets the resolution in Fourier space. A standard DFT has a resolution
+        of 1/N_{FP} = 1/N between fourier modes so that the DFT operator is
+        D_{mn} = e^{-2 \pi i m n / N_{FP}}. fg_deconv_fundamental_period
+        is N_{FP}.
     cache: dict, optional
         optional cache holding pre-computed matrices
     window: string, optional
