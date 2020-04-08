@@ -24,6 +24,7 @@ install:
   - source activate test-environment
   - conda env update -n test-environment -f environment.yml
   - pip install --user git+https://github.com/matplotlib/basemap.git # workaround
+  - pip install pyradiosky
   - pip install git+https://github.com/HERA-Team/hera_sim.git
   - pip install .
 

@@ -284,6 +284,16 @@ class TestDiffPlotters(unittest.TestCase):
             # now close the figure
             plt.close(fig)
 
+    def test_plot_diff_waterfall_with_tapers(self):
+        # since the above test makes sure the figures are correctly configured,
+        # this one will just make sure nothing breaks when a taper is specified
+        fig = uvt.plot.plot_diff_waterfall(
+            self.uvd1, self.uvd2, self.antpairpol, freq_taper='blackman-harris',
+            time_taper='hann'
+        )
+
+        plt.close(fig)
+
     def test_bad_metadata(self):
         for attr, value in self.__dict__.items():
             if not attr.startswith("uvd_bad"):
