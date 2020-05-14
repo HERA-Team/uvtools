@@ -260,7 +260,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                            filter_dim_d = [1]
                        residual, info = dayenu_filter(x=x, data=data, wgts=wgts, filter_dimensions=filter_dim_d,
                                                      filter_centers=filter_centers, filter_half_widths=filter_half_widths,
-                                                     filter_factors=suppression_factors, cache=cache)
+                                                     filter_factors=suppression_factors, cache=cache, skip_wgt=skip_wgt)
                        model = data - residual
                        if len(mode) > 1:
                            model, _, info_deconv = fit_basis_2d(x=x, data=model, filter_centers=filter_centers, filter_dims=filter_dim_d,
@@ -559,7 +559,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             elif mode == 'dayenu':
                 d_r, info = dayenu_filter(np.arange(len(data))-len(data)/2*real_delta,
                                          data * wgts * win, wgts * win,
-                                         filter_dimensions = [1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache)
+                                         filter_dimensions = [1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache, skip_wgt=skip_wgt)
                 _d_res = np.fft.ifft(d_r)
                 if deconv_dayenu_foregrounds:
                     if fg_deconv_method == 'clean':
@@ -758,7 +758,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
     return d_mdl, d_res, info
 
 def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_widths, filter_factors,
-                  cache = {}, return_matrices=True, hash_decimal=10):
+                  cache = {}, return_matrices=True, hash_decimal=10, skip_wgt=0.1):
     '''
     Apply a linear delay filter to waterfall data.
     Due to performance reasons, linear filtering only supports separable delay/fringe-rate filters.
@@ -787,7 +787,9 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
     return_matrices: bool,
         if True, return a dict referencing every every filtering matrix used.
     hash_decimal: number of decimals to hash x to
-
+    skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
+        Model is left as 0s, residual is left as data, and info is {'skipped': True} for that
+        time. Only works properly when all weights are all between 0 and 1.
     Returns
     -------
     data: array, 2d clean residual with data filtered along the frequency direction.
@@ -945,19 +947,22 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
             if not filter_key in cache:
                 #only calculate filter matrix and psuedo-inverse explicitly if they are not already cached
                 #(saves calculation time).
-                wght_mat = np.outer(wght.T, wght)
-                filter_mat = dayenu_mat_inv(x=x[fs], filter_centers=filter_centers[fs],
-                                                     filter_half_widths=filter_half_widths[fs],
-                                                     filter_factors=filter_factors[fs], cache=cache) * wght_mat
-                try:
-                    #Try taking psuedo-inverse. Occasionally I've encountered SVD errors
-                    #when a lot of channels are flagged. Interestingly enough, I haven't
-                    #I'm not sure what the precise conditions for the error are but
-                    #I'm catching it here.
-                    cache[filter_key] = np.linalg.pinv(filter_mat)
-                except np.linalg.LinAlgError:
-                    #if SVD fails to converge, set filter matrix to to lots of nans and skip it
-                    #during multiplication.
+                if np.count_nonzero(wght) / len(wght) >= skip_wgt:
+                    wght_mat = np.outer(wght.T, wght)
+                    filter_mat = dayenu_mat_inv(x=x[fs], filter_centers=filter_centers[fs],
+                                                         filter_half_widths=filter_half_widths[fs],
+                                                         filter_factors=filter_factors[fs], cache=cache) * wght_mat
+                    try:
+                        #Try taking psuedo-inverse. Occasionally I've encountered SVD errors
+                        #when a lot of channels are flagged. Interestingly enough, I haven't
+                        #I'm not sure what the precise conditions for the error are but
+                        #I'm catching it here.
+                        cache[filter_key] = np.linalg.pinv(filter_mat)
+                    except np.linalg.LinAlgError:
+                        #if SVD fails to converge, set filter matrix to to lots of nans and skip it
+                        #during multiplication.
+                        cache[filter_key] = np.ones((data.shape[fs], data.shape[fs]), dtype=complex) * np.nan
+                else:
                     cache[filter_key] = np.ones((data.shape[fs], data.shape[fs]), dtype=complex) * np.nan
             #if matrix is already cached,
             filter_mat = cache[filter_key]
