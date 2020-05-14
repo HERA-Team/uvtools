@@ -695,11 +695,24 @@ def test_fourier_filter():
                                              filter_half_widths=[bl_len], suppression_factors=[0.],
                                              mode='dpss_leastsq', filter2d=False, fitting_options=dpss_options1)
 
+    #test that the info is properly switched. fourier_filter processes all data in frequency_mode and takes transposes for time
+    #filtering mode.
+    for k in info11d:
+        nt.assert_true(len(info11d[k]['axis_0']) == 0)
+        nt.assert_true(len(info11d[k]['axis_1']) > 0)
+
     nt.assert_true(np.all(np.isclose(mdl1[0], mdl11d, atol=1e-6)))
     #perform a fringe-rate filter
     mdl5, res5, info5 = dspec.fourier_filter(x=times, data=d, wgts=w, filter_centers=[0.],
                                              filter_half_widths=[fr_len], suppression_factors=[0.], filter_dim=0,
                                              mode='dpss_leastsq', filter2d=False, fitting_options=dpss_options1)
+
+    #test that the info is properly switched. fourier_filter processes all data in frequency_mode and takes transposes for time
+    #filtering mode.
+    for k in info5:
+        nt.assert_true(len(info5[k]['axis_1']) == 0)
+        nt.assert_true(len(info5[k]['axis_0']) > 0)
+
     #check that fringe rate filter model gives similar results to delay filter.
     nt.assert_true(np.all(np.isclose(mdl1[~f],mdl5[~f], rtol=1e-2)))
     #check fringe rate filter with dft mode
@@ -718,6 +731,15 @@ def test_fourier_filter():
                                              mode='dayenu_dpss_leastsq', filter2d=False, fitting_options=dpss_options1)
     nt.assert_true(np.all(np.isclose(mdl7, mdl8, rtol=1e-2)))
     nt.assert_true(np.all(np.isclose(mdl5, mdl8, rtol=1e-2)))
+
+    for k in info8:
+        if not k == 'info_deconv':
+            nt.assert_true(len(info8[k]['axis_1']) == 0)
+            nt.assert_true(len(info8[k]['axis_0']) > 0)
+    for k in info8['info_deconv']:
+            nt.assert_true(len(info8['info_deconv'][k]['axis_1']) == 0)
+            nt.assert_true(len(info8['info_deconv'][k]['axis_0']) > 0)
+
     #perform 2d dayenu filter with dpss and dft deconvolution.
 
     mdl9, res9, info9 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
@@ -749,6 +771,13 @@ def test_fourier_filter():
     nt.assert_raises(ValueError, dspec.fourier_filter,x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                                  filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
                                                  mode='clean', filter2d=True, fitting_options={'filt2d_mode':'bargh','tol':1e-5})
+
+
+
+
+
+
+
 
 def test_fit_basis_1d():
     #perform dpss interpolation, leastsq

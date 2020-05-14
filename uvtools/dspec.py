@@ -389,6 +389,16 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         residual = residual.T
                         data = data.T
                         wgts = wgts.T
+                        if not mode[0] == 'clean':
+                            print(info.keys())
+                            for k in info:
+                                if not k == 'info_deconv':
+                                    info[k]['axis_0'] = copy.deepcopy(info[k]['axis_1'])
+                                    info[k]['axis_1'] = {}
+                        if 'info_deconv' in info:
+                            for k in info['info_deconv']:
+                                info['info_deconv'][k]['axis_0'] = copy.deepcopy(info['info_deconv'][k]['axis_1'])
+                                info['info_deconv'][k]['axis_1'] = {}
                    return model, residual, info
 
 
@@ -902,8 +912,11 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                     raise ValueError("Number of elements in %s-%d must equal the"
                                      " number of elements %s-%d!"%(aname1, fs, aname2, fs))
 
-    info = {'filter_centers':filter_centers, 'filter_half_widths':filter_half_widths, 'filter_factors': filter_factors,
-            'x':x, 'data_shape':data.shape, 'filter_dimensions': filter_dimensions}
+    info = {'status':{'axis_0':{}, 'axis_1':{}}, 'filter_params':{'axis_0':{}, 'axis_1':{}}}
+    for fs in range(2):
+        info['filter_params']['axis_%d'%fs]['filter_centers'] = filter_centers[fs]
+        info['filter_params']['axis_%d'%fs]['filter_half_widths'] = filter_half_widths[fs]
+        info['filter_params']['axis_%d'%fs]['x'] = x[fs]
     skipped = [[],[]]
     # in the lines below, we iterate over the time dimension. For each time, we
     # compute a lazy covariance matrix (filter_mat) from the weights (wght) and
@@ -919,8 +932,6 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
         for fv in ff:
             if fv <= 0.:
                 raise ValueError("All filter factors must be greater than zero! You provided %.2e :(!"%(fv))
-    info[1]={}
-    info[0]={}
     for fs in filter_dimensions:
         if fs == 0:
             _d, _w = output.T, wgts.T
@@ -955,19 +966,16 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                     output[:, sample_num] = np.dot(filter_mat, sample)
                 elif fs == 1:
                     output[sample_num] = np.dot(filter_mat, sample)
-                info[fs][sample_num] = 'success'
+                info['status']['axis_%d'%fs][sample_num] = 'success'
             else:
                 skipped[fs-1].append(sample_num)
-                info[fs][sample_num] = 'skipped'
+                info['status']['axis_%d'%fs][sample_num] = 'skipped'
             if return_matrices:
                 filter_matrices[fs][sample_num]=filter_mat
 
     #1d data will only be filtered across "channels".
     if data_1d and ntimes == 1:
         output = output[0]
-    info['skipped_time_steps'] = skipped[0]
-    info['skipped_channels'] = skipped[1]
-    info['filter_matrices'] = filter_matrices
     return output, info
 
 
@@ -1808,8 +1816,9 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     info['basis'] = basis
     info['filter_centers'] = filter_centers
     info['filter_half_widths'] = filter_half_widths
+    info['suppression_factors'] = suppression_factors
+    info['basis_options'] = basis_options
     info['amat'] = amat
-    info['suppression_vector'] = suppression_vector
     wmat = np.diag(w)
     if method == 'leastsq':
         a = np.atleast_2d(w).T * amat
@@ -1924,7 +1933,7 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
     """
     if cache is None:
         cache={}
-    info = {0:{},1:{}}
+    info = {'status':{'axis_0':{}, 'axis_1':{}}}
     residual = np.zeros_like(data)
     filter2d = (0 in filter_dims and 1 in filter_dims)
     filter_dims = sorted(filter_dims)[::-1]
@@ -1946,30 +1955,45 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
     for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
         if np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
                                                         and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
-            model[i], _, info[1][i] = fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
+            model[i], _, info_t = fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
                                             filter_half_widths=filter_half_widths[1],
                                             suppression_factors=suppression_factors[1],
                                             basis_options=basis_options[1], method=method,
                                             basis=basis, cache=cache)
+            info['status']['axis_1'][i] = 'success'
         else:
-            info[1][i] = 'skipped'
+            info['status']['axis_1'][i] = 'skipped'
     #and if filter2d, filter the 0 dimension. Note that we feed in the 'model'
     #set wgts for time filtering to happen on skipped rows
+    info['filter_params'] = {'axis_0':{}, 'axis_1':{}}
+    info['filter_params']['axis_1']['method'] = info_t['method']
+    info['filter_params']['axis_1']['basis'] = info_t['basis']
+    info['filter_params']['axis_1']['filter_centers'] = info_t['filter_centers']
+    info['filter_params']['axis_1']['filter_half_widths'] = info_t['filter_half_widths']
+    info['filter_params']['axis_1']['suppression_factors'] = info_t['suppression_factors']
+    info['filter_params']['axis_1']['basis_options'] = info_t['basis_options']
     if filter2d:
         wgts_time = np.ones_like(wgts)
         for i in range(data.shape[0]):
-            if info[1][i] == 'skipped':
+            if info['status']['axis_1'][i] == 'skipped':
                 wgts_time[i] = 0.
         for i, _y, _w, in zip(range(model.shape[1]), model.T, wgts_time.T):
             if np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
                and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
-                model.T[i], _, info[0][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
+                model.T[i], _, info_t = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
                                                                  filter_half_widths=filter_half_widths[0],
                                                                  suppression_factors=suppression_factors[0],
                                                                  basis_options=basis_options[0], method=method,
                                                                  basis=basis, cache=cache)
+                info['status']['axis_0'][i] = 'success'
             else:
-                info[0][i] = 'skipped'
+                info['status']['axis_0'][i] = 'skipped'
+        info['filter_params']['axis_0']['method'] = info_t['method']
+        info['filter_params']['axis_0']['basis'] = info_t['basis']
+        info['filter_params']['axis_0']['filter_centers'] = info_t['filter_centers']
+        info['filter_params']['axis_0']['filter_half_widths'] = info_t['filter_half_widths']
+        info['filter_params']['axis_0']['suppression_factors'] = info_t['suppression_factors']
+        info['filter_params']['axis_0']['basis_options'] = info_t['basis_options']
 
     residual = (data - model) * (np.abs(wgts) > 0).astype(float)
     #this will only happen if filter_dims is only zero!
@@ -1978,7 +2002,9 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
         wgts = wgts.T
         model = model.T
         residual = residual.T
-        info = {0:info[1], 1:{}}
+        for k in info:
+            info[k]['axis_0'] = copy.deepcopy(info[k]['axis_1'])
+            info[k]['axis_1'] = {}
     return model, residual, info
 
 
