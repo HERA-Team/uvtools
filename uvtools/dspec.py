@@ -391,7 +391,6 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         data = data.T
                         wgts = wgts.T
                         if not mode[0] == 'clean':
-                            print(info.keys())
                             for k in info:
                                 if not k == 'info_deconv':
                                     info[k]['axis_0'] = copy.deepcopy(info[k]['axis_1'])
