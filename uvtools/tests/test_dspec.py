@@ -675,7 +675,8 @@ def test_fourier_filter():
     #filtering mode.
     for k in info11d:
         nt.assert_true(len(info11d[k]['axis_0']) == 0)
-        nt.assert_true(len(info11d[k]['axis_1']) > 0)
+        if k == 'status':
+            nt.assert_true(len(info11d[k]['axis_1']) == 1)
 
     nt.assert_true(np.all(np.isclose(mdl1[0], mdl11d, atol=1e-6)))
     #perform a fringe-rate filter
@@ -687,7 +688,8 @@ def test_fourier_filter():
     #filtering mode.
     for k in info5:
         nt.assert_true(len(info5[k]['axis_1']) == 0)
-        nt.assert_true(len(info5[k]['axis_0']) > 0)
+        if k == 'status':
+            nt.assert_true(len(info5[k]['axis_0']) == d.shape[1])
 
     #check that fringe rate filter model gives similar results to delay filter.
     nt.assert_true(np.all(np.isclose(mdl1[~f],mdl5[~f], rtol=1e-2)))
@@ -711,10 +713,12 @@ def test_fourier_filter():
     for k in info8:
         if not k == 'info_deconv':
             nt.assert_true(len(info8[k]['axis_1']) == 0)
-            nt.assert_true(len(info8[k]['axis_0']) > 0)
+            if k == 'status':
+                nt.assert_true(len(info8[k]['axis_0']) == d.shape[1])
     for k in info8['info_deconv']:
             nt.assert_true(len(info8['info_deconv'][k]['axis_1']) == 0)
-            nt.assert_true(len(info8['info_deconv'][k]['axis_0']) > 0)
+            if k == 'status':
+                nt.assert_true(len(info8['info_deconv'][k]['axis_0']) == d.shape[1])
 
     #perform 2d dayenu filter with dpss and dft deconvolution.
 
