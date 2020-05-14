@@ -260,7 +260,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                            filter_dim_d = [1]
                        residual, info = dayenu_filter(x=x, data=data, wgts=wgts, filter_dimensions=filter_dim_d,
                                                      filter_centers=filter_centers, filter_half_widths=filter_half_widths,
-                                                     filter_factors=suppression_factors, cache=cache, skip_wgt=skip_wgt)
+                                                     filter_factors=suppression_factors, cache=cache, skip_wgt=skip_wgt,
+                                                     max_contiguous_edge_flags=max_contiguous_edge_flags)
                        model = data - residual
                        if len(mode) > 1:
                            model, _, info_deconv = fit_basis_2d(x=x, data=model, filter_centers=filter_centers, filter_dims=filter_dim_d,
@@ -558,7 +559,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                 del info['res']
             elif mode == 'dayenu':
                 d_r, info = dayenu_filter(np.arange(len(data))-len(data)/2*real_delta,
-                                         data * wgts * win, wgts * win,
+                                         data * wgts * win, wgts * win, max_contiguous_edge_flags=1000,
                                          filter_dimensions = [1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache, skip_wgt=skip_wgt)
                 _d_res = np.fft.ifft(d_r)
                 if deconv_dayenu_foregrounds:
@@ -605,8 +606,8 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                         info.append(info_here)
                     elif mode == 'dayenu':
                         d_r, info_here = dayenu_filter(np.arange(len(data[i]))*real_delta,
-                                                       data[i] * wgts[i] * win, wgts[i] * win,
-                                                       filter_dimensions=[1], filter_centers=fc,
+                                                       data[i] * wgts[i] * win, wgts[i] * win, skip_wgt=skip_wgt,
+                                                       filter_dimensions=[1], filter_centers=fc, max_contiguous_edge_flags=1000,
                                                        filter_half_widths=fw, filter_factors=ff, cache=cache)
                         _d_res[i] = np.fft.ifft(d_r)
                         if deconv_dayenu_foregrounds:
@@ -717,7 +718,8 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             d_r, info = dayenu_filter([(np.arange(data.shape[0])-data.shape[0]/2)*real_delta[0],
                                         (np.arange(data.shape[1])-data.shape[1]/2)*real_delta[1]],
                                         data * wgts * win, wgts * win, filter_centers=fc, filter_half_widths=fw,
-                                        filter_factors=ff, cache=cache, filter_dimensions=[0, 1])
+                                        filter_factors=ff, cache=cache, filter_dimensions=[0, 1], skip_wgt=skip_wgt,
+                                        max_contiguous_edge_flags=1000)
             _d_res = np.fft.ifft2(d_r)
             if deconv_dayenu_foregrounds:
                 if fg_deconv_method == 'clean':
@@ -758,7 +760,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
     return d_mdl, d_res, info
 
 def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_widths, filter_factors,
-                  cache = {}, return_matrices=True, hash_decimal=10, skip_wgt=0.1):
+                  cache = {}, return_matrices=True, hash_decimal=10, skip_wgt=0.1, max_contiguous_edge_flags=10):
     '''
     Apply a linear delay filter to waterfall data.
     Due to performance reasons, linear filtering only supports separable delay/fringe-rate filters.
@@ -947,7 +949,8 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
             if not filter_key in cache:
                 #only calculate filter matrix and psuedo-inverse explicitly if they are not already cached
                 #(saves calculation time).
-                if np.count_nonzero(wght) / len(wght) >= skip_wgt:
+                if np.count_nonzero(wght) / len(wght) >= skip_wgt and np.count_nonzero(wght[:max_contiguous_edge_flags]) > 0 \
+                   and np.count_nonzero(wght[-max_contiguous_edge_flags:]) >0:
                     wght_mat = np.outer(wght.T, wght)
                     filter_mat = dayenu_mat_inv(x=x[fs], filter_centers=filter_centers[fs],
                                                          filter_half_widths=filter_half_widths[fs],
