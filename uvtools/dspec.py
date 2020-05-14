@@ -558,7 +558,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                 del info['res']
             elif mode == 'dayenu':
                 d_r, info = dayenu_filter(np.arange(len(data))-len(data)/2*real_delta,
-                                         data * wgts * win, wgts * win, max_contiguous_edge_flags=1000,
+                                         data * wgts * win, wgts * win, max_contiguous_edge_flags=len(data)-1,
                                          filter_dimensions = [1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache, skip_wgt=skip_wgt)
                 _d_res = np.fft.ifft(d_r)
                 if deconv_dayenu_foregrounds:
@@ -606,7 +606,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                     elif mode == 'dayenu':
                         d_r, info_here = dayenu_filter(np.arange(len(data[i]))*real_delta,
                                                        data[i] * wgts[i] * win, wgts[i] * win, skip_wgt=skip_wgt,
-                                                       filter_dimensions=[1], filter_centers=fc, max_contiguous_edge_flags=1000,
+                                                       filter_dimensions=[1], filter_centers=fc, max_contiguous_edge_flags=len(data[i])-1,
                                                        filter_half_widths=fw, filter_factors=ff, cache=cache)
                         _d_res[i] = np.fft.ifft(d_r)
                         if deconv_dayenu_foregrounds:
@@ -718,7 +718,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                                         (np.arange(data.shape[1])-data.shape[1]/2)*real_delta[1]],
                                         data * wgts * win, wgts * win, filter_centers=fc, filter_half_widths=fw,
                                         filter_factors=ff, cache=cache, filter_dimensions=[0, 1], skip_wgt=skip_wgt,
-                                        max_contiguous_edge_flags=1000)
+                                        max_contiguous_edge_flags=np.min([data.shape[0], data.shape[1]])-1)
             _d_res = np.fft.ifft2(d_r)
             if deconv_dayenu_foregrounds:
                 if fg_deconv_method == 'clean':
