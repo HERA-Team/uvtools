@@ -395,39 +395,15 @@ def test_dayenu_filter():
                         filter_factors = [1e-5,[1e-5]],
                         filter_dimensions = [0,1],cache = {})
 
+    # test skip_wgt:
+    _, info = dspec.dayenu_filter(np.arange(-nf/2,nf/2)*df, data_1d, np.zeros_like(wghts_1d), [1], np.array(filter_centers), np.array(filter_half_widths),
+                        np.array(filter_factors))
+    nt.assert_true(np.all([info['status']['axis_1'][i] == 'skipped' for i in info['status']['axis_1']]))
 
+    _, info = dspec.dayenu_filter(np.arange(-nf/2,nf/2)*df, data_1d, np.ones_like(wghts_1d), [1], np.array(filter_centers), np.array(filter_half_widths),
+                        np.array(filter_factors))
+    nt.assert_true(np.all([info['status']['axis_1'][i] == 'success' for i in info['status']['axis_1']]))
 
-    #test linear algebra error
-    #wbad = np.ones(32,dtype=complex)
-    #wbad[2:30] = 0.
-    #d_fail, info_fail = dspec.dayenu_filter(np.zeros(32,dtype=complex), wbad, 1e5, [0.], [32/1e5/32], [1e-9], cache = {},
-    #                        filter_dimensions = [False, True])
-    #np.testing.assert_array_equal(d_fail, np.zeros_like(d_fail))
-    #np.testing.assert_array_equal(np.array(info_fail['skipped_channels']), np.array([0]))
-'''
-def test_dayenu_filter_user_frequencies():
-    nf = 100
-    df = 100e3
-    freqs = np.arange(-nf//2, nf//2) * df
-    noise = (np.random.randn(nf) + 1j * np.random.randn(nf))/np.sqrt(2.)
-    #a foreground tone and a signal tone
-    fg_tone = 1e4 * np.exp(2j * np.pi * freqs * 50e-9)
-    sg_tone = 1e2 * np.exp(2j * np.pi * freqs * 1000e-9)
-    fg_ns = noise + fg_tone
-    fg_sg =  fg_tone + sg_tone
-    filter_centers = [0.]
-    filter_half_widths = [200e-9]
-    filter_factors = [1e-9]
-    wghts_1d = np.ones(nf)
-    data_1d = fg_ns
-
-    d1,_ = dspec.dayenu_filter(freqs, data_1d, wghts_1d, [1], np.array(filter_centers), np.array(filter_half_widths),
-                            np.array(filter_factors))
-    d2,_ = dspec.dayenu_filter(freqs, data_1d, wghts_1d, [1], np.array(filter_centers), np.array(filter_half_widths),
-                            np.array(filter_factors))
-    #test whether user provided frequencies gives same answer as non user provided frequencies.
-    np.testing.assert_almost_equal(d1, d2)
-'''
 
 def test_dayenu_mat_inv():
     freqs = np.arange(-16,16)*100e3
