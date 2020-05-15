@@ -371,7 +371,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         for m in range(2):
                             if not np.all(np.isclose(np.diff(x[m]), np.mean(np.diff(x[m])))):
                                 raise ValueError("Data must be equally spaced for CLEAN mode!")
-                        window = [gen_window(window_opt[m], data.shape[m], alpha=fitting_options['alpha'], normalization='mean',
+                        window = [gen_window(window_opt[m], data.shape[m], alpha=fitting_options['alpha'],
                                            edgecut_low=edgecut_low[m], edgecut_hi=edgecut_hi[m]) for m in range(2)]
                         window[0] = np.atleast_2d(window[0]).T
                         area_vecs = [ np.zeros(len(_x[m])) for m in range(2) ]
