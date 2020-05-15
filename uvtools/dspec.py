@@ -62,6 +62,10 @@ def _fourier_filter_hash(filter_centers, filter_half_widths,
         hash_decimal: number of decimals to use for floats in key.
         kwargs: additional hashable elements the user would like to
                 include in their filter key.
+
+    Returns
+    -------
+    A key for fourier_filter arrays hasing the information provided in the args.
     '''
     filter_key = tuple(np.round(x,hash_decimal))\
     + tuple(np.round(np.asarray(filter_centers) * np.mean(np.diff(x)) * len(x), hash_decimal))\
@@ -754,7 +758,6 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             fcfg.append(fcfgt)
             fwfg.append(fwfgt)
         ff = [ [tol],[tol] ]
-
         # check for filt2d_mode
         if filt2d_mode == 'plus':
             _area = np.zeros(data.shape, dtype=np.int)
@@ -807,7 +810,6 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                 _d_cl = _d - _d_res
         elif mode == 'dft_interp':
             raise ValueError("2d clean not yet supported for dft interpolation.")
-
 
     # add resid to model in CLEAN bounds
     if add_clean_residual:

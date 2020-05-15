@@ -662,7 +662,7 @@ def test_fourier_filter():
     mdl3, res3, info3 = dspec.fourier_filter(freqs, np.zeros_like(d), w, [0.], [bl_len], [0.],
                                              mode='clean', filter2d=False, fitting_options={})
     nt.assert_true(np.all([i['skipped'] for i in info3]))
-    
+
     #check error when unsupported mode provided
     nt.assert_raises(ValueError, dspec.fourier_filter, x=freqs, data=d, wgts=w, filter_centers=[0.],
                     filter_half_widths=[bl_len], suppression_factors=[0.],
@@ -763,13 +763,6 @@ def test_fourier_filter():
     nt.assert_raises(ValueError, dspec.fourier_filter,x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                                  filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
                                                  mode='clean', filter2d=True, fitting_options={'filt2d_mode':'bargh','tol':1e-5})
-
-
-
-
-
-
-
 
 def test_fit_basis_1d():
     #perform dpss interpolation, leastsq
