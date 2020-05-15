@@ -943,8 +943,11 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
         #if the axis orthogonal to the iteration axis is to be filtered, then
         #filter it!.
         for sample_num, sample, wght in zip(range(data.shape[fs-1]), _d, _w):
-            filter_key = (data.shape[fs], ) + tuple(np.round(x[fs],hash_decimal)) + tuple(filter_centers[fs]) + \
-            tuple(filter_half_widths[fs]) + tuple(filter_factors[fs]) + tuple(wght.tolist()) + ('inverse',)
+            filter_key = (data.shape[fs], ) + tuple(np.round(x[fs],hash_decimal))\
+             + tuple(np.round(np.asarray(filter_centers[fs]) * np.mean(np.diff(x[fs])) * len(x[fs]), hash_decimal))\
+             + tuple(np.round(np.asarray(filter_half_widths[fs]) * np.mean(np.diff(x[fs])) * len(x[fs]), hash_decimal))\
+             + tuple(np.round(np.asarray(filter_factors[fs]) * 1e9, hash_decimal))\
+             + tuple(np.round(wght.tolist(), hash_decimal)) + ('inverse',)
             if not filter_key in cache:
                 #only calculate filter matrix and psuedo-inverse explicitly if they are not already cached
                 #(saves calculation time).
@@ -1719,7 +1722,7 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
 
 
 def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
-                basis_options, suppression_factors=None,
+                basis_options, suppression_factors=None, hash_decimal=10,
                 method='leastsq', basis='dft', cache=None):
     """
     A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
@@ -1748,6 +1751,7 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
         It is sometimes useful, for renormalization reversability
         to only include 1-\epsilon where \epsilon is a small number of
         each mode in the model.
+    hash_decimal: number of decimals to round to for floating point keys.
     basis_options: dictionary
         basis specific options for fitting. The two bases currently supported are dft and dpss whose options
         are as follows:
@@ -1832,8 +1836,11 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
         res = lsq_linear(a, w * y)
         cn_out = res.x
     elif method == 'matrix':
-        fm_key = (basis,) + tuple(filter_centers) + tuple(filter_half_widths) + tuple(suppression_vector)\
-        + tuple(x) + tuple(w)
+        fm_key = (basis,)\
+        + tuple(np.round(np.asarray(filter_centers) * len(x) * np.mean(np.diff(x)), hash_decimal))\
+        + tuple(np.round(np.asarray(filter_half_widths) * len(x) * np.mean(np.diff(x)), hash_decimal))\
+        + tuple(np.round(np.asarray(suppression_vector), hash_decimal))\
+        + tuple(np.round(x, hash_decimal)) + tuple(np.round(w, hash_decimal))
         if basis.lower() == 'dft':
             fm_key = fm_key + (basis_options['fundamental_period'], )
         elif basis.lower() == 'dpss':
@@ -2031,7 +2038,7 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
         ndata x n_fit_params matrix transforming fit_parameters to data
     cache: optional dictionary
         optional dictionary storing pre-computed fitting matrix.
-    hash_decimals: int optional
+    hash_decimal: int optional
         the number of decimals to use in hash for caching. default is 10
     fit_mat_key: optional hashable variable
         optional key. If none is used, hash fit matrix against design and
@@ -2073,7 +2080,7 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
 
 
 def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cutoff=None,
-        edge_suppression=None, nterms=None, avg_suppression=None, xc=None):
+        edge_suppression=None, nterms=None, avg_suppression=None, xc=None, hash_decimal=10):
     """
     Calculates DPSS operator with multiple delay windows to fit data. Frequencies
     must be equally spaced (unlike Fourier operator). Users can specify how the
@@ -2107,6 +2114,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         checks the suppression of a sinc vector with equal contributions from
         all tones inside of the filter width instead of a single tone.
     xc: float optional
+    hash_decimal: number of decimals to round for floating point dict keys.
 
     Returns
     ----------
@@ -2131,8 +2139,11 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         raise ValueError('Must only provide a single series cutoff condition. %d were provided: %s '%(np.count_nonzero(crit_provided),
                                                                                                  str(crit_provided_name)))
 
-    opkey = ('dpss_operator',) + tuple(x) + tuple(filter_centers) + tuple(filter_half_widths)\
-                                + (crit_provided_name[0],) + tuple(crit_provided_value[0])
+    opkey = ('dpss_operator',) \
+    + tuple(np.round(x, hash_decimal))\
+    + tuple(np.round(np.asarray(filter_centers) * len(x) * np.mean(np.diff(x)), hash_decimal))\
+    + tuple(np.round(np.asarray(filter_half_widths) * len(x) * np.mean(np.diff(x)), hash_decimal))\
+    + (crit_provided_name[0],) + tuple(crit_provided_value[0])
     if not opkey in cache:
         #check that xs are equally spaced.
         if not np.all(np.isclose(np.diff(x), np.mean(np.diff(x)))):
@@ -2177,7 +2188,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
 
 
 def dft_operator(x, filter_centers, filter_half_widths,
-                cache=None, fundamental_period=None, xc=None):
+                cache=None, fundamental_period=None, xc=None, hash_decimal=10):
     """
     Discrete Fourier operator with multiple flexible delay windows to fit data, potentially with arbitrary
     user provided frequencies.
@@ -2198,7 +2209,7 @@ def dft_operator(x, filter_centers, filter_half_widths,
         float or list of floats of half-widths of delay filter windows in nanosec
     cache: dictionary, optional dictionary storing operator matrices with keys
     (x) + (filter_centers) + (filter_half_widths) + \
-    B: fundamental period of fourier modes to use for fitting. units of 1/x. For standard DFT, this is bandwidth.
+    hash_decimal: int, optional number of decimals to use for floating point keys.
 
     Returns
     --------
@@ -2220,7 +2231,11 @@ def dft_operator(x, filter_centers, filter_half_widths,
         filter_half_widths = [filter_half_widths]
 
     #each column is a fixed delay
-    opkey = ('dft_operator',) + tuple(x) + tuple(filter_centers) + tuple(filter_half_widths) + (fundamental_period,)
+    opkey = ('dft_operator',) \
+    + tuple(np.round(x, hash_decimal))\
+    + tuple(np.round(np.asarray(filter_centers) * len(x) * np.mean(np.diff(x)), hash_decimal))\
+    + tuple(np.round(np.asarray(filter_half_widths) * len(x) * np.mean(np.diff(x)), hash_decimal))\
+    + (fundamental_period,)
     if not opkey in cache:
         amat = []
         for fc, fw in zip(filter_centers,filter_half_widths):
@@ -2348,8 +2363,11 @@ def dayenu_mat_inv(x, filter_centers, filter_half_widths,
 
     nchan = len(x)
     #
-    filter_key = tuple(np.round(x, hash_decimal)) + tuple(np.round(filter_centers, hash_decimal)) + \
-    tuple(np.round(filter_half_widths, hash_decimal)) + tuple(np.round(filter_factors, hash_decimal))\
+
+    filter_key = tuple(np.round(x, hash_decimal))\
+     + tuple(np.round(np.asarray(filter_centers) * np.mean(np.diff(x)) * len(x), hash_decimal))\
+     + tuple(np.round(np.asarray(filter_half_widths) * np.mean(np.diff(x)) * len(x), hash_decimal))\
+     + tuple(np.round(np.asarray(filter_factors) * 1e9, hash_decimal))\
      + (wrap, wrap_interval, nwraps, no_regularization, 'dayenu_mat')
 
     if not filter_key in cache:
