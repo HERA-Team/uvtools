@@ -966,12 +966,12 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                     except np.linalg.LinAlgError:
                         #if SVD fails to converge, set filter matrix to to lots of nans and skip it
                         #during multiplication.
-                        cache[filter_key] = np.ones((data.shape[fs], data.shape[fs]), dtype=complex) * np.nan
+                        cache[filter_key] = None#np.ones((data.shape[fs], data.shape[fs]), dtype=complex) * np.nan
                 else:
-                    cache[filter_key] = np.ones((data.shape[fs], data.shape[fs]), dtype=complex) * np.nan
+                    cache[filter_key] = None#np.ones((data.shape[fs], data.shape[fs]), dtype=complex) * np.nan
             #if matrix is already cached,
             filter_mat = cache[filter_key]
-            if not np.all(np.isnan(filter_mat)):
+            if filter_mat is not None:
                 if fs == 0:
                     output[:, sample_num] = np.dot(filter_mat, sample)
                 elif fs == 1:
@@ -979,6 +979,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                 info['status']['axis_%d'%fs][sample_num] = 'success'
             else:
                 skipped[fs-1].append(sample_num)
+                output[sample_num][:] = np.nan
                 info['status']['axis_%d'%fs][sample_num] = 'skipped'
             if return_matrices:
                 filter_matrices[fs][sample_num]=filter_mat
@@ -2075,7 +2076,7 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
                 cache[opkey] = np.linalg.inv(cmat) @ np.conj(design_matrix.T) @ weights
             except np.linalg.LinAlgError as error:
                 print(error)
-                cache[opkey] = np.ones_like(cmat) * np.nan @ np.conj(design_matrix.T) @ weights
+                cache[opkey] = np.nan#np.ones_like(cmat) * np.nan @ np.conj(design_matrix.T) @ weights
     return cache[opkey]
 
 
