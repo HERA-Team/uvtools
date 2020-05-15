@@ -1973,7 +1973,7 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
     #and if filter2d, filter the 0 dimension. Note that we feed in the 'model'
     #set wgts for time filtering to happen on skipped rows
     info['filter_params'] = {'axis_0':{}, 'axis_1':{}}
-    if info_t:
+    if np.all([info['status']['axis_1'][i] == 'success' for i in info['status']['axis_1']]):
         info['filter_params']['axis_1']['method'] = info_t['method']
         info['filter_params']['axis_1']['basis'] = info_t['basis']
         info['filter_params']['axis_1']['filter_centers'] = info_t['filter_centers']
@@ -1996,12 +1996,13 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                 info['status']['axis_0'][i] = 'success'
             else:
                 info['status']['axis_0'][i] = 'skipped'
-        info['filter_params']['axis_0']['method'] = info_t['method']
-        info['filter_params']['axis_0']['basis'] = info_t['basis']
-        info['filter_params']['axis_0']['filter_centers'] = info_t['filter_centers']
-        info['filter_params']['axis_0']['filter_half_widths'] = info_t['filter_half_widths']
-        info['filter_params']['axis_0']['suppression_factors'] = info_t['suppression_factors']
-        info['filter_params']['axis_0']['basis_options'] = info_t['basis_options']
+        if np.all([info['status']['axis_0'][i] == 'success' for i in info['status']['axis_0']]):
+            info['filter_params']['axis_0']['method'] = info_t['method']
+            info['filter_params']['axis_0']['basis'] = info_t['basis']
+            info['filter_params']['axis_0']['filter_centers'] = info_t['filter_centers']
+            info['filter_params']['axis_0']['filter_half_widths'] = info_t['filter_half_widths']
+            info['filter_params']['axis_0']['suppression_factors'] = info_t['suppression_factors']
+            info['filter_params']['axis_0']['basis_options'] = info_t['basis_options']
 
     residual = (data - model) * (np.abs(wgts) > 0).astype(float)
     #this will only happen if filter_dims is only zero!
