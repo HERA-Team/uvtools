@@ -642,6 +642,7 @@ def test_fourier_filter():
     #check clean with and without default options gives equivalent answers.
     mdl3, res3, info3 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.],
                                              mode='clean', filter2d=False, fitting_options={})
+
     mdl4, res4, info4 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.], filter2d=False,
                                              mode='clean', fitting_options=clean_options1)
     clean_options_typo = {'tol':1e-9, 'maxiter':100, 'filt2d_mode':'rect',
@@ -657,6 +658,11 @@ def test_fourier_filter():
     nt.assert_true(np.all(np.isclose(mdl1, mdl2, atol=1e-6)))
     nt.assert_true(np.all(np.isclose(res1, res2)))
 
+    #check that clean skips if all data is equal to zero, avoids infinite loop case.
+    mdl3, res3, info3 = dspec.fourier_filter(freqs, np.zeros_like(d), w, [0.], [bl_len], [0.],
+                                             mode='clean', filter2d=False, fitting_options={})
+    nt.assert_true(np.all([i['skipped'] for i in info3]))
+    
     #check error when unsupported mode provided
     nt.assert_raises(ValueError, dspec.fourier_filter, x=freqs, data=d, wgts=w, filter_centers=[0.],
                     filter_half_widths=[bl_len], suppression_factors=[0.],
@@ -746,6 +752,12 @@ def test_fourier_filter():
     mdl12, res12, info12 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
                                              mode='clean', filter2d=True, fitting_options={'filt2d_mode':'plus','tol':1e-5})
+
+    #make sure that clean is skipped if all weights are zero.
+    mdl13, res13, info13 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=np.zeros_like(w), filter_centers=[[0.],[0.]],
+                                             filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
+                                             mode='clean', filter2d=True, fitting_options={'filt2d_mode':'plus','tol':1e-5})
+    nt.assert_true(info13['skipped'])
 
     #test error when cleaning with invalid filt2d mode.
     nt.assert_raises(ValueError, dspec.fourier_filter,x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],

@@ -360,7 +360,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         if not filter2d:
                             info = []
                             for i, _d, _w, _a in zip(np.arange(_data.shape[0]).astype(int), _data, _wgts, area):
-                                if _w[0] < skip_wgt:
+                                if _w[0] < skip_wgt or np.all(_d) == 0.:
                                     _d_cl[i] = 0.
                                     _d_res[i] = _d
                                     info.append({'skipped':True})
@@ -372,10 +372,15 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                     del(_info['res'])
                                     info.append(_info)
                         elif filter2d:
-                                _d_cl, info = aipy.deconv.clean(_data, _wgts, area=area, tol=tol, stop_if_div=False,
-                                                                maxiter=maxiter, gain=gain)
-                                _d_res = info['res']
-                                del(info['res'])
+                                if np.abs(_data).max() > 0. and np.abs(_wgts).max() > 0.:
+                                    _d_cl, info = aipy.deconv.clean(_data, _wgts, area=area, tol=tol, stop_if_div=False,
+                                                                    maxiter=maxiter, gain=gain)
+                                    _d_res = info['res']
+                                    del(info['res'])
+                                else:
+                                    info = {'skipped':True}
+                                    _d_cl = np.zeros_like(_data)
+                                    _d_res = np.zeros_like(_d_cl)
                         if add_clean_residual:
                             _d_cl = _d_cl + _d_res * area
                         if filter2d:
