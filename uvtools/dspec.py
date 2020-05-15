@@ -1973,12 +1973,13 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
     #and if filter2d, filter the 0 dimension. Note that we feed in the 'model'
     #set wgts for time filtering to happen on skipped rows
     info['filter_params'] = {'axis_0':{}, 'axis_1':{}}
-    info['filter_params']['axis_1']['method'] = info_t['method']
-    info['filter_params']['axis_1']['basis'] = info_t['basis']
-    info['filter_params']['axis_1']['filter_centers'] = info_t['filter_centers']
-    info['filter_params']['axis_1']['filter_half_widths'] = info_t['filter_half_widths']
-    info['filter_params']['axis_1']['suppression_factors'] = info_t['suppression_factors']
-    info['filter_params']['axis_1']['basis_options'] = info_t['basis_options']
+    if info_t:
+        info['filter_params']['axis_1']['method'] = info_t['method']
+        info['filter_params']['axis_1']['basis'] = info_t['basis']
+        info['filter_params']['axis_1']['filter_centers'] = info_t['filter_centers']
+        info['filter_params']['axis_1']['filter_half_widths'] = info_t['filter_half_widths']
+        info['filter_params']['axis_1']['suppression_factors'] = info_t['suppression_factors']
+        info['filter_params']['axis_1']['basis_options'] = info_t['basis_options']
     if filter2d:
         wgts_time = np.ones_like(wgts)
         for i in range(data.shape[0]):
