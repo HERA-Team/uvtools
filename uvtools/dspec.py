@@ -2076,7 +2076,7 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
                 cache[opkey] = np.linalg.inv(cmat) @ np.conj(design_matrix.T) @ weights
             except np.linalg.LinAlgError as error:
                 print(error)
-                cache[opkey] = np.nan#np.ones_like(cmat) * np.nan @ np.conj(design_matrix.T) @ weights
+                cache[opkey] = None#np.ones_like(cmat) * np.nan @ np.conj(design_matrix.T) @ weights
     return cache[opkey]
 
 
@@ -2309,7 +2309,11 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
     amat = dft_operator(x=np.arange(nchan)-nchan/2., filter_centers=[0.], filter_half_widths=[ndelay/fundamental_period],
                                           cache=cache, fundamental_period=fundamental_period)
     wmat = np.diag(wgts * gen_window(window, nchan)).astype(complex)
-    return amat @ fit_solution_matrix(wmat, amat)
+    fs = fit_solution_matrix(wmat, amat)
+    if fs is not None:
+        return amat @ fs
+    else:
+        return np.nan * np.ones((nchan, nchan))
 
 
 def dayenu_mat_inv(x, filter_centers, filter_half_widths,
