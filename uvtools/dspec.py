@@ -43,6 +43,42 @@ def wedge_width(bl_len, sdf, nchan, standoff=0., horizon=1.):
     bl_dly = horizon * bl_len + standoff
     return calc_width(bl_dly, sdf, nchan)
 
+def _fourier_filter_hash(filter_centers, filter_half_widths,
+                         filter_factors, x, w=None, hash_decimal=10, **kwargs):
+    '''
+    Generate a hash key for a fourier filter
+
+    Parameters
+    ----------
+        filter_centers: list,
+                        list of floats for filter centers
+        filter_half_widths: list
+                        list of float filter half widths (in fourier space)
+
+        filter_factors: list
+                        list of float filter factors
+        x: the x-axis of the data to be subjected to the hashed filter.
+        w: optional vector of float weights to hash to. default, none
+        hash_decimal: number of decimals to use for floats in key.
+        kwargs: additional hashable elements the user would like to
+                include in their filter key.
+
+    Returns
+    -------
+    A key for fourier_filter arrays hasing the information provided in the args.
+    '''
+    filter_key = tuple(np.round(x,hash_decimal))\
+    + tuple(np.round(np.asarray(filter_centers) * np.mean(np.diff(x)) * len(x), hash_decimal))\
+    + tuple(np.round(np.asarray(filter_half_widths) * np.mean(np.diff(x)) * len(x), hash_decimal))\
+    + tuple(np.round(np.asarray(filter_factors) * 1e9, hash_decimal))
+    if w is not None:
+        filter_key = filter_key + tuple(np.round(w.tolist(), hash_decimal))
+    filter_key = filter_key + tuple([kwargs[k] for k in kwargs])
+    return filter_key
+
+
+
+
 
 def calc_width(filter_size, real_delta, nsamples):
     '''Calculate the upper and lower bin indices of a fourier filter
@@ -233,6 +269,23 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         d_res: array-like
                             residual -- difference of data and model, nulled at flagged channels
                         info: dictionary (1D case) or list of dictionaries (2D case) with CLEAN metadata
+                              if the mode is 'dayenu', 'dpss', or 'dft', then info has the following sub-dicts.
+                              clean uses a different info dict structure because of downstream code assumptions that are not
+                              sufficiently general to describe the other methods. We should eventually migrate clean assumptions
+                              to this format.
+                              * 'status': dict holding two sub-dicts status of filtering on each time/frequency step.
+                                        - 'axis_0'/'axis_1': dict holding the status of time filtering for each time/freq step. Keys are integer index
+                                                    of each step and values are a string that is either 'success' or 'skipped'.
+                              * 'filter_params': dict holding the filtering parameters for each axis with the following sub-dicts.
+                                        - 'axis_0'/'axis_1': dict holding filtering parameters for filtering over each respective axis.
+                                                    - 'mode': the filtering mode used to filter the time axis ('dayenu', 'dpss_leastsq' 'dpss_method')
+                                                    - 'basis': (if using dpss/dft) gives the filtering basis.
+                                                    - 'filter_centers': centers of filtering windows.
+                                                    - 'filter_half_widths': half-widths of filtering regions for each axis.
+                                                    - 'suppression_factors': amount of suppression for each filtering region.
+                                                    - 'basis_options': the basis options used for dpss/dft mode. See dft_operator and dpss_operator for
+                                                                       more details.
+                                                    - 'x': vector of x-values used to generate the filter.
                    '''
                    if cache is None:
                        cache = {}
@@ -260,7 +313,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                            filter_dim_d = [1]
                        residual, info = dayenu_filter(x=x, data=data, wgts=wgts, filter_dimensions=filter_dim_d,
                                                      filter_centers=filter_centers, filter_half_widths=filter_half_widths,
-                                                     filter_factors=suppression_factors, cache=cache)
+                                                     filter_factors=suppression_factors, cache=cache, skip_wgt=skip_wgt,
+                                                     max_contiguous_edge_flags=max_contiguous_edge_flags)
                        model = data - residual
                        if len(mode) > 1:
                            model, _, info_deconv = fit_basis_2d(x=x, data=model, filter_centers=filter_centers, filter_dims=filter_dim_d,
@@ -317,7 +371,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         for m in range(2):
                             if not np.all(np.isclose(np.diff(x[m]), np.mean(np.diff(x[m])))):
                                 raise ValueError("Data must be equally spaced for CLEAN mode!")
-                        window = [gen_window(window_opt[m], data.shape[m], alpha=fitting_options['alpha'], normalization='mean',
+                        window = [gen_window(window_opt[m], data.shape[m], alpha=fitting_options['alpha'],
                                            edgecut_low=edgecut_low[m], edgecut_hi=edgecut_hi[m]) for m in range(2)]
                         window[0] = np.atleast_2d(window[0]).T
                         area_vecs = [ np.zeros(len(_x[m])) for m in range(2) ]
@@ -359,7 +413,10 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         if not filter2d:
                             info = []
                             for i, _d, _w, _a in zip(np.arange(_data.shape[0]).astype(int), _data, _wgts, area):
-                                if _w[0] < skip_wgt:
+                                # we skip steps that might trigger infinite CLEAN loops or divergent behavior.
+                                # if the weights sum up to a value close to zero (most of the data is flagged)
+                                # or if the data itself is close to zero.
+                                if _w[0] < skip_wgt or np.all(np.isclose(_d, 0.)):
                                     _d_cl[i] = 0.
                                     _d_res[i] = _d
                                     info.append({'skipped':True})
@@ -371,10 +428,19 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                     del(_info['res'])
                                     info.append(_info)
                         elif filter2d:
-                                _d_cl, info = aipy.deconv.clean(_data, _wgts, area=area, tol=tol, stop_if_div=False,
-                                                                maxiter=maxiter, gain=gain)
-                                _d_res = info['res']
-                                del(info['res'])
+                                # we skip 2d cleans if all the data is close to zero (which can cause an infinite clean loop)
+                                # or the weights are all equal to zero which can also lead to a clean loop.
+                                # the maximum of _wgts should be the average value of all cells in 2d wgts.
+                                # since it is the 2d fft of wgts.
+                                if not np.all(np.isclose(_data, 0.)) and np.abs(_wgts).max() > skip_wgt:
+                                    _d_cl, info = aipy.deconv.clean(_data, _wgts, area=area, tol=tol, stop_if_div=False,
+                                                                    maxiter=maxiter, gain=gain)
+                                    _d_res = info['res']
+                                    del(info['res'])
+                                else:
+                                    info = {'skipped':True}
+                                    _d_cl = np.zeros_like(_data)
+                                    _d_res = np.zeros_like(_d_cl)
                         if add_clean_residual:
                             _d_cl = _d_cl + _d_res * area
                         if filter2d:
@@ -389,6 +455,22 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         residual = residual.T
                         data = data.T
                         wgts = wgts.T
+                        if not mode[0] == 'clean':
+                            # downstream code assumes a certain format for clean info dictionaries
+                            # so right now, I only perform this switching for non clean mode.
+                            # eventually, it would be nice to standardize clean too.
+                            # but that needs to happen after we verify that this does not
+                            # break said downstream code.
+                            for k in info:
+                                if not k == 'info_deconv':
+                                    info[k]['axis_0'] = copy.deepcopy(info[k]['axis_1'])
+                                    info[k]['axis_1'] = {}
+                        # if we deconvolve the subtracted foregrounds in dayenu
+                        # then provide fitting options for the deconvolution.
+                        if 'info_deconv' in info:
+                            for k in info['info_deconv']:
+                                info['info_deconv'][k]['axis_0'] = copy.deepcopy(info['info_deconv'][k]['axis_1'])
+                                info['info_deconv'][k]['axis_1'] = {}
                    return model, residual, info
 
 
@@ -548,8 +630,8 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                 del info['res']
             elif mode == 'dayenu':
                 d_r, info = dayenu_filter(np.arange(len(data))-len(data)/2*real_delta,
-                                         data * wgts * win, wgts * win,
-                                         filter_dimensions = [1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache)
+                                         data * wgts * win, wgts * win, max_contiguous_edge_flags=len(data)-1,
+                                         filter_dimensions = [1], filter_centers=fc, filter_half_widths=fw, filter_factors=ff, cache=cache, skip_wgt=skip_wgt)
                 _d_res = np.fft.ifft(d_r)
                 if deconv_dayenu_foregrounds:
                     if fg_deconv_method == 'clean':
@@ -595,8 +677,8 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                         info.append(info_here)
                     elif mode == 'dayenu':
                         d_r, info_here = dayenu_filter(np.arange(len(data[i]))*real_delta,
-                                                       data[i] * wgts[i] * win, wgts[i] * win,
-                                                       filter_dimensions=[1], filter_centers=fc,
+                                                       data[i] * wgts[i] * win, wgts[i] * win, skip_wgt=skip_wgt,
+                                                       filter_dimensions=[1], filter_centers=fc, max_contiguous_edge_flags=len(data[i])-1,
                                                        filter_half_widths=fw, filter_factors=ff, cache=cache)
                         _d_res[i] = np.fft.ifft(d_r)
                         if deconv_dayenu_foregrounds:
@@ -676,7 +758,6 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             fcfg.append(fcfgt)
             fwfg.append(fwfgt)
         ff = [ [tol],[tol] ]
-
         # check for filt2d_mode
         if filt2d_mode == 'plus':
             _area = np.zeros(data.shape, dtype=np.int)
@@ -707,7 +788,8 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
             d_r, info = dayenu_filter([(np.arange(data.shape[0])-data.shape[0]/2)*real_delta[0],
                                         (np.arange(data.shape[1])-data.shape[1]/2)*real_delta[1]],
                                         data * wgts * win, wgts * win, filter_centers=fc, filter_half_widths=fw,
-                                        filter_factors=ff, cache=cache, filter_dimensions=[0, 1])
+                                        filter_factors=ff, cache=cache, filter_dimensions=[0, 1], skip_wgt=skip_wgt,
+                                        max_contiguous_edge_flags=np.min([data.shape[0], data.shape[1]])-1)
             _d_res = np.fft.ifft2(d_r)
             if deconv_dayenu_foregrounds:
                 if fg_deconv_method == 'clean':
@@ -729,7 +811,6 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
         elif mode == 'dft_interp':
             raise ValueError("2d clean not yet supported for dft interpolation.")
 
-
     # add resid to model in CLEAN bounds
     if add_clean_residual:
         _d_cl += _d_res * area
@@ -748,7 +829,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
     return d_mdl, d_res, info
 
 def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_widths, filter_factors,
-                  cache = {}, return_matrices=True, hash_decimal=10):
+                  cache = {}, return_matrices=True, hash_decimal=10, skip_wgt=0.1, max_contiguous_edge_flags=10):
     '''
     Apply a linear delay filter to waterfall data.
     Due to performance reasons, linear filtering only supports separable delay/fringe-rate filters.
@@ -777,11 +858,23 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
     return_matrices: bool,
         if True, return a dict referencing every every filtering matrix used.
     hash_decimal: number of decimals to hash x to
-
+    skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
+        Model is left as 0s, residual is left as data, and info is {'skipped': True} for that
+        time. Only works properly when all weights are all between 0 and 1.
     Returns
     -------
     data: array, 2d clean residual with data filtered along the frequency direction.
     info: dictionary with filtering parameters and a list of skipped_times and skipped_channels
+          has the following fields
+         * 'status': dict holding two sub-dicts status of filtering on each time/frequency step.
+                   - 'axis_0'/'axis_1': dict holding the status of time filtering for each time/freq step. Keys are integer index
+                               of each step and values are a string that is either 'success' or 'skipped'.
+         * 'filter_params': dict holding the filtering parameters for each axis with the following sub-dicts.
+                   - 'axis_0'/'axis_1': dict holding filtering parameters for filtering over each respective axis.
+                               - 'filter_centers': centers of filtering windows.
+                               - 'filter_half_widths': half-widths of filtering regions for each axis.
+                               - 'suppression_factors': amount of suppression for each filtering region.
+                               - 'x': vector of x-values used to generate the filter.
     '''
     # check that data and weight shapes are consistent.
     d_shape = data.shape
@@ -902,8 +995,12 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                     raise ValueError("Number of elements in %s-%d must equal the"
                                      " number of elements %s-%d!"%(aname1, fs, aname2, fs))
 
-    info = {'filter_centers':filter_centers, 'filter_half_widths':filter_half_widths, 'filter_factors': filter_factors,
-            'x':x, 'data_shape':data.shape, 'filter_dimensions': filter_dimensions}
+    info = {'status':{'axis_0':{}, 'axis_1':{}}, 'filter_params':{'axis_0':{}, 'axis_1':{}}}
+    for fs in range(2):
+        info['filter_params']['axis_%d'%fs]['filter_centers'] = filter_centers[fs]
+        info['filter_params']['axis_%d'%fs]['filter_half_widths'] = filter_half_widths[fs]
+        info['filter_params']['axis_%d'%fs]['x'] = x[fs]
+        info['filter_params']['axis_%d'%fs]['mode'] = 'dayenu'
     skipped = [[],[]]
     # in the lines below, we iterate over the time dimension. For each time, we
     # compute a lazy covariance matrix (filter_mat) from the weights (wght) and
@@ -919,8 +1016,6 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
         for fv in ff:
             if fv <= 0.:
                 raise ValueError("All filter factors must be greater than zero! You provided %.2e :(!"%(fv))
-    info[1]={}
-    info[0]={}
     for fs in filter_dimensions:
         if fs == 0:
             _d, _w = output.T, wgts.T
@@ -929,45 +1024,49 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
         #if the axis orthogonal to the iteration axis is to be filtered, then
         #filter it!.
         for sample_num, sample, wght in zip(range(data.shape[fs-1]), _d, _w):
-            filter_key = (data.shape[fs], ) + tuple(np.round(x[fs],hash_decimal)) + tuple(filter_centers[fs]) + \
-            tuple(filter_half_widths[fs]) + tuple(filter_factors[fs]) + tuple(wght.tolist()) + ('inverse',)
+            filter_key = _fourier_filter_hash(filter_centers=filter_centers[fs], filter_half_widths=filter_half_widths[fs],
+                                              filter_factors=filter_factors[fs], x=x[fs], w=wght,
+                                              label='dayenu_filter_matrix')
             if not filter_key in cache:
                 #only calculate filter matrix and psuedo-inverse explicitly if they are not already cached
                 #(saves calculation time).
-                wght_mat = np.outer(wght.T, wght)
-                filter_mat = dayenu_mat_inv(x=x[fs], filter_centers=filter_centers[fs],
-                                                     filter_half_widths=filter_half_widths[fs],
-                                                     filter_factors=filter_factors[fs], cache=cache) * wght_mat
-                try:
-                    #Try taking psuedo-inverse. Occasionally I've encountered SVD errors
-                    #when a lot of channels are flagged. Interestingly enough, I haven't
-                    #I'm not sure what the precise conditions for the error are but
-                    #I'm catching it here.
-                    cache[filter_key] = np.linalg.pinv(filter_mat)
-                except np.linalg.LinAlgError:
-                    #if SVD fails to converge, set filter matrix to to lots of nans and skip it
-                    #during multiplication.
-                    cache[filter_key] = np.ones((data.shape[fs], data.shape[fs]), dtype=complex) * np.nan
-            #if matrix is already cached,
+                if np.count_nonzero(wght) / len(wght) >= skip_wgt and np.count_nonzero(wght[:max_contiguous_edge_flags]) > 0 \
+                   and np.count_nonzero(wght[-max_contiguous_edge_flags:]) >0:
+                    wght_mat = np.outer(wght.T, wght)
+                    filter_mat = dayenu_mat_inv(x=x[fs], filter_centers=filter_centers[fs],
+                                                         filter_half_widths=filter_half_widths[fs],
+                                                         filter_factors=filter_factors[fs], cache=cache) * wght_mat
+                    try:
+                        #Try taking psuedo-inverse. Occasionally I've encountered SVD errors
+                        #when a lot of channels are flagged. Interestingly enough, I haven't
+                        #I'm not sure what the precise conditions for the error are but
+                        #I'm catching it here.
+                        cache[filter_key] = np.linalg.pinv(filter_mat)
+                    except np.linalg.LinAlgError:
+                        # skip if we can't invert or psuedo-invert the matrix.
+                        cache[filter_key] = None
+                else:
+                    # skip if we don't meet skip_wegith criterion or continuous edge flags
+                    # are to many. This last item isn't really a problem for dayenu
+                    # but it's here for consistancy.
+                    cache[filter_key] = None
+
             filter_mat = cache[filter_key]
-            if not np.all(np.isnan(filter_mat)):
+            if filter_mat is not None:
                 if fs == 0:
                     output[:, sample_num] = np.dot(filter_mat, sample)
                 elif fs == 1:
                     output[sample_num] = np.dot(filter_mat, sample)
-                info[fs][sample_num] = 'success'
+                info['status']['axis_%d'%fs][sample_num] = 'success'
             else:
                 skipped[fs-1].append(sample_num)
-                info[fs][sample_num] = 'skipped'
+                info['status']['axis_%d'%fs][sample_num] = 'skipped'
             if return_matrices:
                 filter_matrices[fs][sample_num]=filter_mat
 
     #1d data will only be filtered across "channels".
     if data_1d and ntimes == 1:
         output = output[0]
-    info['skipped_time_steps'] = skipped[0]
-    info['skipped_channels'] = skipped[1]
-    info['filter_matrices'] = filter_matrices
     return output, info
 
 
@@ -1704,7 +1803,7 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
 
 
 def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
-                basis_options, suppression_factors=None,
+                basis_options, suppression_factors=None, hash_decimal=10,
                 method='leastsq', basis='dft', cache=None):
     """
     A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
@@ -1733,6 +1832,7 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
         It is sometimes useful, for renormalization reversability
         to only include 1-\epsilon where \epsilon is a small number of
         each mode in the model.
+    hash_decimal: number of decimals to round to for floating point keys.
     basis_options: dictionary
         basis specific options for fitting. The two bases currently supported are dft and dpss whose options
         are as follows:
@@ -1778,9 +1878,18 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
             Ndata array of complex floats equal to y - model
         info:
             dictionary containing fitting arguments for reference.
-            if 'matrix' method is used, info also contains
-            'fitting_matrix' with the matrix used for deriving the model
-            from the data.
+            if 'matrix' method is used. Fields are
+                * 'method' : method used to derive fits.
+                * 'basis' : basis that the fits are in
+                * 'filter_centers' : filtering centers argument
+                * 'filter_half_widths' : filter_half_widths argument
+                * 'suppression_factors' : suppression_factors argument
+                * 'basis_options' : basis specific options dictionary
+                                    see dpss_operator and dft_operator.
+                * 'amat' : A matrix used for fitting.
+                * 'fitting_matrix' : matrix used for fitting (A [ATA]^-1 AT)
+                  if the method == 'matrix'.
+
     """
     if cache is None:
         cache = {}
@@ -1808,16 +1917,18 @@ def fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     info['basis'] = basis
     info['filter_centers'] = filter_centers
     info['filter_half_widths'] = filter_half_widths
+    info['suppression_factors'] = suppression_factors
+    info['basis_options'] = basis_options
     info['amat'] = amat
-    info['suppression_vector'] = suppression_vector
     wmat = np.diag(w)
     if method == 'leastsq':
         a = np.atleast_2d(w).T * amat
         res = lsq_linear(a, w * y)
         cn_out = res.x
     elif method == 'matrix':
-        fm_key = (basis,) + tuple(filter_centers) + tuple(filter_half_widths) + tuple(suppression_vector)\
-        + tuple(x) + tuple(w)
+        fm_key = _fourier_filter_hash(filter_centers=filter_centers, filter_half_widths=filter_half_widths,
+                                      filter_factors=suppression_vector, x=x, w=w, hash_decimal=hash_decimal,
+                                      label='fitting matrix', basis=basis)
         if basis.lower() == 'dft':
             fm_key = fm_key + (basis_options['fundamental_period'], )
         elif basis.lower() == 'dpss':
@@ -1916,15 +2027,24 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
             Ndata array of complex floats equal to interpolated model
         resid: array-like
             Ndata array of complex floats equal to y - model
-        info:
-            dictionary containing fitting arguments for reference.
-            if 'matrix' method is used, info also contains
-            'fitting_matrix' with the matrix used for deriving the model
-            from the data.
+    info: dictionary with filtering parameters and a list of skipped_times and skipped_channels
+          has the following fields
+         * 'status': dict holding two sub-dicts status of filtering on each time/frequency step.
+                   - 'axis_0'/'axis_1': dict holding the status of time filtering for each time/freq step. Keys are integer index
+                               of each step and values are a string that is either 'success' or 'skipped'.
+         * 'filter_params': dict holding the filtering parameters for each axis with the following sub-dicts.
+                   - 'axis_0'/'axis_1': dict holding filtering parameters for filtering over each respective axis.
+                               - 'filter_centers': centers of filtering windows.
+                               - 'filter_half_widths': half-widths of filtering regions for each axis.
+                               - 'suppression_factors': amount of suppression for each filtering region.
+                               - 'x': vector of x-values used to generate the filter.
+                               - 'basis': (if using dpss/dft) gives the filtering basis.
+                               - 'basis_options': the basis options used for dpss/dft mode. See dft_operator and dpss_operator for
+                                                  more details.
     """
     if cache is None:
         cache={}
-    info = {0:{},1:{}}
+    info = {'status':{'axis_0':{}, 'axis_1':{}}}
     residual = np.zeros_like(data)
     filter2d = (0 in filter_dims and 1 in filter_dims)
     filter_dims = sorted(filter_dims)[::-1]
@@ -1946,30 +2066,48 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
     for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
         if np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
                                                         and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
-            model[i], _, info[1][i] = fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
+            model[i], _, info_t = fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
                                             filter_half_widths=filter_half_widths[1],
                                             suppression_factors=suppression_factors[1],
                                             basis_options=basis_options[1], method=method,
                                             basis=basis, cache=cache)
+            info['status']['axis_1'][i] = 'success'
         else:
-            info[1][i] = 'skipped'
+            info['status']['axis_1'][i] = 'skipped'
     #and if filter2d, filter the 0 dimension. Note that we feed in the 'model'
     #set wgts for time filtering to happen on skipped rows
+    info['filter_params'] = {'axis_0':{}, 'axis_1':{}}
+    if np.all([info['status']['axis_1'][i] == 'success' for i in info['status']['axis_1']]):
+        info['filter_params']['axis_1']['method'] = info_t['method']
+        info['filter_params']['axis_1']['basis'] = info_t['basis']
+        info['filter_params']['axis_1']['filter_centers'] = info_t['filter_centers']
+        info['filter_params']['axis_1']['filter_half_widths'] = info_t['filter_half_widths']
+        info['filter_params']['axis_1']['suppression_factors'] = info_t['suppression_factors']
+        info['filter_params']['axis_1']['basis_options'] = info_t['basis_options']
+        info['filter_params']['axis_1']['mode'] = info_t['basis'] + '_' + method
     if filter2d:
         wgts_time = np.ones_like(wgts)
         for i in range(data.shape[0]):
-            if info[1][i] == 'skipped':
+            if info['status']['axis_1'][i] == 'skipped':
                 wgts_time[i] = 0.
         for i, _y, _w, in zip(range(model.shape[1]), model.T, wgts_time.T):
             if np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
                and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
-                model.T[i], _, info[0][i] = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
+                model.T[i], _, info_t = fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
                                                                  filter_half_widths=filter_half_widths[0],
                                                                  suppression_factors=suppression_factors[0],
                                                                  basis_options=basis_options[0], method=method,
                                                                  basis=basis, cache=cache)
+                info['status']['axis_0'][i] = 'success'
             else:
-                info[0][i] = 'skipped'
+                info['status']['axis_0'][i] = 'skipped'
+        if np.all([info['status']['axis_0'][i] == 'success' for i in info['status']['axis_0']]):
+            info['filter_params']['axis_0']['method'] = info_t['method']
+            info['filter_params']['axis_0']['basis'] = info_t['basis']
+            info['filter_params']['axis_0']['filter_centers'] = info_t['filter_centers']
+            info['filter_params']['axis_0']['filter_half_widths'] = info_t['filter_half_widths']
+            info['filter_params']['axis_0']['suppression_factors'] = info_t['suppression_factors']
+            info['filter_params']['axis_0']['basis_options'] = info_t['basis_options']
 
     residual = (data - model) * (np.abs(wgts) > 0).astype(float)
     #this will only happen if filter_dims is only zero!
@@ -1978,7 +2116,9 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
         wgts = wgts.T
         model = model.T
         residual = residual.T
-        info = {0:info[1], 1:{}}
+        for k in info:
+            info[k]['axis_0'] = copy.deepcopy(info[k]['axis_1'])
+            info[k]['axis_1'] = {}
     return model, residual, info
 
 
@@ -1996,7 +2136,7 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
         ndata x n_fit_params matrix transforming fit_parameters to data
     cache: optional dictionary
         optional dictionary storing pre-computed fitting matrix.
-    hash_decimals: int optional
+    hash_decimal: int optional
         the number of decimals to use in hash for caching. default is 10
     fit_mat_key: optional hashable variable
         optional key. If none is used, hash fit matrix against design and
@@ -2033,12 +2173,12 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
                 cache[opkey] = np.linalg.inv(cmat) @ np.conj(design_matrix.T) @ weights
             except np.linalg.LinAlgError as error:
                 print(error)
-                cache[opkey] = np.ones_like(cmat) * np.nan @ np.conj(design_matrix.T) @ weights
+                cache[opkey] = None
     return cache[opkey]
 
 
 def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cutoff=None,
-        edge_suppression=None, nterms=None, avg_suppression=None, xc=None):
+        edge_suppression=None, nterms=None, avg_suppression=None, xc=None, hash_decimal=10):
     """
     Calculates DPSS operator with multiple delay windows to fit data. Frequencies
     must be equally spaced (unlike Fourier operator). Users can specify how the
@@ -2072,6 +2212,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         checks the suppression of a sinc vector with equal contributions from
         all tones inside of the filter width instead of a single tone.
     xc: float optional
+    hash_decimal: number of decimals to round for floating point dict keys.
 
     Returns
     ----------
@@ -2095,9 +2236,10 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
     if np.count_nonzero(crit_provided) != 1:
         raise ValueError('Must only provide a single series cutoff condition. %d were provided: %s '%(np.count_nonzero(crit_provided),
                                                                                                  str(crit_provided_name)))
-
-    opkey = ('dpss_operator',) + tuple(x) + tuple(filter_centers) + tuple(filter_half_widths)\
-                                + (crit_provided_name[0],) + tuple(crit_provided_value[0])
+    opkey = _fourier_filter_hash(filter_centers=filter_centers, filter_half_widths=filter_half_widths,
+                                 filter_factors=[0.], crit_name=crit_provided_name[0], x=x,
+                                 w=None, hash_decimal=hash_decimal,
+                                 label='dpss_operator', crit_val=tuple(crit_provided_value[0]))
     if not opkey in cache:
         #check that xs are equally spaced.
         if not np.all(np.isclose(np.diff(x), np.mean(np.diff(x)))):
@@ -2142,7 +2284,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
 
 
 def dft_operator(x, filter_centers, filter_half_widths,
-                cache=None, fundamental_period=None, xc=None):
+                cache=None, fundamental_period=None, xc=None, hash_decimal=10):
     """
     Discrete Fourier operator with multiple flexible delay windows to fit data, potentially with arbitrary
     user provided frequencies.
@@ -2163,7 +2305,7 @@ def dft_operator(x, filter_centers, filter_half_widths,
         float or list of floats of half-widths of delay filter windows in nanosec
     cache: dictionary, optional dictionary storing operator matrices with keys
     (x) + (filter_centers) + (filter_half_widths) + \
-    B: fundamental period of fourier modes to use for fitting. units of 1/x. For standard DFT, this is bandwidth.
+    hash_decimal: int, optional number of decimals to use for floating point keys.
 
     Returns
     --------
@@ -2185,7 +2327,9 @@ def dft_operator(x, filter_centers, filter_half_widths,
         filter_half_widths = [filter_half_widths]
 
     #each column is a fixed delay
-    opkey = ('dft_operator',) + tuple(x) + tuple(filter_centers) + tuple(filter_half_widths) + (fundamental_period,)
+    opkey = _fourier_filter_hash(filter_centers=filter_centers, filter_half_widths=filter_half_widths,
+                                 filter_factors=[0.], x=x, w=None, hash_decimal=hash_decimal,
+                                 label='dft_operator', fperiod=fundamental_period)
     if not opkey in cache:
         amat = []
         for fc, fw in zip(filter_centers,filter_half_widths):
@@ -2258,7 +2402,11 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
     amat = dft_operator(x=np.arange(nchan)-nchan/2., filter_centers=[0.], filter_half_widths=[ndelay/fundamental_period],
                                           cache=cache, fundamental_period=fundamental_period)
     wmat = np.diag(wgts * gen_window(window, nchan)).astype(complex)
-    return amat @ fit_solution_matrix(wmat, amat)
+    fs = fit_solution_matrix(wmat, amat)
+    if fs is not None:
+        return amat @ fs
+    else:
+        return np.nan * np.ones((nchan, nchan))
 
 
 def dayenu_mat_inv(x, filter_centers, filter_half_widths,
@@ -2312,11 +2460,11 @@ def dayenu_mat_inv(x, filter_centers, filter_half_widths,
         filter_half_widths = [filter_half_widths]
 
     nchan = len(x)
-    #
-    filter_key = tuple(np.round(x, hash_decimal)) + tuple(np.round(filter_centers, hash_decimal)) + \
-    tuple(np.round(filter_half_widths, hash_decimal)) + tuple(np.round(filter_factors, hash_decimal))\
-     + (wrap, wrap_interval, nwraps, no_regularization, 'dayenu_mat')
 
+    filter_key = _fourier_filter_hash(filter_centers=filter_centers, filter_half_widths=filter_half_widths,
+                                         filter_factors=filter_factors, x=x, w=None, hash_decimal=hash_decimal,
+                                         label='dayenu_matrix_inverse', wrap=wrap, wrap_interval=wrap_interval,
+                                         nwraps=nwraps, no_regularization=no_regularization)
     if not filter_key in cache:
         fx, fy = np.meshgrid(x,x)
         sdwi_mat = np.identity(fx.shape[0]).astype(np.complex128)
