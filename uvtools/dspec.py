@@ -384,7 +384,9 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         if filt2d_mode == 'rect' or not filter2d:
                             for m in range(2):
                                 for fc, fw in zip(filter_centers[m], filter_half_widths[m]):
-                                    area_vecs[m][np.abs(_x[m] - fc)<=fw] = 1.
+                                    # add one fourier bin width to make consistent with get_width
+                                    _dx = np.mean(np.diff(np.fft.fftshift(_x[m])))
+                                    area_vecs[m][np.abs(_x[m] - fc)<=fw + _dx] = 1.
                             #if filtering windows are rectangular,
                             #we can just take outer products
                             area = np.outer(area_vecs[0], area_vecs[1])
@@ -395,9 +397,13 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                 for fc1, fw1 in zip(filter_centers[1], filter_half_widths[1]):
                                     area_temp = np.zeros(area.shape)
                                     if fc0 >= _x[0].min() and fc0 <= _x[0].max():
-                                        area_temp[np.argmin(np.abs(_x[0]-fc0)),(_x[1] - fc1) <= fw1]=1.
+                                        _dx = np.mean(np.diff(np.fft.fftshift(_x[0])))
+                                        # add one fourier bin width to make consistent with get_width
+                                        area_temp[np.argmin(_x[0]-fc0), np.abs(_x[1] - fc1) <= fw1 + _dx]=1.
                                     if fc1 >= _x[1].min() and fc1 <= _x[1].max():
-                                        area_temp[(_x[0] - fc0) <= fw0, np.argmin(np.abs(_x[1]-fc1))]=1.
+                                        _dx = np.mean(np.diff(np.fft.fftshift(_x[1])))
+                                        # add one fourier bin width to make consistent with get_width
+                                        area_temp[np.abs(_x[0] - fc0) <= fw0 + _dx, np.argmin(_x[1]-fc1)]=1.
                                     area += area_temp
                             area = (area>0.).astype(int)
                         else:
@@ -450,6 +456,12 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             model = np.fft.fft(_d_cl, axis=1)
                             residual = np.fft.fft(_d_res, axis=1)
                         #transpose back if filtering the 0th dimension.
+                        windmat = np.outer(window[0], window[1])
+                        windmat1 = np.outer(window[0], window[1])
+                        windmat1[np.isclose(windmat1, 0)] = 1.
+                        residual = residual * ~np.isclose(wgts * windmat, 0.0)\
+                                / windmat1
+
                    if not filter2d and filter_dim == 0:
                         model = model.T
                         residual = residual.T

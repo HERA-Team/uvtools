@@ -630,7 +630,7 @@ def test_fourier_filter():
     dft_options1={'fundamental_period':2.*(times.max()-times.min())}
     dft_options2={'fundamental_period':2.*(times.max()-times.min())}
     dft_options3={'fundamental_period':2.*(dlys.max()-dlys.min())}
-    clean_options1={'tol':1e-9, 'maxiter':100, 'filt2d_mode':'rect',
+    clean_options1={'tol':1e-6, 'maxiter':100, 'filt2d_mode':'rect',
                     'edgecut_low':0, 'edgecut_hi':0, 'add_clean_residual':False,
                     'window':'none', 'gain':0.1, 'alpha':0.5}
     mdl1, res1, info1 = dspec.fourier_filter(x=freqs, data=d, wgts=w, filter_centers=[0.],
@@ -763,6 +763,80 @@ def test_fourier_filter():
     nt.assert_raises(ValueError, dspec.fourier_filter,x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                                  filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
                                                  mode='clean', filter2d=True, fitting_options={'filt2d_mode':'bargh','tol':1e-5})
+
+def test_clean_fourier_filter_equality():
+    # validate that fourier_filter in various clean modes gives close values to vis_clean with equivalent parameters!
+    uvd = UVData()
+    uvd.read_miriad(os.path.join(DATA_PATH, "zen.2458042.17772.xx.HH.uvXA"), bls=[(24, 25)])
+    freqs = uvd.freq_array.squeeze()
+    times = np.unique(uvd.time_array) * 24 * 3600
+    times -= np.mean(times)
+    sdf = np.median(np.diff(freqs))
+    dt = np.median(np.diff(times))
+    frs = np.fft.fftfreq(uvd.Ntimes, d=dt)
+    dlys = np.fft.fftfreq(uvd.Nfreqs, d=sdf) * 1e9
+
+    # simulate some data in fringe-rate and delay space
+    np.random.seed(0)
+    dfr, ddly = frs[1] - frs[0], dlys[1] - dlys[0]
+    d = 200 * np.exp(-2j*np.pi*times[:, None]*(frs[2]+dfr/4) - 2j*np.pi*freqs[None, :]*(dlys[2]+ddly/4)/1e9)
+    d += 50 * np.exp(-2j*np.pi*times[:, None]*(frs[20]) - 2j*np.pi*freqs[None, :]*(dlys[20])/1e9)
+    d += 10 * ((np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes).astype(np.complex) \
+         + 1j * np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes)).reshape(uvd.Ntimes, uvd.Nfreqs))
+    f = np.zeros_like(d, dtype=np.bool)
+    d[:, 20:22] += 1e3
+    f[:, 20:22] = True
+    d[20, :] += 1e3
+    f[20, :] = True
+    w = (~f).astype(np.float)
+    bl_len = 70.0 / 2.99e8
+    # here is a fourier filter implementation of clean
+    mdl1, res1, info1 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len - 1./(sdf * len(freqs))], [0.],
+                                             mode='clean', filter2d=False, fitting_options={'tol':1e-4})
+
+    # here is the vis filter implementation of clean
+    # delay filter basic execution
+    mdl2, res2, info2 = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.0,
+                                             tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+    # validate models and residuals are close.
+    nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
+    nt.assert_true(np.all(np.isclose(res1, res2)))
+
+
+    # Do the same comparison with more complicated windowing and edge cuts.
+    mdl1, res1, info1 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.],
+                                             mode='clean', filter2d=False, fitting_options={'tol':1e-4,
+                                             'window':'tukey', 'edgecut_low':4, 'edgecut_low':4})
+    mdl2, res2, info2 = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.0,
+                                           edgecut_hi=4, edgecut_low=4, tol=1e-4,
+                                           skip_wgt=0.1, gain=0.1, window='tukey')
+    nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
+    nt.assert_true(np.all(np.isclose(res1, res2)))
+
+
+
+
+    #Do a comparison for time domain clean.
+    mdl1, res1, info1 = dspec.fourier_filter(times, d, w, [0.], [frs[15]], [0.], filter_dim=1,
+                                             mode='clean', filter2d=False, fitting_options={'tol':1e-4,
+                                             'window':'tukey', 'edgecut_low':4, 'edgecut_low':4})
+    mdl2, res2, info2 = dspec.fringe_filter(d, w, frs[15], dt, edgecut_hi=4, edgecut_low=4,
+                                            tol=1e-4, window='tukey', skip_wgt=0.1,
+                                            gain=0.1)
+    nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
+    nt.assert_true(np.all(np.isclose(res1, res2)))
+
+
+    #try 2d iterative clean.
+    mdl11, res11, info11 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
+                                             filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
+                                             mode='clean', filter2d=True, fitting_options={'filt2d_mode':'rect','tol':1e-5})
+    #try out plus mode. IDK
+    mdl12, res12, info12 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
+                                             filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
+                                             mode='clean', filter2d=True, fitting_options={'filt2d_mode':'plus','tol':1e-5})
+
+
 
 def test_fit_basis_1d():
     #perform dpss interpolation, leastsq
