@@ -630,7 +630,7 @@ def test_fourier_filter():
     dft_options1={'fundamental_period':2.*(times.max()-times.min())}
     dft_options2={'fundamental_period':2.*(times.max()-times.min())}
     dft_options3={'fundamental_period':2.*(dlys.max()-dlys.min())}
-    clean_options1={'tol':1e-9, 'maxiter':100, 'filt2d_mode':'rect',
+    clean_options1={'tol':1e-6, 'maxiter':100, 'filt2d_mode':'rect',
                     'edgecut_low':0, 'edgecut_hi':0, 'add_clean_residual':False,
                     'window':'none', 'gain':0.1, 'alpha':0.5}
     mdl1, res1, info1 = dspec.fourier_filter(x=freqs, data=d, wgts=w, filter_centers=[0.],
@@ -811,7 +811,7 @@ def test_clean_fourier_filter_equality():
     w = (~f).astype(np.float)
     bl_len = 70.0 / 2.99e8
     # here is a fourier filter implementation of clean
-    mdl1, res1, info1 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.],
+    mdl1, res1, info1 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len - 1./(sdf * len(freqs))], [0.],
                                              mode='clean', filter2d=False, fitting_options={'tol':1e-4})
 
     # here is the vis filter implementation of clean
@@ -822,17 +822,11 @@ def test_clean_fourier_filter_equality():
     nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
     nt.assert_true(np.all(np.isclose(res1, res2)))
 
-    mdl2, res2, info2 = dspec.vis_filter(d, w, bl_len=0., sdf=sdf, standoff=0., horizon=1.0,
-                                         min_dly=bl_len, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
-    # validate models and residuals are close.
-    nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
-    nt.assert_true(np.all(np.isclose(res1, res2)))
-
 
     # Do the same comparison with more complicated windowing and edge cuts.
     mdl1, res1, info1 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.],
                                              mode='clean', filter2d=False, fitting_options={'tol':1e-4,
-                                             'window':'tukey', 'edgecut_low':4, 'edgecut_hi':4})
+                                             'window':'tukey', 'edgecut_low':4, 'edgecut_low':4})
     mdl2, res2, info2 = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.0,
                                            edgecut_hi=4, edgecut_low=4, tol=1e-4,
                                            skip_wgt=0.1, gain=0.1, window='tukey')
@@ -843,42 +837,26 @@ def test_clean_fourier_filter_equality():
 
 
     #Do a comparison for time domain clean.
-    mdl1, res1, info1 = dspec.fourier_filter(times-np.mean(times), d, w, [0.], [frs[15]], [0.], filter_dim=0,
+    mdl1, res1, info1 = dspec.fourier_filter(times, d, w, [0.], [frs[15]], [0.], filter_dim=1,
                                              mode='clean', filter2d=False, fitting_options={'tol':1e-4,
-                                             'window':'tukey', 'edgecut_low':3, 'edgecut_hi':4})
-    mdl2, res2, info2 = dspec.fringe_filter(d, w, frs[15], dt, edgecut_hi=4, edgecut_low=3,
+                                             'window':'tukey', 'edgecut_low':4, 'edgecut_low':4})
+    mdl2, res2, info2 = dspec.fringe_filter(d, w, frs[15], dt, edgecut_hi=4, edgecut_low=4,
                                             tol=1e-4, window='tukey', skip_wgt=0.1,
                                             gain=0.1)
     nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
     nt.assert_true(np.all(np.isclose(res1, res2)))
 
+
     #try 2d iterative clean.
-    mdl1, res1, info1 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
-                                             filter_half_widths=[[frs[15]],[bl_len]], suppression_factors=[[0.],[0.]],
-                                             mode='clean', filter2d=True, fitting_options={'filt2d_mode':'rect','tol':1e-5,
-                                             'window':['tukey', 'tukey'], 'add_clean_residual':False})
+    mdl11, res11, info11 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
+                                             filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
+                                             mode='clean', filter2d=True, fitting_options={'filt2d_mode':'rect','tol':1e-5})
+    #try out plus mode. IDK
+    mdl12, res12, info12 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
+                                             filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
+                                             mode='clean', filter2d=True, fitting_options={'filt2d_mode':'plus','tol':1e-5})
 
-    mdl2, res2, info2 = dspec.high_pass_fourier_filter(data=d, wgts=w, filter_size=[frs[15], bl_len],
-                                             real_delta=[np.mean(np.diff(times)), np.mean(np.diff(freqs))],
-                                             window='tukey', tol=1e-5, clean2d=True,
-                                             mode='clean', add_clean_residual=False)
 
-    nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
-    nt.assert_true(np.all(np.isclose(res1, res2)))
-
-    #check plus mode.
-    mdl1, res1, info1 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
-                                             filter_half_widths=[[frs[15]],[bl_len]], suppression_factors=[[0.],[0.]],
-                                             mode='clean', filter2d=True, fitting_options={'filt2d_mode':'plus','tol':1e-5,
-                                             'window':['tukey', 'tukey'], 'add_clean_residual':False})
-
-    mdl2, res2, info2 = dspec.high_pass_fourier_filter(data=d, wgts=w, filter_size=[frs[15], bl_len],
-                                             real_delta=[np.mean(np.diff(times)), np.mean(np.diff(freqs))],
-                                             window='tukey', tol=1e-5, clean2d=True, filt2d_mode='plus',
-                                             mode='clean', add_clean_residual=False)
-
-    nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
-    nt.assert_true(np.all(np.isclose(res1, res2)))
 
 def test_fit_basis_1d():
     #perform dpss interpolation, leastsq
