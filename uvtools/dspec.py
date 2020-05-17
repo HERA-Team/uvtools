@@ -418,9 +418,16 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         if filt2d_mode == 'rect' or not filter2d:
                             for m in range(2):
                                 for fc, fw in zip(filter_centers[m], filter_half_widths[m]):
-                                    # add one fourier bin width to make consistent with get_width
-                                    _dx = np.mean(np.diff(np.fft.fftshift(_x[m])))
-                                    area_vecs[m][np.abs(_x[m] - fc)<=fw + _dx] = 1.
+                                    if not fw == 9e99:
+                                        #generate area vector centered at zero
+                                        av = np.ones(len(_x[m]))
+                                        ut, lt = calc_width(fw, np.mean(np.diff(x[m])), len(x[m]))
+                                        av[ut:lt] = 0.
+                                        #cycle area vector based on fc
+                                        nc = int(np.round(fc * np.mean(np.diff(x[m])), len(x[m])))
+                                        area_vecs[m] = np.roll(av, -nc)
+                                    else:
+                                        area_vecs[m] = np.ones(len(_x[m]))
                             #if filtering windows are rectangular,
                             #we can just take outer products
                             area = np.outer(area_vecs[0], area_vecs[1])
@@ -431,13 +438,29 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                 for fc1, fw1 in zip(filter_centers[1], filter_half_widths[1]):
                                     area_temp = np.zeros(area.shape)
                                     if fc0 >= _x[0].min() and fc0 <= _x[0].max():
-                                        _dx = np.mean(np.diff(np.fft.fftshift(_x[0])))
-                                        # add one fourier bin width to make consistent with get_width
-                                        area_temp[np.argmin(_x[0]-fc0), np.abs(_x[1] - fc1) <= fw1 + _dx]=1.
+                                        #generate area vector centered at zero
+                                        if not fw1 == 9e99:
+                                            av = np.ones(len(_x[1]))
+                                            ut, lt = calc_width(fw1, np.mean(np.diff(x[1])), len(x[1]))
+                                            av[ut:lt] = 0.
+                                            #cycle area vector based on fc
+                                            nc = int(np.round(fc1 * np.mean(np.diff(x[1])), len(x[1])))
+                                            av = np.roll(av, -nc)
+                                            area_temp[np.argmin(np.abs(_x[0]-fc0)), :] = av
+                                        else:
+                                            area_temp[np.armin(np.abs(_x[0]-fc0)), :] = 1.
                                     if fc1 >= _x[1].min() and fc1 <= _x[1].max():
-                                        _dx = np.mean(np.diff(np.fft.fftshift(_x[1])))
-                                        # add one fourier bin width to make consistent with get_width
-                                        area_temp[np.abs(_x[0] - fc0) <= fw0 + _dx, np.argmin(_x[1]-fc1)]=1.
+                                        #generate area vector centered at zero
+                                        if not fw0 == 9e99:
+                                            av = np.ones(len(_x[0]))
+                                            ut, lt = calc_width(fw0, np.mean(np.diff(x[0])), len(x[0]))
+                                            av[ut:lt] = 0.
+                                            #cycle area vector based on fc
+                                            nc = int(np.round(fc0 * np.mean(np.diff(x[0])), len(x[0])))
+                                            av = np.roll(av, -nc)
+                                            area_temp[:, np.argmin(np.abs(_x[1]-fc1))] = av
+                                        else:
+                                            area_temp[:, np.argmin(np.abs(_x[1]-fc1))] = 1.
                                     area += area_temp
                             area = (area>0.).astype(int)
                         else:
