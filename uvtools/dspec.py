@@ -474,6 +474,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         _d_cl = np.zeros_like(_data)
                         _d_res = np.zeros_like(_data)
                         if not filter2d:
+                            info_clean = {}
                             for i, _d, _w, _a in zip(np.arange(_data.shape[0]).astype(int), _data, _wgts, area):
                                 # we skip steps that might trigger infinite CLEAN loops or divergent behavior.
                                 # if the weights sum up to a value close to zero (most of the data is flagged)
@@ -489,7 +490,6 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                     _info['skipped'] = False
                                     del(_info['res'])
                                     info['clean_status']['axis_1'][i] = _info
-                                    info['status']['axis_1'][i] = 'success'
                                 info['filter_params']['axis_1'] = fitting_options
                         elif filter2d:
                                 # we skip 2d cleans if all the data is close to zero (which can cause an infinite clean loop)
