@@ -390,7 +390,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                         ut, lt = calc_width(fw, np.mean(np.diff(x[m])), len(x[m]))
                                         av[ut:lt] = 0.
                                         #cycle area vector based on fc
-                                        nc = int(np.round(fc * np.mean(np.diff(x[m])), len(x[m])))
+                                        nc = int(np.round(fc * np.mean(np.diff(x[m])) * len(x[m])))
                                         area_vecs[m] = np.roll(av, -nc)
                                     else:
                                         area_vecs[m] = np.ones(len(_x[m]))
@@ -410,7 +410,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                             ut, lt = calc_width(fw1, np.mean(np.diff(x[1])), len(x[1]))
                                             av[ut:lt] = 0.
                                             #cycle area vector based on fc
-                                            nc = int(np.round(fc1 * np.mean(np.diff(x[1])), len(x[1])))
+                                            nc = int(np.round(fc1 * np.mean(np.diff(x[1])) * len(x[1])))
                                             av = np.roll(av, -nc)
                                             area_temp[np.argmin(np.abs(_x[0]-fc0)), :] = av
                                         else:
@@ -422,7 +422,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                             ut, lt = calc_width(fw0, np.mean(np.diff(x[0])), len(x[0]))
                                             av[ut:lt] = 0.
                                             #cycle area vector based on fc
-                                            nc = int(np.round(fc0 * np.mean(np.diff(x[0])), len(x[0])))
+                                            nc = int(np.round(fc0 * np.mean(np.diff(x[0])) * len(x[0])))
                                             av = np.roll(av, -nc)
                                             area_temp[:, np.argmin(np.abs(_x[1]-fc1))] = av
                                         else:
