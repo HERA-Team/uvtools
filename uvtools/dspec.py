@@ -67,12 +67,12 @@ def _fourier_filter_hash(filter_centers, filter_half_widths,
     -------
     A key for fourier_filter arrays hasing the information provided in the args.
     '''
-    filter_key = tuple(np.round(x,hash_decimal))\
-    + tuple(np.round(np.asarray(filter_centers) * np.mean(np.diff(x)) * len(x), hash_decimal))\
-    + tuple(np.round(np.asarray(filter_half_widths) * np.mean(np.diff(x)) * len(x), hash_decimal))\
-    + tuple(np.round(np.asarray(filter_factors) * 1e9, hash_decimal))
+    filter_key = ('x:',) + tuple(np.round(x,hash_decimal))\
+    + ('filter_centers x N x DF:',) + tuple(np.round(np.asarray(filter_centers) * np.mean(np.diff(x)) * len(x), hash_decimal))\
+    + ('filter_centers x N x DF:',) + tuple(np.round(np.asarray(filter_half_widths) * np.mean(np.diff(x)) * len(x), hash_decimal))\
+    + ('filter_factors x 1e9:',) + tuple(np.round(np.asarray(filter_factors) * 1e9, hash_decimal))
     if w is not None:
-        filter_key = filter_key + tuple(np.round(w.tolist(), hash_decimal))
+        filter_key = filter_key + ('weights', ) +  tuple(np.round(w.tolist(), hash_decimal))
     filter_key = filter_key + tuple([kwargs[k] for k in kwargs])
     return filter_key
 
@@ -1002,7 +1002,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                 if not isinstance(x[j], (tuple, list, np.ndarray)):
                     raise ValueError("x[%d] must be a tuple, list or numpy array."%(j))
                 x[j]=np.asarray(x[j])
-        for ff_num,ff_list in zip([0,1],filter_factors):
+        for ff_num,ff_list in zip(filter_dimensions,filter_factors):
             # we allow the user to provide a single filter factor for multiple
             # filtering windows on a single dimension. This code
             # iterates through each dimension and if a single filter_factor is provided
