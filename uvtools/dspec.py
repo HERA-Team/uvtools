@@ -268,8 +268,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             model -- best fit real-space model of data.
                         d_res: array-like
                             residual -- difference of data and model, nulled at flagged channels
-                        info: dictionary (1D case) or list of dictionaries (2D case) with CLEAN metadata
-                              if the mode is 'dayenu', 'dpss', or 'dft', then info has the following sub-dicts.
+                        info: dictionary with meta data on run and provided arguments.
                               clean uses a different info dict structure because of downstream code assumptions that are not
                               sufficiently general to describe the other methods. We should eventually migrate clean assumptions
                               to this format.
@@ -286,6 +285,10 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                                     - 'basis_options': the basis options used for dpss/dft mode. See dft_operator and dpss_operator for
                                                                        more details.
                                                     - 'x': vector of x-values used to generate the filter.
+                            * 'clean_status': if CLEAN mode is used, this is also a field.
+                                        - 'axis_0'/'axis_1': dictionary holding the clean output for cleaning on each axis. keys are integrations cleaned (integer)
+                                                             and values for each key are the status dictionaries returned by aipy.deconv.clean (see aipy.deconv.clean
+                                                             for more information).
                    '''
                    if cache is None:
                        cache = {}
@@ -381,6 +384,10 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         gain = fitting_options['gain']
                         add_clean_residual = fitting_options['add_clean_residual']
                         filt2d_mode = fitting_options['filt2d_mode']
+                        info = {}
+                        info['filter_params'] = {'axis_0':{}, 'axis_1':{}}
+                        info['clean_status'] = {'axis_0':{}, 'axis_1':{}}
+                        info['status'] = {'axis_0':{}, 'axis_1':{}}
                         if filt2d_mode == 'rect' or not filter2d:
                             for m in range(2):
                                 for fc, fw in zip(filter_centers[m], filter_half_widths[m]):
@@ -440,7 +447,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         _d_cl = np.zeros_like(_data)
                         _d_res = np.zeros_like(_data)
                         if not filter2d:
-                            info = []
+                            info_clean = {}
                             for i, _d, _w, _a in zip(np.arange(_data.shape[0]).astype(int), _data, _wgts, area):
                                 # we skip steps that might trigger infinite CLEAN loops or divergent behavior.
                                 # if the weights sum up to a value close to zero (most of the data is flagged)
@@ -448,28 +455,38 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                 if _w[0] < skip_wgt or np.all(np.isclose(_d, 0.)):
                                     _d_cl[i] = 0.
                                     _d_res[i] = _d
-                                    info.append({'skipped':True})
+                                    info['status']['axis_1'][i] = 'skipped'
                                 else:
                                     _d_cl[i], _info = aipy.deconv.clean(_d, _w, area=_a, tol=tol, stop_if_div=False,
                                                                     maxiter=maxiter, gain=gain)
                                     _d_res[i] = _info['res']
                                     _info['skipped'] = False
                                     del(_info['res'])
-                                    info.append(_info)
+                                    info['clean_status']['axis_1'][i] = _info
+                                info['filter_params']['axis_1'] = fitting_options
                         elif filter2d:
                                 # we skip 2d cleans if all the data is close to zero (which can cause an infinite clean loop)
                                 # or the weights are all equal to zero which can also lead to a clean loop.
                                 # the maximum of _wgts should be the average value of all cells in 2d wgts.
                                 # since it is the 2d fft of wgts.
                                 if not np.all(np.isclose(_data, 0.)) and np.abs(_wgts).max() > skip_wgt:
-                                    _d_cl, info = aipy.deconv.clean(_data, _wgts, area=area, tol=tol, stop_if_div=False,
+                                    _d_cl, _info = aipy.deconv.clean(_data, _wgts, area=area, tol=tol, stop_if_div=False,
                                                                     maxiter=maxiter, gain=gain)
-                                    _d_res = info['res']
-                                    del(info['res'])
+                                    _d_res = _info['res']
+                                    del(_info['res'])
+                                    info['clean_status']['axis_1'] = _info
+                                    info['clean_status']['axis_0'] = info['clean_status']['axis_1']
+                                    info['status']['axis_1'] = {i:'success' for i in range(_data.shape[0])}
+                                    info['status']['axis_0'] = {i:'success' for i in range(_data.shape[1])}
                                 else:
-                                    info = {'skipped':True}
+                                    info['clean_status']['axis_0'] = {'skipped':True}
+                                    info['clean_status']['axis_1'] = {'skipped':True}
+                                    info['status']['axis_1'] = {i:'skipped' for i in range(_data.shape[0])}
+                                    info['status']['axis_0'] = {i:'skipped' for i in range(_data.shape[1])}
                                     _d_cl = np.zeros_like(_data)
                                     _d_res = np.zeros_like(_d_cl)
+                                info['filter_params']['axis_0'] = fitting_options
+                                info['filter_params']['axis_1'] = info['filter_params']['axis_0']
                         if add_clean_residual:
                             _d_cl = _d_cl + _d_res * area
                         if filter2d:
@@ -490,16 +507,11 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         residual = residual.T
                         data = data.T
                         wgts = wgts.T
-                        if not mode[0] == 'clean':
-                            # downstream code assumes a certain format for clean info dictionaries
-                            # so right now, I only perform this switching for non clean mode.
-                            # eventually, it would be nice to standardize clean too.
-                            # but that needs to happen after we verify that this does not
-                            # break said downstream code.
-                            for k in info:
-                                if not k == 'info_deconv':
-                                    info[k]['axis_0'] = copy.deepcopy(info[k]['axis_1'])
-                                    info[k]['axis_1'] = {}
+                        # switch axis 0 and axis 1 info dicts if we were doing time cleaning.
+                        for k in info:
+                            if not k == 'info_deconv':
+                                info[k]['axis_0'] = copy.deepcopy(info[k]['axis_1'])
+                                info[k]['axis_1'] = {}
                         # if we deconvolve the subtracted foregrounds in dayenu
                         # then provide fitting options for the deconvolution.
                         if 'info_deconv' in info:
