@@ -311,7 +311,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                        wgts = wgts.T
                    if mode[0] == 'dayenu':
                        if filter2d:
-                           filter_dim_d = [0, 1]
+                           filter_dim_d = [1, 0]
                        else:
                            filter_dim_d = [1]
                        residual, info = dayenu_filter(x=x, data=data, wgts=wgts, filter_dimensions=filter_dim_d,
@@ -328,7 +328,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
 
                    elif mode[0] == 'dft' or mode[0] == 'dpss':
                         if filter2d:
-                            filter_dim_d = [0, 1]
+                            filter_dim_d = [1, 0]
                         else:
                             filter_dim_d = [1]
                         model, residual, info = fit_basis_2d(x=x, data=data, filter_centers=filter_centers, filter_dims=filter_dim_d,
@@ -889,8 +889,6 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
     data: 1D or 2D (real or complex) numpy array where last dimension is frequency.
     Does not assume that weights have already been multiplied!
     wgts: real numpy array of linear multiplicative weights with the same shape as the data.
-    delta_data: float, list
-        the width of data bins. Typically Hz: float. if 2d clean, should be 2-tuple or 2-list
     filter_dimensions: list
         list of integers indicating data dimensions to filter. Must be 0, 1, or -1
     filter_centers: float, list, or 1d numpy array of delays at which to center filter windows
@@ -974,7 +972,6 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
     if not np.all(np.abs(np.asarray(filter_dimensions)) < data.ndim):
         raise ValueError("invalid filter dimensions provided, must be 0 or 1/-1")
     # convert filter dimensions to a list of integers (incase the dimensions were supplied as floats)
-    filter_dimensions=list(np.unique(np.asarray(filter_dimensions)).astype(int))
     # will only filter each dim a single time.
     # now check validity of other inputs. We perform the same check over multiple
     # inputs by iterating over a list with their names.
