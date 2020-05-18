@@ -822,6 +822,12 @@ def test_clean_fourier_filter_equality():
     nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
     nt.assert_true(np.all(np.isclose(res1, res2)))
 
+    mdl2, res2, info2 = dspec.vis_filter(d, w, bl_len=0., sdf=sdf, standoff=0., horizon=1.0,
+                                         min_dly=bl_len, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+    # validate models and residuals are close.
+    nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
+    nt.assert_true(np.all(np.isclose(res1, res2)))
+
 
     # Do the same comparison with more complicated windowing and edge cuts.
     mdl1, res1, info1 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.],
