@@ -490,6 +490,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                     _info['skipped'] = False
                                     del(_info['res'])
                                     info['clean_status']['axis_1'][i] = _info
+                                    info['status']['axis_1'][i] = 'success'
                                 info['filter_params']['axis_1'] = fitting_options
                         elif filter2d:
                                 # we skip 2d cleans if all the data is close to zero (which can cause an infinite clean loop)
