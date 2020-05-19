@@ -645,6 +645,10 @@ def test_fourier_filter():
 
     mdl4, res4, info4 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.], filter2d=False,
                                              mode='clean', fitting_options=clean_options1)
+
+    #check that dayenu can be run without fitting options.
+
+
     clean_options_typo = {'tol':1e-9, 'maxiter':100, 'filt2d_mode':'rect',
                     'edgecut_low':0, 'edgecut_hi':0, 'add_clean_residual':False,
                     'window':'none', 'gain':0.1, 'alphae':0.5}
@@ -657,6 +661,22 @@ def test_fourier_filter():
 
     nt.assert_true(np.all(np.isclose(mdl1, mdl2, atol=1e-6)))
     nt.assert_true(np.all(np.isclose(res1, res2)))
+
+    #check that dayenu can be run without fitting options.
+    mdl3, res3, info3 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [1e-9],
+                                             mode='dayenu', filter2d=False, fitting_options={})
+
+    mdl4, res4, info4 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [1e-9], filter2d=False,
+                                             mode='dayenu')
+
+    nt.assert_true(np.all(np.isclose(mdl3, mdl4, atol=1e-6)))
+    nt.assert_true(np.all(np.isclose(res3, res4, atol=1e-6)))
+
+    #check value error for providing no fitting options with differet modes
+    for mode in ['dpss_leastsq', 'dft_leastsq', 'clean', 'dayenu_dpss_leastsq']:
+        nt.assert_raises(ValueError, dspec.fourier_filter, freqs, d, w, [0.], [bl_len], [1e-9],
+                         mode=mode, filter2d=False)
+
 
     #check that clean skips if all data is equal to zero, avoids infinite loop case.
     mdl3, res3, info3 = dspec.fourier_filter(freqs, np.zeros_like(d), w, [0.], [bl_len], [0.],

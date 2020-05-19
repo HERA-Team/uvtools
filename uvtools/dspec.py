@@ -109,7 +109,7 @@ def calc_width(filter_size, real_delta, nsamples):
     return (uthresh, lthresh)
 
 def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppression_factors,
-                   mode, filter2d, fitting_options, cache=None, filter_dim=1, skip_wgt=0.1,
+                   mode, filter2d, fitting_options=None, cache=None, filter_dim=1, skip_wgt=0.1,
                    max_contiguous_edge_flags=10):
                    '''
                    A filtering function that tries to wrap up all functionality of high_pass_fourier_filter
@@ -193,6 +193,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         if filter2d is true, this should be a 2-tuple or 2-list
                         of dictionaries. The dictionary for each dimension must
                         specify the following for each fitting method.
+                        If mode=='dayenu', the user does not need to provide this argument. 
                         * 'dft':
                             'fundamental_period': float or 2-tuple
                                 The fundamental_period of dft modes to fit. This is the
@@ -290,6 +291,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                                              and values for each key are the status dictionaries returned by aipy.deconv.clean (see aipy.deconv.clean
                                                              for more information).
                    '''
+                   if fitting_options is None and mode != 'dayenu':
+                       raise ValueError("fitting_options can only be None if mode=='dayenu'.")
                    if cache is None:
                        cache = {}
                    supported_modes=['clean', 'dft_leastsq', 'dpss_leastsq', 'dft_matrix', 'dpss_matrix', 'dayenu',
