@@ -43,6 +43,30 @@ def wedge_width(bl_len, sdf, nchan, standoff=0., horizon=1.):
     bl_dly = horizon * bl_len + standoff
     return calc_width(bl_dly, sdf, nchan)
 
+def _get_filter_area(x, filter_center, filter_width):
+    """
+    Return an 'area' vector demarking where cleaning should be allowed
+    to take place.
+
+    Arguments:
+        x : array-like real space vector listing where data is sampled.
+        filter_center : center of the area to be cleaned. Units of 1/(x-units)
+        filter_width : width of the region of area to be cleaned. Units of 1/(x-units)
+    """
+    nx = len(x)
+    dx = np.mean(np.diff(x))
+    if not np.isinf(filter_width):
+        av = np.ones(len(x))
+        ut, lt = calc_width(filter_width, dx, nx)
+        av[ut:lt] = 0.
+        nc = int(np.round(filter_center * dx * nx))
+        av = np.roll(av, -nc)
+    else:
+        av = np.ones(nx)
+    return av
+
+
+
 def _fourier_filter_hash(filter_centers, filter_half_widths,
                          filter_factors, x, w=None, hash_decimal=10, **kwargs):
     '''
@@ -67,12 +91,12 @@ def _fourier_filter_hash(filter_centers, filter_half_widths,
     -------
     A key for fourier_filter arrays hasing the information provided in the args.
     '''
-    filter_key = tuple(np.round(x,hash_decimal))\
-    + tuple(np.round(np.asarray(filter_centers) * np.mean(np.diff(x)) * len(x), hash_decimal))\
-    + tuple(np.round(np.asarray(filter_half_widths) * np.mean(np.diff(x)) * len(x), hash_decimal))\
-    + tuple(np.round(np.asarray(filter_factors) * 1e9, hash_decimal))
+    filter_key = ('x:',) + tuple(np.round(x,hash_decimal))\
+    + ('filter_centers x N x DF:',) + tuple(np.round(np.asarray(filter_centers) * np.mean(np.diff(x)) * len(x), hash_decimal))\
+    + ('filter_centers x N x DF:',) + tuple(np.round(np.asarray(filter_half_widths) * np.mean(np.diff(x)) * len(x), hash_decimal))\
+    + ('filter_factors x 1e9:',) + tuple(np.round(np.asarray(filter_factors) * 1e9, hash_decimal))
     if w is not None:
-        filter_key = filter_key + tuple(np.round(w.tolist(), hash_decimal))
+        filter_key = filter_key + ('weights', ) +  tuple(np.round(w.tolist(), hash_decimal))
     filter_key = filter_key + tuple([kwargs[k] for k in kwargs])
     return filter_key
 
@@ -109,7 +133,7 @@ def calc_width(filter_size, real_delta, nsamples):
     return (uthresh, lthresh)
 
 def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppression_factors,
-                   mode, filter2d, fitting_options, cache=None, filter_dim=1, skip_wgt=0.1,
+                   mode, filter2d, fitting_options=None, cache=None, filter_dim=1, skip_wgt=0.1,
                    max_contiguous_edge_flags=10):
                    '''
                    A filtering function that tries to wrap up all functionality of high_pass_fourier_filter
@@ -193,6 +217,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         if filter2d is true, this should be a 2-tuple or 2-list
                         of dictionaries. The dictionary for each dimension must
                         specify the following for each fitting method.
+                        If mode=='dayenu', the user does not need to provide this argument.
                         * 'dft':
                             'fundamental_period': float or 2-tuple
                                 The fundamental_period of dft modes to fit. This is the
@@ -268,8 +293,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             model -- best fit real-space model of data.
                         d_res: array-like
                             residual -- difference of data and model, nulled at flagged channels
-                        info: dictionary (1D case) or list of dictionaries (2D case) with CLEAN metadata
-                              if the mode is 'dayenu', 'dpss', or 'dft', then info has the following sub-dicts.
+                        info: dictionary with meta data on run and provided arguments.
                               clean uses a different info dict structure because of downstream code assumptions that are not
                               sufficiently general to describe the other methods. We should eventually migrate clean assumptions
                               to this format.
@@ -286,7 +310,13 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                                     - 'basis_options': the basis options used for dpss/dft mode. See dft_operator and dpss_operator for
                                                                        more details.
                                                     - 'x': vector of x-values used to generate the filter.
+                            * 'clean_status': if CLEAN mode is used, this is also a field.
+                                        - 'axis_0'/'axis_1': dictionary holding the clean output for cleaning on each axis. keys are integrations cleaned (integer)
+                                                             and values for each key are the status dictionaries returned by aipy.deconv.clean (see aipy.deconv.clean
+                                                             for more information).
                    '''
+                   if fitting_options is None and mode != 'dayenu':
+                       raise ValueError("fitting_options can only be None if mode=='dayenu'.")
                    if cache is None:
                        cache = {}
                    supported_modes=['clean', 'dft_leastsq', 'dpss_leastsq', 'dft_matrix', 'dpss_matrix', 'dayenu',
@@ -308,7 +338,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                        wgts = wgts.T
                    if mode[0] == 'dayenu':
                        if filter2d:
-                           filter_dim_d = [0, 1]
+                           filter_dim_d = [1, 0]
                        else:
                            filter_dim_d = [1]
                        residual, info = dayenu_filter(x=x, data=data, wgts=wgts, filter_dimensions=filter_dim_d,
@@ -325,7 +355,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
 
                    elif mode[0] == 'dft' or mode[0] == 'dpss':
                         if filter2d:
-                            filter_dim_d = [0, 1]
+                            filter_dim_d = [1, 0]
                         else:
                             filter_dim_d = [1]
                         model, residual, info = fit_basis_2d(x=x, data=data, filter_centers=filter_centers, filter_dims=filter_dim_d,
@@ -359,7 +389,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             edgecut_hi = [ 0, fitting_options['edgecut_hi'] ]
                             edgecut_low = [ 0, fitting_options['edgecut_low']]
                             filter_centers = [[0.], copy.deepcopy(filter_centers)]
-                            filter_half_widths = [[9e99], copy.deepcopy(filter_half_widths)]
+                            filter_half_widths = [[np.inf], copy.deepcopy(filter_half_widths)]
                             window_opt = ['none', fitting_options['window']]
                         else:
                             if not np.all(np.isclose(np.diff(x[1]), np.mean(np.diff(x[1])))):
@@ -381,12 +411,14 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         gain = fitting_options['gain']
                         add_clean_residual = fitting_options['add_clean_residual']
                         filt2d_mode = fitting_options['filt2d_mode']
+                        info = {}
+                        info['filter_params'] = {'axis_0':{}, 'axis_1':{}}
+                        info['clean_status'] = {'axis_0':{}, 'axis_1':{}}
+                        info['status'] = {'axis_0':{}, 'axis_1':{}}
                         if filt2d_mode == 'rect' or not filter2d:
                             for m in range(2):
                                 for fc, fw in zip(filter_centers[m], filter_half_widths[m]):
-                                    area_vecs[m][np.abs(_x[m] - fc)<=fw] = 1.
-                            #if filtering windows are rectangular,
-                            #we can just take outer products
+                                    area_vecs[m] = _get_filter_area(x[m], fc, fw)
                             area = np.outer(area_vecs[0], area_vecs[1])
                         elif filt2d_mode == 'plus' and filter2d:
                             area = np.zeros(data.shape)
@@ -395,9 +427,13 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                 for fc1, fw1 in zip(filter_centers[1], filter_half_widths[1]):
                                     area_temp = np.zeros(area.shape)
                                     if fc0 >= _x[0].min() and fc0 <= _x[0].max():
-                                        area_temp[np.argmin(np.abs(_x[0]-fc0)),(_x[1] - fc1) <= fw1]=1.
+                                        #generate area vector centered at zero
+                                        av = _get_filter_area(x[1], fc1, fw1)
+                                        area_temp[np.argmin(np.abs(_x[0]-fc0)), :] = av
                                     if fc1 >= _x[1].min() and fc1 <= _x[1].max():
-                                        area_temp[(_x[0] - fc0) <= fw0, np.argmin(np.abs(_x[1]-fc1))]=1.
+                                        #generate area vector centered at zero
+                                        av = _get_filter_area(x[0], fc0, fw0)
+                                        area_temp[:, np.argmin(np.abs(_x[1]-fc1))] = av
                                     area += area_temp
                             area = (area>0.).astype(int)
                         else:
@@ -411,7 +447,6 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         _d_cl = np.zeros_like(_data)
                         _d_res = np.zeros_like(_data)
                         if not filter2d:
-                            info = []
                             for i, _d, _w, _a in zip(np.arange(_data.shape[0]).astype(int), _data, _wgts, area):
                                 # we skip steps that might trigger infinite CLEAN loops or divergent behavior.
                                 # if the weights sum up to a value close to zero (most of the data is flagged)
@@ -419,28 +454,39 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                 if _w[0] < skip_wgt or np.all(np.isclose(_d, 0.)):
                                     _d_cl[i] = 0.
                                     _d_res[i] = _d
-                                    info.append({'skipped':True})
+                                    info['status']['axis_1'][i] = 'skipped'
                                 else:
                                     _d_cl[i], _info = aipy.deconv.clean(_d, _w, area=_a, tol=tol, stop_if_div=False,
                                                                     maxiter=maxiter, gain=gain)
                                     _d_res[i] = _info['res']
                                     _info['skipped'] = False
                                     del(_info['res'])
-                                    info.append(_info)
+                                    info['clean_status']['axis_1'][i] = _info
+                                    info['status']['axis_1'][i] = 'success'
+                                info['filter_params']['axis_1'] = fitting_options
                         elif filter2d:
                                 # we skip 2d cleans if all the data is close to zero (which can cause an infinite clean loop)
                                 # or the weights are all equal to zero which can also lead to a clean loop.
                                 # the maximum of _wgts should be the average value of all cells in 2d wgts.
                                 # since it is the 2d fft of wgts.
                                 if not np.all(np.isclose(_data, 0.)) and np.abs(_wgts).max() > skip_wgt:
-                                    _d_cl, info = aipy.deconv.clean(_data, _wgts, area=area, tol=tol, stop_if_div=False,
+                                    _d_cl, _info = aipy.deconv.clean(_data, _wgts, area=area, tol=tol, stop_if_div=False,
                                                                     maxiter=maxiter, gain=gain)
-                                    _d_res = info['res']
-                                    del(info['res'])
+                                    _d_res = _info['res']
+                                    del(_info['res'])
+                                    info['clean_status']['axis_1'] = _info
+                                    info['clean_status']['axis_0'] = info['clean_status']['axis_1']
+                                    info['status']['axis_1'] = {i:'success' for i in range(_data.shape[0])}
+                                    info['status']['axis_0'] = {i:'success' for i in range(_data.shape[1])}
                                 else:
-                                    info = {'skipped':True}
+                                    info['clean_status']['axis_0'] = {'skipped':True}
+                                    info['clean_status']['axis_1'] = {'skipped':True}
+                                    info['status']['axis_1'] = {i:'skipped' for i in range(_data.shape[0])}
+                                    info['status']['axis_0'] = {i:'skipped' for i in range(_data.shape[1])}
                                     _d_cl = np.zeros_like(_data)
                                     _d_res = np.zeros_like(_d_cl)
+                                info['filter_params']['axis_0'] = fitting_options
+                                info['filter_params']['axis_1'] = info['filter_params']['axis_0']
                         if add_clean_residual:
                             _d_cl = _d_cl + _d_res * area
                         if filter2d:
@@ -450,21 +496,22 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             model = np.fft.fft(_d_cl, axis=1)
                             residual = np.fft.fft(_d_res, axis=1)
                         #transpose back if filtering the 0th dimension.
+                        windmat = np.outer(window[0], window[1])
+                        windmat1 = np.outer(window[0], window[1])
+                        windmat1[np.isclose(windmat1, 0)] = 1.
+                        residual = residual * ~np.isclose(wgts * windmat, 0.0)\
+                                / windmat1
+
                    if not filter2d and filter_dim == 0:
                         model = model.T
                         residual = residual.T
                         data = data.T
                         wgts = wgts.T
-                        if not mode[0] == 'clean':
-                            # downstream code assumes a certain format for clean info dictionaries
-                            # so right now, I only perform this switching for non clean mode.
-                            # eventually, it would be nice to standardize clean too.
-                            # but that needs to happen after we verify that this does not
-                            # break said downstream code.
-                            for k in info:
-                                if not k == 'info_deconv':
-                                    info[k]['axis_0'] = copy.deepcopy(info[k]['axis_1'])
-                                    info[k]['axis_1'] = {}
+                        # switch axis 0 and axis 1 info dicts if we were doing time cleaning.
+                        for k in info:
+                            if not k == 'info_deconv':
+                                info[k]['axis_0'] = copy.deepcopy(info[k]['axis_1'])
+                                info[k]['axis_1'] = {}
                         # if we deconvolve the subtracted foregrounds in dayenu
                         # then provide fitting options for the deconvolution.
                         if 'info_deconv' in info:
@@ -841,8 +888,6 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
     data: 1D or 2D (real or complex) numpy array where last dimension is frequency.
     Does not assume that weights have already been multiplied!
     wgts: real numpy array of linear multiplicative weights with the same shape as the data.
-    delta_data: float, list
-        the width of data bins. Typically Hz: float. if 2d clean, should be 2-tuple or 2-list
     filter_dimensions: list
         list of integers indicating data dimensions to filter. Must be 0, 1, or -1
     filter_centers: float, list, or 1d numpy array of delays at which to center filter windows
@@ -926,7 +971,6 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
     if not np.all(np.abs(np.asarray(filter_dimensions)) < data.ndim):
         raise ValueError("invalid filter dimensions provided, must be 0 or 1/-1")
     # convert filter dimensions to a list of integers (incase the dimensions were supplied as floats)
-    filter_dimensions=list(np.unique(np.asarray(filter_dimensions)).astype(int))
     # will only filter each dim a single time.
     # now check validity of other inputs. We perform the same check over multiple
     # inputs by iterating over a list with their names.
@@ -957,7 +1001,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                 if not isinstance(x[j], (tuple, list, np.ndarray)):
                     raise ValueError("x[%d] must be a tuple, list or numpy array."%(j))
                 x[j]=np.asarray(x[j])
-        for ff_num,ff_list in zip([0,1],filter_factors):
+        for ff_num,ff_list in zip(filter_dimensions,filter_factors):
             # we allow the user to provide a single filter factor for multiple
             # filtering windows on a single dimension. This code
             # iterates through each dimension and if a single filter_factor is provided
