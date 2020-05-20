@@ -43,6 +43,30 @@ def wedge_width(bl_len, sdf, nchan, standoff=0., horizon=1.):
     bl_dly = horizon * bl_len + standoff
     return calc_width(bl_dly, sdf, nchan)
 
+def _get_filter_area(x, filter_center, filter_width):
+    """
+    Return an 'area' vector demarking where cleaning should be allowed
+    to take place.
+
+    Arguments:
+        x : array-like real space vector listing where data is sampled.
+        filter_center : center of the area to be cleaned. Units of 1/(x-units)
+        filter_width : width of the region of area to be cleaned. Units of 1/(x-units)
+    """
+    nx = len(x)
+    dx = np.mean(np.diff(x))
+    if not np.isinf(filter_width):
+        av = np.ones(len(x))
+        ut, lt = calc_width(filter_width, dx, nx)
+        av[ut:lt] = 0.
+        nc = int(np.round(filter_center * dx * nx))
+        av = np.roll(av, -nc)
+    else:
+        av = np.ones(nx)
+    return av
+
+
+
 def _fourier_filter_hash(filter_centers, filter_half_widths,
                          filter_factors, x, w=None, hash_decimal=10, **kwargs):
     '''
@@ -193,7 +217,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         if filter2d is true, this should be a 2-tuple or 2-list
                         of dictionaries. The dictionary for each dimension must
                         specify the following for each fitting method.
-                        If mode=='dayenu', the user does not need to provide this argument. 
+                        If mode=='dayenu', the user does not need to provide this argument.
                         * 'dft':
                             'fundamental_period': float or 2-tuple
                                 The fundamental_period of dft modes to fit. This is the
@@ -365,7 +389,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                             edgecut_hi = [ 0, fitting_options['edgecut_hi'] ]
                             edgecut_low = [ 0, fitting_options['edgecut_low']]
                             filter_centers = [[0.], copy.deepcopy(filter_centers)]
-                            filter_half_widths = [[9e99], copy.deepcopy(filter_half_widths)]
+                            filter_half_widths = [[np.inf], copy.deepcopy(filter_half_widths)]
                             window_opt = ['none', fitting_options['window']]
                         else:
                             if not np.all(np.isclose(np.diff(x[1]), np.mean(np.diff(x[1])))):
@@ -394,18 +418,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         if filt2d_mode == 'rect' or not filter2d:
                             for m in range(2):
                                 for fc, fw in zip(filter_centers[m], filter_half_widths[m]):
-                                    if not fw == 9e99:
-                                        #generate area vector centered at zero
-                                        av = np.ones(len(_x[m]))
-                                        ut, lt = calc_width(fw, np.mean(np.diff(x[m])), len(x[m]))
-                                        av[ut:lt] = 0.
-                                        #cycle area vector based on fc
-                                        nc = int(np.round(fc * np.mean(np.diff(x[m])) * len(x[m])))
-                                        area_vecs[m] = np.roll(av, -nc)
-                                    else:
-                                        area_vecs[m] = np.ones(len(_x[m]))
-                            #if filtering windows are rectangular,
-                            #we can just take outer products
+                                    area_vecs[m] = _get_filter_area(x[m], fc, fw)
                             area = np.outer(area_vecs[0], area_vecs[1])
                         elif filt2d_mode == 'plus' and filter2d:
                             area = np.zeros(data.shape)
@@ -415,28 +428,12 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                                     area_temp = np.zeros(area.shape)
                                     if fc0 >= _x[0].min() and fc0 <= _x[0].max():
                                         #generate area vector centered at zero
-                                        if not fw1 == 9e99:
-                                            av = np.ones(len(_x[1]))
-                                            ut, lt = calc_width(fw1, np.mean(np.diff(x[1])), len(x[1]))
-                                            av[ut:lt] = 0.
-                                            #cycle area vector based on fc
-                                            nc = int(np.round(fc1 * np.mean(np.diff(x[1])) * len(x[1])))
-                                            av = np.roll(av, -nc)
-                                            area_temp[np.argmin(np.abs(_x[0]-fc0)), :] = av
-                                        else:
-                                            area_temp[np.armin(np.abs(_x[0]-fc0)), :] = 1.
+                                        av = _get_filter_area(x[1], fc1, fw1)
+                                        area_temp[np.argmin(np.abs(_x[0]-fc0)), :] = av
                                     if fc1 >= _x[1].min() and fc1 <= _x[1].max():
                                         #generate area vector centered at zero
-                                        if not fw0 == 9e99:
-                                            av = np.ones(len(_x[0]))
-                                            ut, lt = calc_width(fw0, np.mean(np.diff(x[0])), len(x[0]))
-                                            av[ut:lt] = 0.
-                                            #cycle area vector based on fc
-                                            nc = int(np.round(fc0 * np.mean(np.diff(x[0])) * len(x[0])))
-                                            av = np.roll(av, -nc)
-                                            area_temp[:, np.argmin(np.abs(_x[1]-fc1))] = av
-                                        else:
-                                            area_temp[:, np.argmin(np.abs(_x[1]-fc1))] = 1.
+                                        av = _get_filter_area(x[0], fc0, fw0)
+                                        area_temp[:, np.argmin(np.abs(_x[1]-fc1))] = av
                                     area += area_temp
                             area = (area>0.).astype(int)
                         else:
@@ -450,7 +447,6 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, suppressio
                         _d_cl = np.zeros_like(_data)
                         _d_res = np.zeros_like(_data)
                         if not filter2d:
-                            info_clean = {}
                             for i, _d, _w, _a in zip(np.arange(_data.shape[0]).astype(int), _data, _wgts, area):
                                 # we skip steps that might trigger infinite CLEAN loops or divergent behavior.
                                 # if the weights sum up to a value close to zero (most of the data is flagged)
