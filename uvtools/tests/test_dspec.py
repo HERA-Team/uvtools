@@ -806,9 +806,17 @@ def test_fourier_filter():
     nt.assert_true(info13['clean_status']['axis_1']['skipped'])
     #test error when cleaning with invalid filt2d mode.
     nt.assert_raises(ValueError, dspec.fourier_filter,x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
-                                                 filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
-                                                 mode='clean', filter2d=True, **{'filt2d_mode':'bargh','tol':1e-5})
-
+                                                 filter_half_widths=[[fr_len],[bl_len]],
+                                                 mode='clean', filter_dims=[1, 0], **{'filt2d_mode':'bargh','tol':1e-5})
+    #check equally spaced data value error for clean
+    tlog = np.logspace(np.log10(times.min()), np.log10(times.max()), len(times))
+    flog = np.logspace(np.log10(freqs.min()), np.log10(freqs.max()), len(freqs))
+    nt.assert_raises(ValueError, dspec.fourier_filter,x=[tlog, flog], data=d, wgts=w, filter_centers=[[0.],[0.]],
+                                                 filter_half_widths=[[fr_len],[bl_len]],
+                                                 mode='clean', filter_dims=[1, 0], **{'filt2d_mode':'plus','tol':1e-5})
+    nt.assert_raises(ValueError, dspec.fourier_filter,x=flog, data=d, wgts=w, filter_centers=[0.],
+                                                  filter_half_widths=[bl_len],
+                                                  mode='clean', filter_dims=[1], **{'tol':1e-5})
 def test_clean_fourier_filter_equality():
     # validate that fourier_filter in various clean modes gives close values to vis_clean with equivalent parameters!
     uvd = UVData()
