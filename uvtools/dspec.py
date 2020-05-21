@@ -576,16 +576,12 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                             _d_cl = _d_cl + _d_res * area
                         if filter2d:
                             model = np.fft.fft2(_d_cl)
-                            residual = np.fft.fft2(_d_res)
                         else:
                             model = np.fft.fft(_d_cl, axis=1)
-                            residual = np.fft.fft(_d_res, axis=1)
                         #transpose back if filtering the 0th dimension.
                         windmat = np.outer(window[0], window[1])
-                        windmat1 = np.outer(window[0], window[1])
-                        windmat1[np.isclose(windmat1, 0)] = 1.
-                        residual = residual * ~np.isclose(wgts * windmat, 0.0)\
-                                / windmat1
+                        residual = (data - model) * ~np.isclose(wgts * windmat, 0.0)
+
 
                    if 0 in filter_dims and not filter2d:
                         model = model.T
@@ -970,7 +966,7 @@ def wedge_filter(data, wgts, bl_len, sdf, standoff=0., horizon=1., min_dly=0.0, 
     return delay_filter(sdf=sdf, data=data, wgts=wgts, max_dly=bl_dly,
                           skip_wgt=skip_wgt, **kwargs)
 
-def delay_filter(data, wgts, sdf, max_dly, skip_wgt=0.5,
+def delay_filter(data, wgts, max_dly, sdf, skip_wgt=0.5,
                  mode='clean', **kwargs):
     '''Apply a wideband delay filter to data. Variable names preserved for
         backward compatability with capo/PAPER analysis.
@@ -980,8 +976,8 @@ def delay_filter(data, wgts, sdf, max_dly, skip_wgt=0.5,
             (Unlike previous versions, it is NOT assumed that weights have already been multiplied
             into the data.)
         wgts: real numpy array of linear multiplicative weights with the same shape as the data.
+            max_dly: maximum abs of delay to filter to (around delay = 0.)
         sdf: frequency channel width (typically in GHz)
-        max_dly: maximum abs of delay to filter to (around delay = 0.)
         skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
             Model is left as 0s, residual is left as data, and info is {'skipped': True} for that
             time. Only works properly when all weights are all between 0 and 1.
