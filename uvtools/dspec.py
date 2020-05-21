@@ -354,7 +354,6 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                                                              and values for each key are the status dictionaries returned by aipy.deconv.clean (see aipy.deconv.clean
                                                              for more information).
                    '''
-
                    if not isinstance(filter_dims, (list, tuple)):
                        filter_dims = [filter_dims]
                    for d in filter_dims:
@@ -599,6 +598,9 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                             for k in info['info_deconv']:
                                 info['info_deconv'][k]['axis_0'] = copy.deepcopy(info['info_deconv'][k]['axis_1'])
                                 info['info_deconv'][k]['axis_1'] = {}
+                   if ndim_data == 1:
+                       model = model.flatten()
+                       residual = residual.flatten()
                    return model, residual, info
 
 def vis_clean(data, wgts, filter_size, real_delta, clean2d=False, tol=1e-9, window='none',

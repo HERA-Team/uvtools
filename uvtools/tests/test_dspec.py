@@ -47,7 +47,11 @@ class TestMethods(unittest.TestCase):
         np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
         np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
         wgts[::16] = 0
-        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
+        # this test should have been failing since _w = 0.46 but skip_wgt=0.5 by default.
+        # the reason it was not was because there is no 1d check for skip_wgt in fourier_filter.
+        # I've therefor changed the test to check if zero, then lower the skip_wgt and check
+        # for mdl data closeness.
+        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL, skip_wgt=0.1)
         np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
         np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
         data = np.random.normal(size=NCHAN)
