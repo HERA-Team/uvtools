@@ -23,7 +23,7 @@ DPSS_DEFAULTS={'suppression_factors' : {True: [[1e-9], [1e-9]], False: [1e-9]},
                'eigenval_cutoff' : {True: [[1e-12], [1e-12]], False: [1e-12]},
                'max_contiguous_edge_flags' : 10}
 DFT_DEFAULTS={'suppression_factors' : {True: [[1e-9], [1e-9]], False: [1e-9]},
-                'fundamental_period' : {True: [np.nan, np.nan], False: np.nan},
+                'fundamental_period' : {True : [np.nan, np.nan], False : np.nan},
                 'max_contiguous_edge_flags' : 10}
  #In the above dictionary, some fields are different depending on whether
  #filter2d is True or False (whether we do 2d filtering or not). These parameters,
@@ -285,6 +285,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                         *  dpss :
                             eigenval_cutoff : array-like
                                 list of sinc_matrix eigenvalue cutoffs to use for included dpss modes.
+                                if 2d filter, provide 2-tuple/list
                             suppression_factors : array-like
                                 if not 2dfilter: 1d np.ndarray or list of tuples of floats
                                 specifying the fractional residuals of model to leave in the data.
@@ -388,21 +389,44 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                       cache = {}
                    else:
                       cache = kwargs.pop('cache')
+                   # process kwargs
+                   if 'dayenu' == mode[0]:
+                       if len(mode) > 1:
+                           if 'dft' in mode:
+                               defaults = {**DAYENU_DEFAULTS, **DFT_DEFAULTS}
+                               dicts_2d = DEFAULT_DAYENU_FILT2D + DEFAULT_DFT_FILT2D
+                           elif 'dpss' in mode:
+                               defaults = {**DAYENU_DEFAULTS, **DPSS_DEFAULTS}
+                               dicts_2d = DEFAULT_DAYENU_FILT2D + DEFAULT_DPSS_FILT2D
+
+                       else:
+                           defaults = DAYENU_DEFAULTS
+                           dicts_2d = DEFAULT_DAYENU_FILT2D
+                   elif mode[0] == 'dft':
+                        defaults = DFT_DEFAULTS
+                        dicts_2d = DEFAULT_DFT_FILT2D
+                   elif mode[0] == 'dpss':
+                        defaults = DPSS_DEFAULTS
+                        dicts_2d = DEFAULT_DPSS_FILT2D
+                   elif mode[0] == 'clean':
+                        defaults = CLEAN_DEFAULTS
+                        dicts_2d = DEFAULT_CLEAN_FILT2D
+                   _process_filter_kwargs(kwargs, defaults, filter2d, dicts_2d)
+                   if 'dft' in mode:
+                        fp = np.asarray(kwargs['fundamental_period']).flatten()
+                        for m in range(len(fp)):
+                            if np.isnan(fp[m]):
+                                fp[m] = 2. * (x[m].max() - x[m].min())
+                        if len(fp) == 1:
+                            kwargs['fundamental_period'] = fp[0]
+                        else:
+                            kwargs['fundamental_period'] = list(fp)
+
                    if mode[0] == 'dayenu':
                        if filter2d:
                           filter_dims_d = [1, 0]
                        else:
                           filter_dims_d = [1]
-                       if len(mode) == 1:
-                           _process_filter_kwargs(kwargs, DAYENU_DEFAULTS, filter2d, DEFAULT_DAYENU_FILT2D)
-                       else:
-                           if mode[1] == 'dft':
-                               defaults = {**DAYENU_DEFAULTS, **DFT_DEFAULTS}
-                               dicts_2d = DEFAULT_DAYENU_FILT2D + DEFAULT_DFT_FILT2D
-                           elif mode[1] == 'dpss':
-                                defaults = {**DAYENU_DEFAULTS, **DPSS_DEFAULTS}
-                                dicts_2d = DEFAULT_DAYENU_FILT2D + DEFAULT_DPSS_FILT2D
-                           _process_filter_kwargs(kwargs, defaults, filter2d, dicts_2d)
                        suppression_factors = kwargs.pop('suppression_factors')
                        max_contiguous_edge_flags = kwargs.pop('max_contiguous_edge_flags')
                        residual, info = dayenu_filter(x=x, data=data, wgts=wgts, filter_dimensions=filter_dims_d,
@@ -411,19 +435,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                                                      max_contiguous_edge_flags=max_contiguous_edge_flags)
                        model = data - residual
                        if len(mode) > 1:
-                           if filter2d:
-                              basis_options = [kwargs, copy.deepcopy(kwargs)]
-                              if mode[0] == 'dft':
-                                  for m in range(2):
-                                      if np.isnan(basis_options[m]['fundamental_period']):
-                                          basis_options[m]['fundamental_period'] = basis_options[m]['fundamental_period'] * 2 * (x[m].max() - x[m].min())
-                           else:
-                              basis_options = kwargs
-                              if mode[0] == 'dft':
-                                  if np.isnan(kwargs['fundamental_period']):
-                                      basis_options['fundamental_period'] = basis_options['fundamental_period'] * 2 * (x.max() - x.min())
                            model, _, info_deconv = fit_basis_2d(x=x, data=model, filter_centers=filter_centers, filter_dims=filter_dims_d,
-                                                                 skip_wgt=skip_wgt, basis=mode[1], method=mode[2], wgts=wgts, basis_options=basis_options,
+                                                                 skip_wgt=skip_wgt, basis=mode[1], method=mode[2], wgts=wgts, basis_options=kwargs,
                                                                  filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
                                                                  cache=cache, max_contiguous_edge_flags=max_contiguous_edge_flags)
                            info['info_deconv']=info_deconv
@@ -433,26 +446,11 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                            filter_dims_d = [1, 0]
                        else:
                            filter_dims_d = [1]
-                       if mode[0] == 'dft':
-                           _process_filter_kwargs(kwargs, DFT_DEFAULTS, filter2d, DEFAULT_DFT_FILT2D)
-                       if mode[0] == 'dpss':
-                           _process_filter_kwargs(kwargs, DPSS_DEFAULTS, filter2d, DEFAULT_DPSS_FILT2D)
                        suppression_factors = kwargs.pop('suppression_factors')
                        max_contiguous_edge_flags = kwargs.pop('max_contiguous_edge_flags')
                        #if filter2d is True, create fitting_options that is a 2-list for 0 and 1 dimension
-                       if filter2d:
-                           basis_options = [kwargs, copy.deepcopy(kwargs)]
-                           if mode[0] == 'dft':
-                               for m in range(2):
-                                   if np.isnan(basis_options[m]['fundamental_period']):
-                                       basis_options[m]['fundamental_period'] = basis_options[m]['fundamental_period'] * 2 * (x[m].max() - x[m].min())
-                       else:
-                           basis_options = kwargs
-                           if mode[0] == 'dft':
-                               if np.isnan(kwargs['fundamental_period']):
-                                   basis_options['fundamental_period'] = basis_options['fundamental_period'] * 2 * (x.max() - x.min())
                        model, residual, info = fit_basis_2d(x=x, data=data, filter_centers=filter_centers, filter_dims=filter_dims_d,
-                                                           skip_wgt=skip_wgt, basis=mode[0], method=mode[1], wgts=wgts, basis_options=basis_options,
+                                                           skip_wgt=skip_wgt, basis=mode[0], method=mode[1], wgts=wgts, basis_options=kwargs,
                                                            filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
                                                            cache=cache, max_contiguous_edge_flags=max_contiguous_edge_flags)
 
@@ -461,7 +459,6 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                         #fitting_options. This is to preserve default behavior
                         #in high_pass_fourier_filter
                         #check that fittig options are in allowed keys
-                        _process_filter_kwargs(kwargs, CLEAN_DEFAULTS, filter2d, DEFAULT_CLEAN_FILT2D)
                         #arguments for 2d clean should be supplied as
                         #2-list. For code economy, we expand 1d arguments to 2d
                         #including the data and weights to 1 x N arrays.
@@ -1732,11 +1729,11 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
         It is sometimes useful, for renormalization reversability
         to only include 1-\epsilon where \epsilon is a small number of
         each mode in the model.
-    basis_options: dictionary or 2-tuple
+    basis_options: dictionary
         basis specific options for fitting. The two bases currently supported are dft and dpss whose options
         are as follows:
             * 'dft':
-              *'fundamental_period': float or 2-tuple
+              *'fundamental_period': float or 2-list/tuple
                 The fundamental_period of dft modes to fit. This is the
                 Fourier resoltion of fitted fourier modes equal to
                 1/FP where FP is the fundamental period. For a standard
@@ -1751,17 +1748,22 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                 for specifying how to terminate the dpss series in each filter window.
                 *'eigenval_cutoff': array-like
                     list of sinc_matrix eigenvalue cutoffs to use for included dpss modes.
+                    if 2d fit, should be a 2-list with each element giving list
+                    of eigenval cutoffs for each dimension.
                 *'nterms': array-like
                     list of integers specifying the order of the dpss sequence to use in each
-                    filter window.
+                    filter window. if 2d fit, should be a 2-list of lists of nterms for each delay
+                    window in each dimension.
                 *'edge_supression': array-like
                     specifies the degree of supression that must occur to tones at the filter edges
                     to calculate the number of DPSS terms to fit in each sub-window.
+                    if 2d fit, should be a 2-list of lists of edge_suppression thresholds in each dim
                 *'avg_suppression': list of floats, optional
                     specifies the average degree of suppression of tones inside of the filter edges
                     to calculate the number of DPSS terms. Similar to edge_supression but instead checks
                     the suppression of a since vector with equal contributions from all tones inside of the
                     filter width instead of a single tone.
+                    if 2d fit, should be a list of lists of avg_suppression thressholds for each.
     method: string
         specifies the fitting method to use. We currently support.
             *'leastsq' to perform iterative leastsquares fit to derive model.
@@ -1821,8 +1823,10 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
         suppression_factors = [[], copy.deepcopy(suppression_factors)]
         basis_options=[{}, basis_options]
     else:
-        if not isinstance(basis_options, (tuple,list)) or not len(basis_options) == 2:
-            raise ValueError("basis_options must be 2-tuple or 2-list for 2d filtering.")
+        for k in basis_options:
+            if not isinstance(basis_options[k], (tuple,list)) or not len(basis_options[k]) == 2:
+                raise ValueError("basis_options values must be 2-tuple or 2-list for 2d filtering.")
+        basis_options = [{k:basis_options[k][0] for k in basis_options}, {k:basis_options[k][1] for k in basis_options}]
     #filter -1 dimension
     model = np.zeros_like(data)
     for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
