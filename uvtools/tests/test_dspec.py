@@ -36,7 +36,7 @@ class TestMethods(unittest.TestCase):
         self.assertEqual(dspec.wedge_width(100., .001, 100, horizon=2.), (21,-20))
 
     def test_delay_filter_dims(self):
-        self.assertRaises(AssertionError, dspec.delay_filter, np.zeros((1,2,3)), np.zeros((1,2,3)), 0, .001)
+        self.assertRaises(ValueError, dspec.delay_filter, np.zeros((1,2,3)), np.zeros((1,2,3)), 0, .001)
 
     def test_delay_filter_1D(self):
         NCHAN = 128
@@ -159,8 +159,8 @@ class TestMethods(unittest.TestCase):
         np.testing.assert_allclose(dres[1:,:], np.zeros_like(dres)[1:,:], atol=NCHAN*TOL)
         np.testing.assert_allclose(dmdl[0,:], np.zeros_like(dmdl[0,:]), atol=NCHAN*TOL)
         np.testing.assert_allclose(dres[0,:], (data * wgts)[0,:], atol=NCHAN*TOL)
-        self.assertEqual(len(info), NTIMES)
-        self.assertTrue(info[0]['skipped'])
+        self.assertEqual(len(info['status']['axis_1']), NTIMES)
+        self.assertTrue(info['status']['axis_1'][i] == 'skipped' for i in list(info['status']['axis_1'])[::-1])
 
     def test_calc_width(self):
         # test single filter_size
@@ -473,8 +473,8 @@ def test_vis_filter():
     bl_len = 70.0 / 2.99e8
 
     # delay filter basic execution
-    mdl, res, info = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.0,
-                                             tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+    mdl, res, info = dspec.delay_filter(d, w, sdf, bl_len,
+                                        tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
     cln = mdl + res
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=1, avgax=0)
@@ -635,26 +635,24 @@ def test_fourier_filter():
                     'window':'none', 'gain':0.1, 'alpha':0.5}
     mdl1, res1, info1 = dspec.fourier_filter(x=freqs, data=d, wgts=w, filter_centers=[0.],
                                              filter_half_widths=[bl_len], suppression_factors=[0.],
-                                             mode='dpss_leastsq', filter2d=False, fitting_options=dpss_options1)
+                                             mode='dpss_leastsq', **dpss_options1)
 
     mdl2, res2, info2 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], suppression_factors=[0.],
-                                             mode='dpss_matrix', filter2d=False, fitting_options=dpss_options1)
+                                             mode='dpss_matrix', **dpss_options1)
     #check clean with and without default options gives equivalent answers.
-    mdl3, res3, info3 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], suppression_factors=[0.],
-                                             mode='clean', filter2d=False, fitting_options={})
+    mdl3, res3, info3 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len],
+                                             mode='clean')
 
-    mdl4, res4, info4 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [0.], filter2d=False,
-                                             mode='clean', fitting_options=clean_options1)
-
-    #check that dayenu can be run without fitting options.
+    mdl4, res4, info4 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len],
+                                             mode='clean', **clean_options1)
 
 
     clean_options_typo = {'tol':1e-9, 'maxiter':100, 'filt2d_mode':'rect',
                     'edgecut_low':0, 'edgecut_hi':0, 'add_clean_residual':False,
                     'window':'none', 'gain':0.1, 'alphae':0.5}
     #check that a ValueError is returned if we include a bad parameter name.
-    nt.assert_raises(ValueError, dspec.fourier_filter, freqs, d, w, [0.], [bl_len], [0.], filter2d=False,
-                     mode='clean', fitting_options=clean_options_typo)
+    nt.assert_raises(ValueError, dspec.fourier_filter, freqs, d, w, [0.], [bl_len],
+                     mode='clean', **clean_options_typo)
 
     nt.assert_true(np.all(np.isclose(mdl3, mdl4, atol=1e-6)))
     nt.assert_true(np.all(np.isclose(res3, res4, atol=1e-6)))
@@ -663,39 +661,33 @@ def test_fourier_filter():
     nt.assert_true(np.all(np.isclose(res1, res2)))
 
     #check that dayenu can be run without fitting options.
-    mdl3, res3, info3 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [1e-9],
-                                             mode='dayenu', filter2d=False, fitting_options={})
+    mdl3, res3, info3 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], suppression_factors=[1e-9],
+                                             mode='dayenu')
 
-    mdl4, res4, info4 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], [1e-9], filter2d=False,
+    mdl4, res4, info4 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], suppression_factors=[1e-9],
                                              mode='dayenu')
 
     nt.assert_true(np.all(np.isclose(mdl3, mdl4, atol=1e-6)))
     nt.assert_true(np.all(np.isclose(res3, res4, atol=1e-6)))
 
-    #check value error for providing no fitting options with differet modes
-    for mode in ['dpss_leastsq', 'dft_leastsq', 'clean', 'dayenu_dpss_leastsq']:
-        nt.assert_raises(ValueError, dspec.fourier_filter, freqs, d, w, [0.], [bl_len], [1e-9],
-                         mode=mode, filter2d=False)
-
-
     #check that clean skips if all data is equal to zero, avoids infinite loop case.
-    mdl3, res3, info3 = dspec.fourier_filter(freqs, np.zeros_like(d), w, [0.], [bl_len], [0.],
-                                             mode='clean', filter2d=False, fitting_options={})
+    mdl3, res3, info3 = dspec.fourier_filter(freqs, np.zeros_like(d), w, [0.], [bl_len],
+                                             mode='clean', filter_dims=1)
     nt.assert_true(np.all([info3['status']['axis_1'][i] == 'skipped' for i in info3['status']['axis_1']]))
 
     #check error when unsupported mode provided
     nt.assert_raises(ValueError, dspec.fourier_filter, x=freqs, data=d, wgts=w, filter_centers=[0.],
                     filter_half_widths=[bl_len], suppression_factors=[0.],
-                    mode='foo', filter2d=False, fitting_options=dpss_options1)
+                    mode='foo', **dpss_options1)
     #check error when wgt dim does not equal data dim.
     nt.assert_raises(ValueError, dspec.fourier_filter, x=freqs, data=d, wgts=w[0].squeeze(), filter_centers=[0.],
                     filter_half_widths=[bl_len], suppression_factors=[0.],
-                    mode='dpss_leastsq', filter2d=False, fitting_options=dpss_options1)
+                    mode='dpss_leastsq', **dpss_options1)
 
     #check 1d vector support
     mdl11d, res11d, info11d = dspec.fourier_filter(x=freqs, data=d[0], wgts=w[0], filter_centers=[0.],
                                              filter_half_widths=[bl_len], suppression_factors=[0.],
-                                             mode='dpss_leastsq', filter2d=False, fitting_options=dpss_options1)
+                                             mode='dpss_leastsq', **dpss_options1)
 
     #test that the info is properly switched. fourier_filter processes all data in frequency_mode and takes transposes for time
     #filtering mode.
@@ -707,8 +699,8 @@ def test_fourier_filter():
     nt.assert_true(np.all(np.isclose(mdl1[0], mdl11d, atol=1e-6)))
     #perform a fringe-rate filter
     mdl5, res5, info5 = dspec.fourier_filter(x=times, data=d, wgts=w, filter_centers=[0.],
-                                             filter_half_widths=[fr_len], suppression_factors=[0.], filter_dim=0,
-                                             mode='dpss_leastsq', filter2d=False, fitting_options=dpss_options1)
+                                             filter_half_widths=[fr_len], suppression_factors=[0.], filter_dims=0,
+                                             mode='dpss_leastsq', **dpss_options1)
 
     #test that the info is properly switched. fourier_filter processes all data in frequency_mode and takes transposes for time
     #filtering mode.
@@ -721,18 +713,18 @@ def test_fourier_filter():
     nt.assert_true(np.all(np.isclose(mdl1[~f],mdl5[~f], rtol=1e-2)))
     #check fringe rate filter with dft mode
     mdl6, res6, info6 = dspec.fourier_filter(x=times, data=d, wgts=w, filter_centers=[0.],
-                                             filter_half_widths=[fr_len], suppression_factors=[0.], filter_dim=0,
-                                             mode='dft_leastsq', filter2d=False, fitting_options=dft_options1)
+                                             filter_half_widths=[fr_len], suppression_factors=[0.], filter_dims=0,
+                                             mode='dft_leastsq', **dft_options1)
     #check that dft and dpss fringe-rate inpainting give the same results.
     nt.assert_true(np.all(np.isclose(mdl5, mdl6, rtol=1e-2)))
     #Check Dayenu filter.
     mdl7, res7, info7 = dspec.fourier_filter(x=times, data=d, wgts=w, filter_centers=[0.],
-                                             filter_half_widths=[fr_len], suppression_factors=[1e-8], filter_dim=0,
-                                             mode='dayenu_dft_leastsq', filter2d=False, fitting_options=dft_options1)
+                                             filter_half_widths=[fr_len], suppression_factors=[1e-8], filter_dims=0,
+                                             mode='dayenu_dft_leastsq', **dft_options1)
 
     mdl8, res8, info8 = dspec.fourier_filter(x=times, data=d, wgts=w, filter_centers=[0.],
-                                             filter_half_widths=[fr_len], suppression_factors=[1e-8], filter_dim=0,
-                                             mode='dayenu_dpss_leastsq', filter2d=False, fitting_options=dpss_options1)
+                                             filter_half_widths=[fr_len], suppression_factors=[1e-8], filter_dims=0,
+                                             mode='dayenu_dpss_leastsq', **dpss_options1)
     nt.assert_true(np.all(np.isclose(mdl7, mdl8, rtol=1e-2)))
     nt.assert_true(np.all(np.isclose(mdl5, mdl8, rtol=1e-2)))
 
@@ -750,42 +742,40 @@ def test_fourier_filter():
 
     mdl9, res9, info9 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[1e-8],[1e-8]],
-                                             mode='dayenu_dpss_leastsq', filter2d=True, fitting_options=[dpss_options1, dpss_options1])
+                                             mode='dayenu_dpss_leastsq', filter_dims=[1, 0], **dpss_options1)
 
     nt.assert_raises(ValueError, dspec.fourier_filter, x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[1e-8],[1e-8]],
-                                             mode='dayenu_dpss_leastsq', filter2d=True, fitting_options=dpss_options1)
+                                             mode='dayenu_dpss_leastsq', filter_dims=[1, 0], **dft_options1)
 
     mdl10, res10, info10 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[1e-8],[1e-8]],
-                                             mode='dayenu_dft_leastsq', filter2d=True, fitting_options=[dft_options2,dft_options3])
+                                             mode='dayenu_dft_leastsq', filter_dims=[1, 0], **dft_options1)
    #check 2d filter dft fundamental period error.
     nt.assert_raises(ValueError, dspec.fourier_filter,x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
-                                             mode='dft_leastsq', filter2d=True, fitting_options=dft_options1)
+                                             mode='dft_leastsq', filter_dims=[1, 0], **dpss_options1)
 
     #try 2d iterative clean.
     mdl11, res11, info11 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]],
-                                             mode='clean', filter2d=True, fitting_options={'filt2d_mode':'rect','tol':1e-5})
+                                             mode='clean', filter_dims=[1, 0], **{'filt2d_mode':'rect','tol':1e-5})
     #try out plus mode. IDK
     mdl12, res12, info12 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]],
-                                             mode='clean', filter2d=True, fitting_options={'filt2d_mode':'plus','tol':1e-5})
+                                             mode='clean', filter_dims=[1, 0], **{'filt2d_mode':'plus','tol':1e-5})
 
     #make sure that clean is skipped if all weights are zero.
     mdl13, res13, info13 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=np.zeros_like(w), filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]],
-                                             mode='clean', filter2d=True, fitting_options={'filt2d_mode':'plus','tol':1e-5})
+                                             mode='clean', filter_dims=[1, 0], **{'filt2d_mode':'plus','tol':1e-5})
     nt.assert_true(info13['clean_status']['axis_0']['skipped'])
     nt.assert_true(info13['clean_status']['axis_1']['skipped'])
     #test error when cleaning with invalid filt2d mode.
     nt.assert_raises(ValueError, dspec.fourier_filter,x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                                  filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
-                                                 mode='clean', filter2d=True, fitting_options={'filt2d_mode':'bargh','tol':1e-5})
-    #check that we cannot exclude suppression factors for non clean mode.
-    nt.assert_raises(ValueError, dspec.fourier_filter,freqs, data=d, wgts=w, filter_centers=[0.], filter_half_widths=[bl_len],
-                     mode='dayenu', filter2d=False, fitting_options={'tol':1e-4})
+                                                 mode='clean', filter2d=True, **{'filt2d_mode':'bargh','tol':1e-5})
+
 def test_clean_fourier_filter_equality():
     # validate that fourier_filter in various clean modes gives close values to vis_clean with equivalent parameters!
     uvd = UVData()
@@ -814,18 +804,18 @@ def test_clean_fourier_filter_equality():
     bl_len = 70.0 / 2.99e8
     # here is a fourier filter implementation of clean
     mdl1, res1, info1 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len],
-                                             mode='clean', filter2d=False, fitting_options={'tol':1e-4})
+                                             mode='clean', **{'tol':1e-4})
 
     # here is the vis filter implementation of clean
     # delay filter basic execution
-    mdl2, res2, info2 = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.0,
+    mdl2, res2, info2 = dspec.wedge_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.0,
                                              tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
     # validate models and residuals are close.
     nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
     nt.assert_true(np.all(np.isclose(res1, res2)))
 
-    mdl2, res2, info2 = dspec.vis_filter(d, w, bl_len=0., sdf=sdf, standoff=0., horizon=1.0,
-                                         min_dly=bl_len, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+    mdl2, res2, info2 = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, standoff=0., horizon=1.0,
+                                         min_dly=0.0, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
     # validate models and residuals are close.
     nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
     nt.assert_true(np.all(np.isclose(res1, res2)))
@@ -833,20 +823,18 @@ def test_clean_fourier_filter_equality():
 
     # Do the same comparison with more complicated windowing and edge cuts.
     mdl1, res1, info1 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len],
-                                             mode='clean', filter2d=False, fitting_options={'tol':1e-4,
+                                             mode='clean', **{'tol':1e-4,
                                              'window':'tukey', 'edgecut_low':4, 'edgecut_hi':4})
-    mdl2, res2, info2 = dspec.delay_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.0,
+    mdl2, res2, info2 = dspec.delay_filter(d, w, bl_len, sdf,
                                            edgecut_hi=4, edgecut_low=4, tol=1e-4,
                                            skip_wgt=0.1, gain=0.1, window='tukey')
     nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
     nt.assert_true(np.all(np.isclose(res1, res2)))
 
 
-
-
     #Do a comparison for time domain clean.
-    mdl1, res1, info1 = dspec.fourier_filter(times-np.mean(times), d, w, [0.], [frs[15]], [0.], filter_dim=0,
-                                             mode='clean', filter2d=False, fitting_options={'tol':1e-4,
+    mdl1, res1, info1 = dspec.fourier_filter(times-np.mean(times), d, w, [0.], [frs[15]],
+                                             mode='clean', filter_dims=[0], **{'tol':1e-4,
                                              'window':'tukey', 'edgecut_low':3, 'edgecut_hi':4})
     mdl2, res2, info2 = dspec.fringe_filter(d, w, frs[15], dt, edgecut_hi=4, edgecut_low=3,
                                             tol=1e-4, window='tukey', skip_wgt=0.1,
@@ -856,28 +844,28 @@ def test_clean_fourier_filter_equality():
 
     #try 2d iterative clean.
     mdl1, res1, info1 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
-                                             filter_half_widths=[[frs[15]],[bl_len]], suppression_factors=[[0.],[0.]],
-                                             mode='clean', filter2d=True, fitting_options={'filt2d_mode':'rect','tol':1e-5,
+                                             filter_half_widths=[[frs[15]],[bl_len]],
+                                             mode='clean', filter_dims=[1, 0], **{'filt2d_mode':'rect','tol':1e-5,
                                              'window':['tukey', 'tukey'], 'add_clean_residual':False})
 
     mdl2, res2, info2 = dspec.high_pass_fourier_filter(data=d, wgts=w, filter_size=[frs[15], bl_len],
                                              real_delta=[np.mean(np.diff(times)), np.mean(np.diff(freqs))],
                                              window='tukey', tol=1e-5, clean2d=True,
-                                             mode='clean', add_clean_residual=False)
+                                             add_clean_residual=False)
 
     nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
     nt.assert_true(np.all(np.isclose(res1, res2)))
 
     #check plus mode.
     mdl1, res1, info1 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
-                                             filter_half_widths=[[frs[15]],[bl_len]], suppression_factors=[[0.],[0.]],
-                                             mode='clean', filter2d=True, fitting_options={'filt2d_mode':'plus','tol':1e-5,
+                                             filter_half_widths=[[frs[15]],[bl_len]],
+                                             mode='clean', filter_dims=[1, 0], **{'filt2d_mode':'plus','tol':1e-5,
                                              'window':['tukey', 'tukey'], 'add_clean_residual':False})
 
     mdl2, res2, info2 = dspec.high_pass_fourier_filter(data=d, wgts=w, filter_size=[frs[15], bl_len],
                                              real_delta=[np.mean(np.diff(times)), np.mean(np.diff(freqs))],
                                              window='tukey', tol=1e-5, clean2d=True, filt2d_mode='plus',
-                                             mode='clean', add_clean_residual=False)
+                                             add_clean_residual=False)
 
     nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
     nt.assert_true(np.all(np.isclose(res1, res2)))
