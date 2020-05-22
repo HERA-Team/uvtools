@@ -885,14 +885,20 @@ def test_vis_clean():
     mdl2, res2, info2 = dspec.fringe_filter(d, w, frs[15], dt, edgecut_hi=4, edgecut_low=3,
                                             tol=1e-4, window='tukey', skip_wgt=0.1,
                                             gain=0.1)
+
+    # test vis_clean time axis with fringe-rate clean
+    mdl3, res3, info3 = dspec.vis_clean(d.T, w.T, (frs[15], frs[15]), dt, edgecut_hi=4, edgecut_low=3,
+                                            tol=1e-4, window='tukey', skip_wgt=0.1,
+                                            gain=0.1)
     nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
     nt.assert_true(np.all(np.isclose(res1, res2)))
+    nt.assert_true(np.all(np.isclose(res1, res3.T)))
+    nt.assert_true(np.all(np.isclose(mdl1, mdl3.T)))
 
     #cover value error if 2-tuple filter sizes and not 2dclean.
     nt.assert_raises(ValueError, dspec.fringe_filter,d , w, frs[15], dt, edgecut_hi=4, edgecut_low=3,
                                             tol=1e-4, window='tukey', skip_wgt=0.1,
                                             gain=0.1, clean2d=True)
-
     #try 2d iterative clean.
     mdl1, res1, info1 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[frs[15]],[bl_len]],
@@ -923,8 +929,11 @@ def test_vis_clean():
                                              real_delta=[np.mean(np.diff(times)), np.mean(np.diff(freqs))],
                                              window='tukey', tol=1e-5, clean2d=True, filt2d_mode='plus',
                                              add_clean_residual=False)
-
-
+    #cover value error for calling 2d visclean with 1d real_delta.
+    nt.assert_raises(ValueError, dspec.high_pass_fourier_filter, data=d, wgts=w, filter_size=[[frs[15] , frs[15]], bl_len],
+                     real_delta=np.mean(np.diff(times)),
+                     window='tukey', tol=1e-5, clean2d=True, filt2d_mode='plus',
+                     add_clean_residual=False)
 
     nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
     nt.assert_true(np.all(np.isclose(res1, res2)))
