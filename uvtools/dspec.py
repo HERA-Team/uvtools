@@ -102,10 +102,9 @@ def _get_filter_area(x, filter_center, filter_width):
     dx = np.mean(np.diff(x))
     if not np.isinf(filter_width):
         av = np.ones(len(x))
-        ut, lt = calc_width(filter_width, dx, nx)
+        filter_size = ((-filter_center + filter_width), (filter_center + filter_width))
+        ut, lt = calc_width(filter_size, dx, nx)
         av[ut:lt] = 0.
-        nc = int(np.round(filter_center * dx * nx))
-        av = np.roll(av, -nc)
     else:
         av = np.ones(nx)
     return av
@@ -998,7 +997,8 @@ def fringe_filter(data, wgts, max_frate, dt, skip_wgt=0.5, mode='clean', **kwarg
     Args:
         data : 1D or 2D data array. If 2D, shape=(Ntimes, Nfreqs)
         wgts : 1D or 2D weight array.
-        max_frate : float, maximum fringe-rate (i.e. frequency) to CLEAN, units of 1/[dt]
+        max_frate : float, maximum fringe-rate (i.e. frequency) to CLEAN, units of 1/[dt]. 2-tuple
+        can be provided where (20, 20) would clean between -20 < fr < 20
         dt : float, time-bin width of data
         skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
             Model is left as 0s, residual is left as data, and info is {'skipped': True} for that
@@ -1016,8 +1016,8 @@ def fringe_filter(data, wgts, max_frate, dt, skip_wgt=0.5, mode='clean', **kwarg
     times = np.arange(data.shape[0]) * dt
     # run fourier filter
     if isinstance(max_frate, (list,tuple)):
-        fc = (max_frate[1] + max_frate[0]) / 2.
-        fw = np.abs(max_frate[1] - max_frate[0]) / 2.
+        fc = (max_frate[1] - max_frate[0]) / 2.
+        fw = np.abs(max_frate[1] + max_frate[0]) / 2.
     else:
         fc = 0.
         fw = max_frate
@@ -1108,8 +1108,8 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
         freqs = np.arange(data.shape[1]) * sdf
         times = np.arange(data.shape[0]) * dt
         if isinstance(max_frate, (list,tuple)):
-            fc = (max_frate[1] + max_frate[0]) / 2.
-            fw = np.abs(max_frate[1] - max_frate[0]) / 2.
+            fc = (max_frate[1] - max_frate[0]) / 2.
+            fw = np.abs(max_frate[1] + max_frate[0]) / 2.
         else:
             fc = 0.
             fw = max_frate
