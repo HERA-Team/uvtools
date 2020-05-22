@@ -214,6 +214,7 @@ def test_dft_operator():
     fop1 = dspec.dft_operator(freqs, 0., 1e-6, fundamental_period=200*1e5)
     np.testing.assert_allclose(fop1, y1)
 
+
 def test_dpss_operator():
     #test that an error is thrown when we specify more then one
     #termination method.

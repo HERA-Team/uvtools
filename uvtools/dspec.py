@@ -1204,7 +1204,7 @@ def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, normalization=
     return w
 
 
-def fourier_operator(dsize, nmax, nmin=None, freq_units=False, even_modes=False, L=None):
+def fourier_operator(dsize, nmax, nmin=None, L=None):
     """
     Return a complex Fourier analysis operator for a given data dimension and number of Fourier modes.
 
@@ -1219,12 +1219,6 @@ def fourier_operator(dsize, nmax, nmin=None, freq_units=False, even_modes=False,
     nmin : int, optional, default nmin = nmax
         minimum integer of fourier mode numbers. Modes will be constructed between
         [nmin, nmax] for total of (nmax - nmin) + 1 modes.
-    freq_units : bool,
-        if False, then fourier modes are given by e^(-m * n * j / N)
-        if True, then fourier modes are given by e^(-m * n * j / N * 2 * pi)
-        where N is fundamental period.
-    even_modes : bool, optional, default = False
-        instead of 2n + 1 modes, use 2n modes from -n, n-1 as per usual.
     L : int, optional, default = None
         fundamental period of Fourier modes to fit too.
         if none, default to ndata.
@@ -1235,21 +1229,12 @@ def fourier_operator(dsize, nmax, nmin=None, freq_units=False, even_modes=False,
     """
     nu = np.arange(dsize)
     if L is None:
-        if not even_modes:
-            L = nu[-1] - nu[0]
-        else:
-            L = dsize
+        L = nu[-1] - nu[0]
     if nmin is None:
         nmin = -nmax
     # Construct frequency array (*not* in physical frequency units)
-
-    if freq_units:
-        L  = L / (2. * np.pi)
     # Build matrix operator for complex Fourier basis
-    if even_modes:
-        n = np.arange(nmin, nmax)
-    else:
-        n = np.arange(nmin, nmax + 1)
+    n = np.arange(nmin, nmax + 1)
     F = np.array([np.exp(-1.j * _n * nu / L) for _n in n])
     return F
 
@@ -1289,8 +1274,8 @@ def fourier_model(cn, Nfreqs):
     return np.dot(cn, F)
 
 
-def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False, freq_units = False,
-                            cn_guess=None, use_linear=True, operator=None, even_modes=False, fundamental_period=None):
+def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False,
+                            cn_guess=None, use_linear=True, operator=None, fundamental_period=None):
     """
     Fit a smooth model to 1D complex-valued data with flags, using a linear
     least-squares solver. The model is a Fourier series up to a specified
@@ -1343,12 +1328,6 @@ def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False, freq_unit
         delay_filter_leastsq. Operator must have shape (Nmodes, Nfreq), where
         Nmodes = 2*nmax + 1. A complex Fourier basis will be automatically
         calculated if no operator is specified.
-    freq_units : bool, optional, default = False
-        if False, then fourier modes are given by e^(-m * n * j / N)
-        if True, then fourier modes are given by e^(-m * n * j / N * 2 * pi)
-    even_modes : bool, optional, default = False
-        instead of 2n + 1 modes, use 2n modes from -n, n-1 as per usual.
-
     fundamental_period : int, optional, default = None
         fundamental period of Fourier modes to fit too.
         if none, default to ndata.
@@ -1372,13 +1351,10 @@ def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False, freq_unit
     elif isinstance(nmax, int):
         nmin = -nmax
     if operator is None:
-        F = fourier_operator(dsize=data.size, nmin = nmin, nmax=nmax, freq_units=freq_units, even_modes=even_modes, L=fundamental_period)
+        F = fourier_operator(dsize=data.size, nmin = nmin, nmax=nmax, L=fundamental_period)
     else:
         F = operator
-        if even_modes:
-            cshape = nmax - nmin
-        else:
-            cshape = nmax - nmin + 1
+        cshape = nmax - nmin + 1
         if F.shape[0] != cshape:
             raise ValueError("Fourier basis operator has the wrong shape. "
                              "Must have shape (Nmodes, Nfreq).")
@@ -1388,10 +1364,8 @@ def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False, freq_unit
     # Define model and likelihood function
     def model(cn, F):
         return np.dot(cn, F)
-    if even_modes:
-        nmodes = nmax - nmin
-    else:
-        nmodes = nmax - nmin + 1
+
+    nmodes = nmax - nmin + 1
 
     # Initial guess for Fourier coefficients (real + imaginary blocks)
     cn_in = np.zeros(2 * nmodes)
@@ -1448,8 +1422,8 @@ def delay_filter_leastsq_1d(data, flags, sigma, nmax, add_noise=False, freq_unit
     return bf_model, cn_out, data_out
 
 
-def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units = False,
-                         cn_guess=None, use_linear=True, operator=None, even_modes=False, fundamental_period=None):
+def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False,
+                         cn_guess=None, use_linear=True, operator=None, fundamental_period=None):
     """
     Fit a smooth model to each 1D slice of 2D complex-valued data with flags,
     using a linear least-squares solver. The model is a Fourier series up to a
@@ -1502,12 +1476,6 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
     operator : array_like, optional
         Fourier basis operator matrix. Must have shape (Nmodes, Nfreq), where
         Nmodes = 2*nmax + 1. A complex Fourier basis will be used by default.
-
-    freq_units : bool, optional, default = False
-        if False, then fourier modes are given by e^(-m * n * j / N)
-        if True, then fourier modes are given by e^(-m * n * j / N * 2 * pi)
-    even_modes : bool, optional, default False
-        instead of 2n + 1 modes, use 2n modes from -n, n-1 as per usual.
     fundamental_period : int, optional, default = None
         fundamental period of Fourier modes to fit too.
         if none, default to ndata.
@@ -1532,14 +1500,12 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
         nmin = -nmax
     # Construct and cache Fourier basis operator (for speed)
     if operator is None:
-        F = fourier_operator(dsize=data.shape[1], nmax=nmax, nmin=nmin, freq_units=freq_units, even_modes=even_modes, L=fundamental_period)
+        F = fourier_operator(dsize=data.shape[1], nmax=nmax, nmin=nmin, L=fundamental_period)
     else:
         # delay_filter_leastsq_1d will check for correct dimensions
         F = operator
-    if even_modes:
-        nmodes = nmax - nmin
-    else:
-        nmodes = nmax - nmin + 1
+
+    nmodes = nmax - nmin + 1
     # Array to store in-painted data
     inp_data = np.zeros(data.shape, dtype=np.complex)
     cn_array = np.zeros((data.shape[0], nmodes), dtype=np.complex)
@@ -1549,8 +1515,8 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False, freq_units =
     cn_out = None
     for i in range(data.shape[0]):
         bf_model, cn_out, data_out = delay_filter_leastsq_1d(
-            data[i], flags[i], sigma=sigma, nmax=(nmin, nmax), add_noise=add_noise, even_modes=even_modes,
-            use_linear=use_linear, cn_guess=cn_out, operator=F, freq_units=freq_units, fundamental_period=fundamental_period)
+            data[i], flags[i], sigma=sigma, nmax=(nmin, nmax), add_noise=add_noise,
+            use_linear=use_linear, cn_guess=cn_out, operator=F, fundamental_period=fundamental_period)
         inp_data[i, :] = data_out
         cn_array[i, :] = cn_out
         mdl_array[i, :] = bf_model
