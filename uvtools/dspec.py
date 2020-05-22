@@ -761,6 +761,26 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
             raise ValueError("number of elements along data dimension %d, nel=%d"
                              "does not equal the number of elements along weight"
                              "dimension %d, nel = %d"%(dim, d_shape[dim], dim, w_shape[dim]))
+    if not isinstance(x, (np.ndarray,list, tuple)):
+        raise ValueError("x must be a numpy array, list, or tuple")
+    # Check that inputs are tiples or lists
+    if not isinstance(filter_dimensions, (list,tuple,int, np.int)):
+        raise ValueError("filter_dimensions must be a list or tuple")
+    # if filter_dimensions are supplied as a single integer, convert to list (core code assumes lists).
+    if isinstance(filter_dimensions, int):
+        filter_dimensions = [filter_dimensions]
+    # check that filter_dimensions is no longer then 2 elements
+    if not len(filter_dimensions) in [1, 2]:
+        raise ValueError("length of filter_dimensions cannot exceed 2")
+    # make sure filter_dimensions are 0 or 1.
+    for dim in filter_dimensions:
+        if not dim in [0, 1] or not isinstance(dim, (int, np.int)):
+            raise ValueError("filter dimension must be integer 0, or 1")
+
+    # convert filter dimensions to a list of integers (incase the dimensions were supplied as floats)
+    # will only filter each dim a single time.
+    # now check validity of other inputs. We perform the same check over multiple
+    # inputs by iterating over a list with their names.
     #convert 1d data to 2d data to save lines of code.
     if d_dim == 1:
         data = np.asarray([data])
@@ -772,28 +792,6 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
         data_1d = False
     nchan = data.shape[1]
     ntimes = data.shape[0]
-    if not isinstance(x, (np.ndarray,list, tuple)):
-        raise ValueError("x must be a numpy array, list, or tuple")
-    # Check that inputs are tiples or lists
-    if not isinstance(filter_dimensions, (list,tuple,int)):
-        raise ValueError("filter_dimensions must be a list or tuple")
-    # if filter_dimensions are supplied as a single integer, convert to list (core code assumes lists).
-    if isinstance(filter_dimensions, int):
-        filter_dimensions = [filter_dimensions]
-    # check that filter_dimensions is no longer then 2 elements
-    if not len(filter_dimensions) in [1, 2]:
-        raise ValueError("length of filter_dimensions cannot exceed 2")
-    # make sure filter_dimensions are 0 or 1.
-    for dim in filter_dimensions:
-        if not isinstance(dim,int):
-            raise ValueError("only integers are valid filter dimensions")
-    # make sure that all filter dimensions are valid for the supplied data.
-    if not np.all(np.abs(np.asarray(filter_dimensions)) < data.ndim):
-        raise ValueError("invalid filter dimensions provided, must be 0 or 1/-1")
-    # convert filter dimensions to a list of integers (incase the dimensions were supplied as floats)
-    # will only filter each dim a single time.
-    # now check validity of other inputs. We perform the same check over multiple
-    # inputs by iterating over a list with their names.
     check_vars = [filter_centers, filter_half_widths, filter_factors]
     check_names = ['filter_centers', 'filter_half_widths', 'filter_factors']
     for anum, aname, avar in zip(range(len(check_vars)),check_names,check_vars):
@@ -815,12 +813,12 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                     raise ValueError(err_msg)
             else:
                 raise ValueError(err_msg)
-            if not len(x) == 2:
-                raise ValueError("For 2d filtering, x must be 2d long list or tuple or ndarray")
-            for j in range(2):
-                if not isinstance(x[j], (tuple, list, np.ndarray)):
-                    raise ValueError("x[%d] must be a tuple, list or numpy array."%(j))
-                x[j]=np.asarray(x[j])
+        if not len(x) == 2:
+            raise ValueError("For 2d filtering, x must be 2d long list or tuple or ndarray")
+        for j in range(2):
+            if not isinstance(x[j], (tuple, list, np.ndarray)):
+                raise ValueError("x[%d] must be a tuple, list or numpy array."%(j))
+            x[j]=np.asarray(x[j])
         for ff_num,ff_list in zip(filter_dimensions,filter_factors):
             # we allow the user to provide a single filter factor for multiple
             # filtering windows on a single dimension. This code
@@ -876,10 +874,11 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
     #axis).
     filter_matrices=[{},{}]
     #check filter factors for zeros and negative numbers
-    for ff in filter_factors:
+    for ff, fc, fw in zip(filter_factors, filter_centers, filter_half_widths):
         for fv in ff:
             if fv <= 0.:
                 raise ValueError("All filter factors must be greater than zero! You provided %.2e :(!"%(fv))
+
     for fs in filter_dimensions:
         if fs == 0:
             _d, _w = output.T, wgts.T

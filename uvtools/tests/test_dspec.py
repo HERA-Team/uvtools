@@ -330,9 +330,31 @@ def test_dayenu_filter():
                     filter_half_widths, filter_factors)
     nt.assert_raises(ValueError, dspec.dayenu_filter, freqs, data_1d, wghts_1d, [1], np.array(filter_centers), np.array(filter_half_widths),
                         np.array(filter_factors)*0.)
+    # check error where x is not a numpy array
+    nt.assert_raises(ValueError, dspec.dayenu_filter, x='x', data=data_1d, wgts=wghts_1d, filter_dimensions=[1], filter_centers=filter_centers,
+                     filter_half_widths=filter_half_widths,
+                     filter_factors=filter_factors)
+    # check error where filter-dimensions is not an integer or tuple/list
+    nt.assert_raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_1d, wgts=wghts_1d, filter_dimensions='[1]',
+                     filter_centers=filter_centers, filter_half_widths=filter_half_widths,
+                     filter_factors=filter_factors)
+    # check lenght of filter_dims is > 2
+    nt.assert_raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_1d, wgts=wghts_1d, filter_dimensions=[0, 1, 2],
+                     filter_centers=filter_centers, filter_half_widths=filter_half_widths,
+                     filter_factors=filter_factors)
+    # check that filter_dimensions are integers.
+    nt.assert_raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_1d, wgts=wghts_1d, filter_dimensions=[0.0],
+                     filter_centers=filter_centers, filter_half_widths=filter_half_widths,
+                     filter_factors=filter_factors)
+    # check filter dimensions are either 0 or 1.
+    nt.assert_raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_1d, wgts=wghts_1d, filter_dimensions=[2],
+                     filter_centers=filter_centers, filter_half_widths=filter_half_widths,
+                     filter_factors=filter_factors)
+
     #now filter foregrounds and test that std of residuals are close to std of noise:
     filtered_noise, _ =  dspec.dayenu_filter(np.arange(-nf/2, nf/2)*df, data_1d, wghts_1d, [1], filter_centers, filter_half_widths,
                                          filter_factors)
+
     #print(np.std((data_1d - fg_tone).real)*np.sqrt(2.))
     #print(np.std((filtered_noise).real)*np.sqrt(2.))
     np.testing.assert_almost_equal( np.std(filtered_noise.real)**2. + np.std(filtered_noise.imag)**2.,
@@ -354,6 +376,16 @@ def test_dayenu_filter():
     noise_2d = np.random.randn(nf,nf)/np.sqrt(2.)\
     + 1j*np.random.randn(nf,nf)/np.sqrt(2.)
     data_2d = signal_2d + noise_2d
+
+    # check that if we are performing 2d filtering, then x is a length 2 list.
+    nt.assert_raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_2d, wgts=np.ones_like(data_2d), filter_dimensions=[1, 0],
+                     filter_centers=[[0.],[0.]], filter_half_widths=[[1e-3], [100e-9]],
+                     filter_factors=[[1e-9], [1e-9]])
+    # check that if we are performing 2d filtering, then x is a length 2 list and each x is a numpy array, list, or tuple.
+    nt.assert_raises(ValueError, dspec.dayenu_filter, x=['time is a construct', np.arange(-nf/2, nf/2)*df], data=data_2d, wgts=np.ones_like(data_2d), filter_dimensions=[1, 0],
+                     filter_centers=[[0.],[0.]], filter_half_widths=[[1e-3], [100e-9]],
+                     filter_factors=[[1e-9], [1e-9]])
+
     #now, only filter fringe-rate domain. The fringe rate for a source
     #overhead should be roughly 0.0036 for this baseline.
     filtered_data_fr, _ = dspec.dayenu_filter(np.arange(-nf/2,nf/2)*dt, data_2d, np.ones_like(data_2d),
