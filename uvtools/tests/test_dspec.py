@@ -817,7 +817,7 @@ def test_fourier_filter():
     nt.assert_raises(ValueError, dspec.fourier_filter,x=flog, data=d, wgts=w, filter_centers=[0.],
                                                   filter_half_widths=[bl_len],
                                                   mode='clean', filter_dims=[1], **{'tol':1e-5})
-def test_clean_fourier_filter_equality():
+def test_vis_clean():
     # validate that fourier_filter in various clean modes gives close values to vis_clean with equivalent parameters!
     uvd = UVData()
     uvd.read_miriad(os.path.join(DATA_PATH, "zen.2458042.17772.xx.HH.uvXA"), bls=[(24, 25)])
@@ -857,9 +857,14 @@ def test_clean_fourier_filter_equality():
 
     mdl2, res2, info2 = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, standoff=0., horizon=1.0,
                                          min_dly=0.0, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+
+    # cover tuple arguments.
+    mdl3, res3, info3 = dspec.vis_clean(d, w, filter_size=bl_len, real_delta=sdf, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
     # validate models and residuals are close.
     nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
     nt.assert_true(np.all(np.isclose(res1, res2)))
+    nt.assert_true(np.all(np.isclose(res1, res3)))
+    nt.assert_true(np.all(np.isclose(mdl1, mdl3)))
 
 
     # Do the same comparison with more complicated windowing and edge cuts.
@@ -882,6 +887,11 @@ def test_clean_fourier_filter_equality():
                                             gain=0.1)
     nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
     nt.assert_true(np.all(np.isclose(res1, res2)))
+
+    #cover value error if 2-tuple filter sizes and not 2dclean.
+    nt.assert_raises(ValueError, dspec.fringe_filter,d , w, frs[15], dt, edgecut_hi=4, edgecut_low=3,
+                                            tol=1e-4, window='tukey', skip_wgt=0.1,
+                                            gain=0.1, clean2d=True)
 
     #try 2d iterative clean.
     mdl1, res1, info1 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
@@ -908,8 +918,19 @@ def test_clean_fourier_filter_equality():
                                              window='tukey', tol=1e-5, clean2d=True, filt2d_mode='plus',
                                              add_clean_residual=False)
 
+    #cover tuple capabilities of vis_clean
+    mdl3, res3, info3 = dspec.high_pass_fourier_filter(data=d, wgts=w, filter_size=[[frs[15] , frs[15]], bl_len],
+                                             real_delta=[np.mean(np.diff(times)), np.mean(np.diff(freqs))],
+                                             window='tukey', tol=1e-5, clean2d=True, filt2d_mode='plus',
+                                             add_clean_residual=False)
+
+
+
     nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
     nt.assert_true(np.all(np.isclose(res1, res2)))
+    nt.assert_true(np.all(np.isclose(res3, res1)))
+    nt.assert_true(np.all(np.isclose(mdl3, mdl1)))
+
 
 def test_fit_basis_1d():
     #perform dpss interpolation, leastsq

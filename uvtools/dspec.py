@@ -658,8 +658,8 @@ def vis_clean(data, wgts, filter_size, real_delta, clean2d=False, tol=1e-9, wind
             fw = []
             for m in range(2):
                 if isinstance(filter_size[m], (list, tuple)):
-                    fc.append(e[(filter_size[1] + filter_size[0]) / 2.])
-                    fw.append([np.abs(filter_size[m][1] - filter_size[m][0]) / 2.])
+                    fc.append([(filter_size[m][1] - filter_size[m][0]) / 2.])
+                    fw.append([np.abs(filter_size[m][1] + filter_size[m][0]) / 2.])
                 else:
                     fc.append([0.])
                     fw.append([filter_size[m]])
@@ -671,11 +671,11 @@ def vis_clean(data, wgts, filter_size, real_delta, clean2d=False, tol=1e-9, wind
             filter_dims = 1
             x = np.arange(data.shape[-1]) * real_delta
             if isinstance(filter_size, (list, tuple)):
-                fc = [(filter_size[1] + filter_size[0]) / 2.]
-                fw = [np.abs(filter_size[1] - filter_size[0]) / 2.]
+                fc = [(filter_size[1] - filter_size[0]) / 2.]
+                fw = [np.abs(filter_size[1] + filter_size[0]) / 2.]
             else:
                 fc = [0.]
-                filter_size = [filter_size]
+                fw = [filter_size]
         clean_options = {'tol':tol, 'window':window, 'maxiter':maxiter, 'gain':gain,
                          'filt2d_mode':filt2d_mode, 'alpha':alpha, 'edgecut_hi':edgecut_hi,
                          'edgecut_low':edgecut_low, 'add_clean_residual':add_clean_residual}
