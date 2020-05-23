@@ -329,8 +329,6 @@ def test_dayenu_filter():
     #check if error thrown if dimension of weights does not equal 2 or 1.
     nt.assert_raises(ValueError, dspec.dayenu_filter, freqs, wghts_1d, np.zeros((10,10,10)), 1, filter_centers,
                     filter_half_widths, filter_factors)
-    nt.assert_raises(ValueError, dspec.dayenu_filter, freqs, data_1d, wghts_1d, [1], np.array(filter_centers), np.array(filter_half_widths),
-                        np.array(filter_factors)*0.)
     # check error where x is not a numpy array
     nt.assert_raises(ValueError, dspec.dayenu_filter, x='x', data=data_1d, wgts=wghts_1d, filter_dimensions=[1], filter_centers=filter_centers,
                      filter_half_widths=filter_half_widths,

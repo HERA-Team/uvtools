@@ -13,29 +13,34 @@ from scipy.optimize import leastsq, lsq_linear
 import copy
 
 #DEFAULT PARAMETERS FOR CLEANs
-CLEAN_DEFAULTS={'tol':1e-9, 'window':{False:'none',True:['none', 'none']},
+CLEAN_DEFAULTS_1D={'tol':1e-9, 'window':'none',
  'alpha':.5, 'maxiter':100, 'gain':0.1,
- 'edgecut_low':{True:[0, 0],False:0}, 'edgecut_hi':{True:[0, 0],False:0},
+ 'edgecut_low': 0, 'edgecut_hi': 0,
  'add_clean_residual':False, 'filt2d_mode':'rect'}
-DAYENU_DEFAULTS={'suppression_factors' : {True: [1e-9, 1e-9], False: [1e-9]},
-                 'max_contiguous_edge_flags' : 0}
-DPSS_DEFAULTS={'suppression_factors' : {True: [[1e-9], [1e-9]], False: [1e-9]},
-               'eigenval_cutoff' : {True: [[1e-12], [1e-12]], False: [1e-12]},
+DAYENU_DEFAULTS_1D = {'suppression_factors' : [1e-9],
+                 'max_contiguous_edge_flags' : 10}
+DPSS_DEFAULTS_1D = {'suppression_factors' :  [1e-9],
+               'eigenval_cutoff' : [1e-12],
                'max_contiguous_edge_flags' : 10}
-DFT_DEFAULTS={'suppression_factors' : {True: [[1e-9], [1e-9]], False: [1e-9]},
-                'fundamental_period' : {True : [np.nan, np.nan], False : np.nan},
+DFT_DEFAULTS_1D = {'suppression_factors' : [1e-9],
+                'fundamental_period' : np.nan,
                 'max_contiguous_edge_flags' : 10}
- #In the above dictionary, some fields are different depending on whether
- #filter2d is True or False (whether we do 2d filtering or not). These parameters,
- #are listed below in DEFAULT_FILT2D. In CLEAN_DEFAULTS they are set to a dictionary
- #where True references default param values for 2d filtering and False references
- #default param values for 1d filtering.
-DEFAULT_CLEAN_FILT2D = ['edgecut_hi', 'edgecut_low', 'window']
-DEFAULT_DAYENU_FILT2D = ['suppression_factors']
-DEFAULT_DPSS_FILT2D = ['suppression_factors', 'eigenval_cutoff']
-DEFAULT_DFT_FILT2D = ['suppression_factors', 'fundamental_period']
 
-def _process_filter_kwargs(kwarg_dict, default_dict, filter2d, filt2d_dict):
+CLEAN_DEFAULTS_2D = {'tol':1e-9, 'window': ['none', 'none'],
+ 'alpha':.5, 'maxiter':100, 'gain':0.1,
+ 'edgecut_low': [0, 0], 'edgecut_hi': [0, 0],
+ 'add_clean_residual':False, 'filt2d_mode':'rect'}
+DAYENU_DEFAULTS_2D = {'suppression_factors' : [[1e-9], [1e-9]],
+                 'max_contiguous_edge_flags' : 10}
+DPSS_DEFAULTS_2D = {'suppression_factors' : [[1e-9], [1e-9]],
+               'eigenval_cutoff' : [[1e-12], [1e-12]],
+               'max_contiguous_edge_flags' : 10}
+DFT_DEFAULTS_2D = {'suppression_factors' : [[1e-9], [1e-9]],
+                'fundamental_period' : [np.nan, np.nan],
+                'max_contiguous_edge_flags' : 10}
+
+
+def _process_filter_kwargs(kwarg_dict, default_dict):
         """
         Utility function to complete a dictionary of kwargs
         by inserting values in default_dict for missing keys
@@ -46,25 +51,19 @@ def _process_filter_kwargs(kwarg_dict, default_dict, filter2d, filt2d_dict):
         ----------
             kwarg_dict : dictionary of kwargs to process
             default_dict : dictionary containing default kwarg values.
-            filter2d : bool, determine whether filtering in 2d or 1d.
-            filt2d_dict : list containing kwarg keys that specify whether
-                          there are two different options whether or not 2d filtering
-                          is happening.
         Returns
         -------
             Nothing, kwarg dict is corrected in place.
         """
-        for k in default_dict:
-            if k not in kwarg_dict:
-                if k in filt2d_dict:
-                    kwarg_dict[k] = default_dict[k][filter2d]
-                else:
-                    kwarg_dict[k] = default_dict[k]
         # check for mispelled keys
         for k in kwarg_dict:
             if not k in default_dict:
                 raise ValueError("%s is not a valid argument!"%(k) + \
                                  "valid arguments include %s"%(list(default_dict.keys())))
+        for k in default_dict:
+            if not k in kwarg_dict:
+                kwarg_dict[k] = default_dict[k]
+
 
 
 
@@ -137,7 +136,7 @@ def _fourier_filter_hash(filter_centers, filter_half_widths,
     '''
     filter_key = ('x:',) + tuple(np.round(x,hash_decimal))\
     + ('filter_centers x N x DF:',) + tuple(np.round(np.asarray(filter_centers) * np.mean(np.diff(x)) * len(x), hash_decimal))\
-    + ('filter_centers x N x DF:',) + tuple(np.round(np.asarray(filter_half_widths) * np.mean(np.diff(x)) * len(x), hash_decimal))\
+    + ('filter_half_widths x N x DF:',) + tuple(np.round(np.asarray(filter_half_widths) * np.mean(np.diff(x)) * len(x), hash_decimal))\
     + ('filter_factors x 1e9:',) + tuple(np.round(np.asarray(filter_factors) * 1e9, hash_decimal))
     if w is not None:
         filter_key = filter_key + ('weights', ) +  tuple(np.round(w.tolist(), hash_decimal))
@@ -392,25 +391,37 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                    if 'dayenu' == mode[0]:
                        if len(mode) > 1:
                            if 'dft' in mode:
-                               defaults = {**DAYENU_DEFAULTS, **DFT_DEFAULTS}
-                               dicts_2d = DEFAULT_DAYENU_FILT2D + DEFAULT_DFT_FILT2D
+                               if filter2d:
+                                   defaults = {**DAYENU_DEFAULTS_2D, **DFT_DEFAULTS_2D}
+                               else:
+                                   defaults = {**DAYENU_DEFAULTS_1D, **DFT_DEFAULTS_1D}
                            elif 'dpss' in mode:
-                               defaults = {**DAYENU_DEFAULTS, **DPSS_DEFAULTS}
-                               dicts_2d = DEFAULT_DAYENU_FILT2D + DEFAULT_DPSS_FILT2D
-
+                               if filter2d:
+                                   defaults = {**DAYENU_DEFAULTS_2D, **DPSS_DEFAULTS_2D}
+                               else:
+                                   defaults = {**DAYENU_DEFAULTS_1D, **DPSS_DEFAULTS_1D}
                        else:
-                           defaults = DAYENU_DEFAULTS
-                           dicts_2d = DEFAULT_DAYENU_FILT2D
+                           if filter2d:
+                               defaults = DAYENU_DEFAULTS_2D
+                           else:
+                               defaults = DAYENU_DEFAULTS_1D
                    elif mode[0] == 'dft':
-                        defaults = DFT_DEFAULTS
-                        dicts_2d = DEFAULT_DFT_FILT2D
+                       if filter2d:
+                           defaults = DFT_DEFAULTS_2D
+                       else:
+                           defaults = DFT_DEFAULTS_1D
                    elif mode[0] == 'dpss':
-                        defaults = DPSS_DEFAULTS
-                        dicts_2d = DEFAULT_DPSS_FILT2D
+                       if filter2d:
+                           defaults = DPSS_DEFAULTS_2D
+                       else:
+                           defaults = DPSS_DEFAULTS_1D
                    elif mode[0] == 'clean':
-                        defaults = CLEAN_DEFAULTS
-                        dicts_2d = DEFAULT_CLEAN_FILT2D
-                   _process_filter_kwargs(kwargs, defaults, filter2d, dicts_2d)
+                       if filter2d:
+                           defaults = CLEAN_DEFAULTS_2D
+                       else:
+                           defaults = CLEAN_DEFAULTS_1D
+
+                   _process_filter_kwargs(kwargs, defaults)
                    if 'dft' in mode:
                         fp = np.asarray(kwargs['fundamental_period']).flatten()
                         for m in range(len(fp)):
@@ -874,7 +885,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
     #axis).
     filter_matrices=[{},{}]
     #check filter factors for zeros and negative numbers
-    for ff, fc, fw in zip(filter_factors, filter_centers, filter_half_widths):
+    for ff in filter_half_widths:
         for fv in ff:
             if fv <= 0.:
                 raise ValueError("All filter factors must be greater than zero! You provided %.2e :(!"%(fv))
@@ -1808,7 +1819,7 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
     #and if filter2d, filter the 0 dimension. Note that we feed in the 'model'
     #set wgts for time filtering to happen on skipped rows
     info['filter_params'] = {'axis_0':{}, 'axis_1':{}}
-    if np.all([info['status']['axis_1'][i] == 'success' for i in info['status']['axis_1']]):
+    if np.any([info['status']['axis_1'][i] == 'success' for i in info['status']['axis_1']]):
         info['filter_params']['axis_1']['method'] = info_t['method']
         info['filter_params']['axis_1']['basis'] = info_t['basis']
         info['filter_params']['axis_1']['filter_centers'] = info_t['filter_centers']
@@ -1832,7 +1843,7 @@ def fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                 info['status']['axis_0'][i] = 'success'
             else:
                 info['status']['axis_0'][i] = 'skipped'
-        if np.all([info['status']['axis_0'][i] == 'success' for i in info['status']['axis_0']]):
+        if np.any([info['status']['axis_0'][i] == 'success' for i in info['status']['axis_0']]):
             info['filter_params']['axis_0']['method'] = info_t['method']
             info['filter_params']['axis_0']['basis'] = info_t['basis']
             info['filter_params']['axis_0']['filter_centers'] = info_t['filter_centers']
