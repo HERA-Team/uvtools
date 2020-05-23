@@ -435,6 +435,9 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                        if filter2d:
                           filter_dims_d = [1, 0]
                        else:
+                          # If filter_dimes = [0], then the data and wgts have already been transposed
+                          # so that the 1d filtering is executed as though we are filtering in frequency
+                          # the transposes are undone below (after filtering)
                           filter_dims_d = [1]
                        suppression_factors = filter_kwargs.pop('suppression_factors')
                        max_contiguous_edge_flags = filter_kwargs.pop('max_contiguous_edge_flags')
@@ -454,6 +457,9 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                        if filter2d:
                            filter_dims_d = [1, 0]
                        else:
+                           # If filter_dimes = [0], then the data and wgts have already been transposed
+                           # so that the 1d filtering is executed as though we are filtering in frequency
+                           # the transposes are undone below (after filtering)
                            filter_dims_d = [1]
                        suppression_factors = filter_kwargs.pop('suppression_factors')
                        max_contiguous_edge_flags = filter_kwargs.pop('max_contiguous_edge_flags')
@@ -471,6 +477,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                        else:
                            info['filter_params']['axis_1'] = filter_kwargs
                    if 0 in filter_dims and not filter2d:
+                        # undo transposes if we were performing a dimension 0
+                        # time filter.
                         model = model.T
                         residual = residual.T
                         data = data.T
