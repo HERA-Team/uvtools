@@ -380,6 +380,11 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                    else:
                      raise ValueError("filter_dims either have length 1 or length 2")
                    if 0 in filter_dims and not filter2d:
+                     # If we are only filtering along the time-axis
+                     # then we set data and weights equal to their transposes
+                     # and proceed to filter as though we are filtering across
+                     # the frequency axis.
+                     # the transposes are undone below after filtering is complete 
                      data = data.T
                      wgts = wgts.T
                    if 'cache' not in filter_kwargs:
