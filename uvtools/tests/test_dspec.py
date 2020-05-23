@@ -47,10 +47,10 @@ class TestMethods(unittest.TestCase):
         np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
         np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
         wgts[::16] = 0
-        # this test should have been failing since _w = 0.46 but skip_wgt=0.5 by default.
-        # the reason it was not was because there is no 1d check for skip_wgt in fourier_filter.
-        # I've therefor changed the test to check if zero, then lower the skip_wgt and check
-        # for mdl data closeness.
+        # This test should have been failing since _w = 0.46 but skip_wgt=0.5 by default for delay_filter.
+        # The reason it was not failing originally was because no 1d check for skip_wgt existed in high_pass_fourier_filter.
+        # This check does exist in fourier_filter (as it should) and now the test, in its original form, fails.
+        # I've changed the skip_wgt to 0.1 (down from 0.5) so that it passes.
         dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL, skip_wgt=0.1)
         np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
         np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
@@ -972,7 +972,7 @@ def test_vis_clean():
     nt.assert_true(np.all(np.isclose(mdl3, mdl1)))
 
 
-def test_fit_basis_1d():
+def test__fit_basis_1d():
     #perform dpss interpolation, leastsq
     fs = np.arange(-50,50)
     #here is some data
@@ -985,21 +985,21 @@ def test_fit_basis_1d():
     dw = data*wgts
     dpss_opts={'eigenval_cutoff':[1e-12]}
     #perform dpss interpolation, leastsq and matrix and compare results
-    mod1, resid1, info1 = dspec.fit_basis_1d(fs, dw, wgts, [0.], [5./50.], basis_options=dpss_opts,
+    mod1, resid1, info1 = dspec._fit_basis_1d(fs, dw, wgts, [0.], [5./50.], basis_options=dpss_opts,
                                     method='leastsq', basis='dpss')
-    mod2, resid2, info2 = dspec.fit_basis_1d(fs, dw, wgts, [0.], [5./50.], basis_options=dpss_opts,
+    mod2, resid2, info2 = dspec._fit_basis_1d(fs, dw, wgts, [0.], [5./50.], basis_options=dpss_opts,
                                     method='matrix', basis='dpss')
     nt.assert_true(np.all(np.isclose(mod1, mod2, atol=1e-6)))
     #perform dft interpolation, leastsq and matrix and compare results
     dft_opts={'fundamental_period':200.}
 
-    mod4, resid4, info4 = dspec.fit_basis_1d(fs, dw, wgts, [0.], [5./50.], basis_options=dft_opts,
+    mod4, resid4, info4 = dspec._fit_basis_1d(fs, dw, wgts, [0.], [5./50.], basis_options=dft_opts,
                                     method='leastsq', basis='dft')
     dft_opts={'fundamental_period':140.}
     #if I use 200, i get a poorly conditioned fitting matrix but fp=140 doesn't filter very well
     #not sure why this is! -AEW. leastsq does fine though, but we can't get numerically stable
     #filtering matrices for pspec analysis :(
-    mod3, resid3, info3 = dspec.fit_basis_1d(fs, dw, wgts, [0.], [5./50.], basis_options=dft_opts,
+    mod3, resid3, info3 = dspec._fit_basis_1d(fs, dw, wgts, [0.], [5./50.], basis_options=dft_opts,
                                     method='matrix', basis='dft')
     #DFT interpolation with leastsq does OK.
     #DFT interpolation with matrix method is problematic.
