@@ -60,6 +60,10 @@ class TestMethods(unittest.TestCase):
         self.assertAlmostEqual(np.average(data), np.average(dmdl), 3)
         self.assertAlmostEqual(np.average(dres), 0, 3)
 
+        #check that skip_wgt is properly passed to clean
+        wgts[:72] = 0.
+        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL, skip_wgt=0.5, mode='clean')
+        nt.assert_true(info['status']['axis_1'][0] == 'skipped')
 
     def test_delay_filter_2D(self):
         NCHAN = 128
@@ -80,6 +84,11 @@ class TestMethods(unittest.TestCase):
         dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=1e-9)
         np.testing.assert_allclose(np.average(data,axis=1), np.average(dmdl,axis=1), atol=1e-3)
         np.testing.assert_allclose(np.average(dres,axis=1), 0, atol=1e-3)
+        #check that skip_wgt is properly passed to clean
+        wgts[0,:72] = 0.
+        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL, skip_wgt=0.5, mode='clean')
+        nt.assert_true(info['status']['axis_1'][0] == 'skipped')
+        nt.assert_true(info['status']['axis_1'][1] == 'success')
 
     def test_fourier_model(self):
         NMAX = 7
@@ -507,9 +516,20 @@ def test_vis_filter():
     w = (~f).astype(np.float)
     bl_len = 70.0 / 2.99e8
 
+    # try passing skip_wgt
+    mdl, res, info = dspec.delay_filter(d, w, sdf, bl_len,
+                                        tol=1e-4, window='none', skip_wgt=1. - 1. / f.shape[1], gain=0.1)
+    # with this skip_wgt, all times should be skipped.
+    nt.assert_true(np.all([info['status']['axis_1'][i] == 'skipped' for i in info['status']['axis_1'] ]))
+
     # delay filter basic execution
     mdl, res, info = dspec.delay_filter(d, w, sdf, bl_len,
                                         tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
+
+    #check skips .
+    nt.assert_true(info['status']['axis_1'][20] == 'skipped')
+    nt.assert_true(np.all([info['status']['axis_1'][i] == 'success' for i in info['status']['axis_1'] if i != 20]))
+
     cln = mdl + res
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=1, avgax=0)
@@ -538,6 +558,8 @@ def test_vis_filter():
     # try non-symmetric filter
     mdl, res, info = dspec.fringe_filter(d, w, (frs[-20], frs[10]), dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
     cln = mdl + res
+
+    nt.assert_true(np.all([info['status']['axis_1'][i] == 'success' for i in info['status']['axis_1'] if i != 20]))
 
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=0, avgax=1)

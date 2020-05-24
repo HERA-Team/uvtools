@@ -384,7 +384,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                      # then we set data and weights equal to their transposes
                      # and proceed to filter as though we are filtering across
                      # the frequency axis.
-                     # the transposes are undone below after filtering is complete 
+                     # the transposes are undone below after filtering is complete
                      data = data.T
                      wgts = wgts.T
                    if 'cache' not in filter_kwargs:
@@ -474,7 +474,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                                                            filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
                                                            cache=cache, max_contiguous_edge_flags=max_contiguous_edge_flags)
                    elif mode[0] == 'clean':
-                       model, residual, info = _clean_filter(x=x, data=data, wgts=wgts, filter_centers=filter_centers,
+                       model, residual, info = _clean_filter(x=x, data=data, wgts=wgts, filter_centers=filter_centers, skip_wgt=skip_wgt,
                                                             filter_half_widths=filter_half_widths, clean2d=filter2d, **filter_kwargs)
                        if filter2d:
                            info['filter_params']['axis_0'] = filter_kwargs
