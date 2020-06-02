@@ -776,7 +776,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
     #axis).
     filter_matrices=[{},{}]
     #check filter factors for zeros and negative numbers
-    for ff in filter_half_widths:
+    for ff in filter_factors:
         for fv in ff:
             if fv <= 0.:
                 raise ValueError("All filter factors must be greater than zero! You provided %.2e :(!"%(fv))
