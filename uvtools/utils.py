@@ -106,7 +106,7 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
 
     return datafiles, datapols
 
-def FFT(data, axis, taper=None, **kwargs):
+def FFT(data, axis=-1, taper=None, **kwargs):
     """Convenient function for performing a FFT along an axis.
 
     Parameters
@@ -115,8 +115,8 @@ def FFT(data, axis, taper=None, **kwargs):
        An array of data, assumed to not be ordered in the numpy FFT convention.
        Typically the data_array of a UVData object.
 
-    axis : int
-        The axis to perform the FFT over.
+    axis : int, optional
+        The axis to perform the FFT over. Default is the last axis of the array.
 
     taper : str, optional
         Choice of taper (windowing function) to apply to the data. Default is 
@@ -136,7 +136,7 @@ def FFT(data, axis, taper=None, **kwargs):
     new_shape = tuple([1 if ax != axis else -1 for ax in range(data.ndim)])
     window.shape = new_shape
 
-    return fftshift(fft(window * data, axis=axis), axis)
+    return fftshift(fft(fftshift(window * data, axis), axis=axis), axis)
 
 def fourier_freqs(times):
     """A function for generating Fourier frequencies given 'times'.
