@@ -471,6 +471,92 @@ def omni_view_gif(filenames, name='omni_movie.gif'):
         images.append(imageio.imread(filename))
     imageio.mimsave(name, images)
     
+def labeled_waterfall(
+    data,
+    antpairpol=None,
+    freqs=None,
+    times=None,
+    lsts=None,
+    fig=None,
+    ax=None,
+    cmap="best",
+    mode="log",
+    dynamic_range=None,
+    time_or_lst="lst",
+    fft_axis=None,
+    freq_taper=None,
+    freq_taper_kwargs=None,
+    time_taper=None,
+    time_taper_kwargs=None,
+):
+    """Make a waterfall plot with axes labeled.
+
+    Parameters
+    ----------
+    data: array-like of complex or :class:`pyuvdata.UVData` instance
+        2-dimensional array of visibility measurements or a :class:`pyuvdata.UVData`
+        object containing the visibility data and metadata. If a 2-dimensional array
+        is provided, then ``freqs`` and either ``times`` or ``lsts`` must be
+        provided as well. Additionally, if a 2-dimensional array is provided, then
+        it must have shape (``len(times)``, ``len(freqs)``). If a
+        :class:`pyuvdata.UVData` object is provided, then ``antpairpol`` must also
+        be provided.
+    antpairpol: tuple
+        Length-3 tuple specifying antenna pair and polarization to use for pulling
+        visibility data if ``data`` is a :class:`pyuvdata.UVData` object.
+    freqs: array-like of float
+        Frequencies corresponding to the data, in Hz. Must be provided if ``data``
+        is not a :class:`pyuvdata.UVData` instance.
+    times: array-like of float
+        Times corresponding to the data, in JD. Either this or ``lsts`` must be
+        provided if ``data`` is not a :class:`pyuvdata.UVData` instance.
+    lsts: array-like of float
+        LSTs corresponding to the data, in radians. Either this or ``times`` must
+        be provided if ``data`` is not a :class:`pyuvdata.UVData` instance.
+    fig: :class:`plt.Figure` instance, optional
+        Figure to draw the axes on. If ``fig`` is provided and ``ax`` is not, then
+        a new :class:`plt.Axes` object is drawn into the figure. If neither ``fig``
+        nor ``ax`` are provided, then a new :class:`plt.Figure` object is created.
+    ax: :class:`plt.Axes` instance, optional
+        :class:`plt.Axes` object to use for plotting the waterfall. If not provided,
+        then a new :class:`plt.Axes` object is created.
+    cmap: str or :class:`plt.cm.colors.Colormap` instance, optional
+        Colormap to use for plotting the waterfall. Default is to choose a colormap
+        appropriate for the plotting mode chosen ("twilight" for plotting phases,
+        and "inferno" otherwise).
+    mode: str, optional
+        Plotting mode to use; see :func:`data_mode` for details.
+    dynamic_range: float, optional
+        Number of orders of magnitude of dynamic range to plot. For example, setting
+        ``dynamic_range=5`` limits the colorbar to range from the maximum value to
+        five orders of magnitude below the maximum. If ``mode=="phs"``, then this
+        parameter is ignored.
+    time_or_lst: str, optional
+        Whether to plot times or LSTs on the vertical axis. Accepted values are
+        "time" and "lst"; default is to plot against LST.
+    fft_axis: int or str, optional
+        Axis over which to perform a Fourier transform. May be specified with one
+        of three strings ("freq", "time", "both") or one of three integers (-1, 0,
+        1), with -1 indicating to transform over both axes. Default is to not
+        perform a Fourier transform over any axis.
+    freq_taper: str, optional
+        Taper to use when performing a Fourier transform along the frequency axis.
+        Must be one of the tapers supported by :func:`dspec.gen_window`.
+    freq_taper_kwargs: dict, optional
+        Keyword arguments to use in generating the taper for the frequency axis.
+    time_taper: str, optional
+        Taper to use when performing a Fourier transform along the time axis.
+        Must be one of the tapers supported by :func:`dspec.gen_window`.
+    time_taper_kwargs: dict, optional
+        Keyword arguments to use in generating the taper for the time axis.
+
+    Returns
+    -------
+    fig: :class:`plt.Figure` instance
+        Figure containing the waterfall plot.
+    """
+    pass
+
 def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all", 
                         check_metadata=True, freq_taper=None, 
                         freq_taper_kwargs=None, time_taper=None,
