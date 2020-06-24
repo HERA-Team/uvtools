@@ -1,5 +1,6 @@
 import aipy
 import numpy as np
+from astropy import units
 from scipy.stats import binned_statistic_2d
 
 from . import utils
@@ -477,8 +478,12 @@ def labeled_waterfall(
     freqs=None,
     times=None,
     lsts=None,
-    fig=None,
     ax=None,
+    figsize=(10,7),
+    dpi=100,
+    aspect="auto",
+    fontsize=None,
+    draw_colorbar=True,
     cmap="best",
     mode="log",
     dynamic_range=None,
@@ -513,13 +518,21 @@ def labeled_waterfall(
     lsts: array-like of float
         LSTs corresponding to the data, in radians. Either this or ``times`` must
         be provided if ``data`` is not a :class:`pyuvdata.UVData` instance.
-    fig: :class:`plt.Figure` instance, optional
-        Figure to draw the axes on. If ``fig`` is provided and ``ax`` is not, then
-        a new :class:`plt.Axes` object is drawn into the figure. If neither ``fig``
-        nor ``ax`` are provided, then a new :class:`plt.Figure` object is created.
     ax: :class:`plt.Axes` instance, optional
         :class:`plt.Axes` object to use for plotting the waterfall. If not provided,
-        then a new :class:`plt.Axes` object is created.
+        then a new :class:`plt.Figure` object and :class:`plt.Axes` instance is created.
+    figsize: tuple of int, optional
+        Length-2 tuple specifying figure dimensions in inches. Ignored if ``ax`` 
+        is provided.
+    dpi: int, optional
+        Dots per inch to be used in creating the figure. Ignored if ``ax`` is provided.
+    aspect: str or float, optional
+        Aspect ratio of the plot. Should be either "equal", "auto", or a number.
+        Default is to use "auto".
+    fontsize: float, optional
+        Font size for labels, in points.
+    draw_colorbar: bool, optional
+        Whether to draw a colorbar. Default is to draw a colorbar.
     cmap: str or :class:`plt.cm.colors.Colormap` instance, optional
         Colormap to use for plotting the waterfall. Default is to choose a colormap
         appropriate for the plotting mode chosen ("twilight" for plotting phases,
@@ -552,10 +565,140 @@ def labeled_waterfall(
 
     Returns
     -------
-    fig: :class:`plt.Figure` instance
-        Figure containing the waterfall plot.
+    fig: :class:`plt.Figure` instance or :class:`plt.Axes` instance
+        Figure or axes object containing the waterfall plot. If ``ax`` was
+        provided in the function all, then the same :class:`plt.Axes` instance
+        that was passed is returned with the waterfall drawn into it, as well
+        as labels and a colorbar added.
     """
-    pass
+    import matplotlib.pyplot as plt
+
+    # Validate parameters.
+    if time_or_lst not in ("time", "lst"):
+        raise ValueError("time_or_lst must be 'time' or 'lst'.")
+    if isinstance(data, np.ndarray):
+        if freqs is None or times is None or lsts is None:
+            raise ValueError(
+                "freqs, times, and lsts must be provided for plotting an array."
+            )
+    else:
+        try:
+            from pyuvdata import UVData
+        except ImportError:
+            raise TypeError("data must either be an ndarray or UVData object.")
+        if antpairpol is None:
+            raise ValueError(
+                "You must provide an antpairpol key if data is a UVData object."
+            )
+        freqs = np.unique(uvd.freq_array)
+        times = np.unique(uvd.time_array)
+        lsts = np.unique(uvd.lst_array)
+        data = data.get_data(antpairpol)
+    
+    # Prepare axis labels.
+    xvals = freqs / 1e6
+    xlabel = "Frequency [MHz]"
+    if time_or_lst == "time":
+        yvals = times - int(times[0])
+        ylabel = f"JD - {int(times[0]):d}"
+    else:
+        yvals = lsts * units.day.to("hr") / (2 * np.pi)
+        ylabel = "LST [hours]"
+
+    # Do any requested Fourier transforms and update axis labels.
+    if fft_axis is not None:
+        freq_taper_kwargs = freq_taper_kwargs or {}
+        time_taper_kwargs = time_taper_kwargs or {}
+        if fft_axis not in ("freq", "time", "both", -1, 0, 1):
+            raise ValueError("fft_axis not recognized.")
+        if type(fft_axis) is int:
+            fft_axis = ("freq", "time", "both")[fft_axis]
+        if fft_axis in ("freq", "both"):
+            delays = utils.fourier_freqs(freqs) * 1e9 # ns
+            data = utils.FFT(data, axis=1, taper=freq_taper, **freq_taper_kwargs)
+            xvals = delays
+            xlabel = "Delay [ns]"
+        if fft_axis in ("time", "both"):
+            fringe_rates = utils.fourier_freqs(times * units.day.to("s")) * 1e3 # mHz
+            data = utils.FFT(data, axis=0, taper=time_taper, **time_taper_kwargs)
+            yvals = fringe_rates
+            ylabel = "Fringe Rate [mHz]"
+
+    # Update data for plotting.
+    data = data_mode(data, mode=mode)
+    vmin, vmax = None, None
+
+    # Prepare colorbar parameters.
+    if mode == "phs":
+        cbar_label = "Phase [radians]"
+        vmin, vmax = -np.pi, np.pi
+        if cmap == "best":
+            cmap = "twilight"
+    else:
+        if fft_axis == "freq":
+            base_label = r"$\tilde{V}(t,\tau)$"
+            unit_label = "[Jy Hz]"
+        elif fft_axis == "time":
+            base_label = r"$\tilde{V}(f,\nu)$"
+            unit_label = "[Jy s]"
+        elif fft_axis == "both":
+            base_label = r"$\tilde{V}(f,\tau)$"
+            unit_label = "[Jy Hz s]"
+        else:
+            base_label = r"$V(t,\nu)$"
+            unit_label = "[Jy]"
+
+        if mode == "abs":
+            cbar_label = f"|{base_label}| {unit_label}"
+        elif mode == "real":
+            cbar_label = r"$\mathfrak{Re}$" + f"({base_label}) {unit_label}"
+        elif mode == "imag":
+            cbar_label = r"$\mathfrak{Im}$" + f"({base_label}) {unit_label}"
+        else:
+            cbar_label = r"$\log_{10}$" + f"|{base_label}| {unit_label}"
+
+        if cmap == "best":
+            cmap = "inferno"
+
+    # Limit the dynamic range if desired.
+    if dynamic_range is not None and mode != "phs":
+        vmax = data.max()
+        if mode == "log":
+            vmin = vmax - dynamic_range
+        else:
+            vmin = vmax / 10 ** dynamic_range
+
+    # Setup mappable for drawing colorbar.
+    if draw_colorbar:
+        norm = plt.cm.colors.Normalize(vmin=vmin, vmax=vmax)
+        scalar_map = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+
+    # Prepare the figure.
+    return_value = ax
+    if ax is None:
+        fig = plt.figure(figsize=figsize, dpi=dpi)
+        ax = fig.add_subplot(111)
+        return_value = fig
+
+    # Finish setup, then plot.
+    ax.set_xlabel(xlabel, fontsize=fontsize)
+    ax.set_ylabel(ylabel, fontsize=fontsize)
+    ax.imshow(
+        data,
+        aspect=aspect,
+        cmap=cmap,
+        norm=norm,
+        extent=(xvals.min(), xvals.max(), yvals.max(), yvals.min()),
+    )
+    if draw_colorbar:
+        if return_value is ax:
+            fig = ax.get_figure()
+
+        extend = "neither" if dynamic_range is None else "min"
+        cbar = fig.colorbar(mappable=scalar_map, ax=ax, extend=extend)
+        cbar.set_label(cbar_label, fontsize=fontsize)
+
+    return return_value
 
 def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all", 
                         check_metadata=True, freq_taper=None, 
