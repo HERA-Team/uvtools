@@ -590,9 +590,9 @@ def labeled_waterfall(
             raise ValueError(
                 "You must provide an antpairpol key if data is a UVData object."
             )
-        freqs = np.unique(uvd.freq_array)
-        times = np.unique(uvd.time_array)
-        lsts = np.unique(uvd.lst_array)
+        freqs = np.unique(data.freq_array)
+        times = np.unique(data.time_array)
+        lsts = np.unique(data.lst_array)
         data = data.get_data(antpairpol)
     
     # Prepare axis labels.
