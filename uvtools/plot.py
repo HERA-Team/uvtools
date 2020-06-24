@@ -478,6 +478,8 @@ def labeled_waterfall(
     freqs=None,
     times=None,
     lsts=None,
+    time_or_lst="lst",
+    mode="log",
     ax=None,
     figsize=(10,7),
     dpi=100,
@@ -485,9 +487,7 @@ def labeled_waterfall(
     fontsize=None,
     draw_colorbar=True,
     cmap="best",
-    mode="log",
     dynamic_range=None,
-    time_or_lst="lst",
     fft_axis=None,
     freq_taper=None,
     freq_taper_kwargs=None,
@@ -498,26 +498,31 @@ def labeled_waterfall(
 
     Parameters
     ----------
-    data: array-like of complex or :class:`pyuvdata.UVData` instance
-        2-dimensional array of visibility measurements or a :class:`pyuvdata.UVData`
-        object containing the visibility data and metadata. If a 2-dimensional array
-        is provided, then ``freqs`` and either ``times`` or ``lsts`` must be
-        provided as well. Additionally, if a 2-dimensional array is provided, then
-        it must have shape (``len(times)``, ``len(freqs)``). If a
-        :class:`pyuvdata.UVData` object is provided, then ``antpairpol`` must also
-        be provided.
+    data: array-like of complex, or :class:`pyuvdata.UVData` instance
+        Object containing visibility data. If an array is passed, then ``freqs``
+        and either ``times`` or ``lsts`` must be provided, and the array must
+        have shape (``lsts.size``, ``freqs.size``). Otherwise, an ``antpairpol``
+        key must be provided.
     antpairpol: tuple
-        Length-3 tuple specifying antenna pair and polarization to use for pulling
-        visibility data if ``data`` is a :class:`pyuvdata.UVData` object.
+        (ant1, ant2, pol) tuple specifying the baseline and polarization to
+        pull data for if ``data`` is a :class:`pyuvdata.UVData` instance. Ignored
+        if ``data`` is an array-like object.
     freqs: array-like of float
-        Frequencies corresponding to the data, in Hz. Must be provided if ``data``
-        is not a :class:`pyuvdata.UVData` instance.
+        Frequencies corresponding to the observed data, in Hz. Required if ``data``
+        is an array-like object; ignored otherwise.
     times: array-like of float
-        Times corresponding to the data, in JD. Either this or ``lsts`` must be
-        provided if ``data`` is not a :class:`pyuvdata.UVData` instance.
+        Observation times, in JD. Required if ``data`` is an array-like object and
+        ``lsts`` is not provided.
     lsts: array-like of float
-        LSTs corresponding to the data, in radians. Either this or ``times`` must
-        be provided if ``data`` is not a :class:`pyuvdata.UVData` instance.
+        Observed LSTs, in radians. Required if ``data`` is an array-like object
+        and ``times`` is not provided.
+    time_or_lst: str, optional
+        Either "time" or "lst". Used to specify whether the time axis should be
+        in JD or LST. If ``data`` is an array-like object and only one of ``times``
+        or ``lsts`` is provided, then this parameter is ignored.
+    mode: str, optional
+        Plotting mode to use; must be a mode accepted by :func:`data_mode`. Default
+        is "log", which plots the base-10 logarithm of the absolute value of the data.
     ax: :class:`plt.Axes` instance, optional
         :class:`plt.Axes` object to use for plotting the waterfall. If not provided,
         then a new :class:`plt.Figure` object and :class:`plt.Axes` instance is created.
@@ -537,16 +542,11 @@ def labeled_waterfall(
         Colormap to use for plotting the waterfall. Default is to choose a colormap
         appropriate for the plotting mode chosen ("twilight" for plotting phases,
         and "inferno" otherwise).
-    mode: str, optional
-        Plotting mode to use; see :func:`data_mode` for details.
     dynamic_range: float, optional
         Number of orders of magnitude of dynamic range to plot. For example, setting
         ``dynamic_range=5`` limits the colorbar to range from the maximum value to
         five orders of magnitude below the maximum. If ``mode=="phs"``, then this
         parameter is ignored.
-    time_or_lst: str, optional
-        Whether to plot times or LSTs on the vertical axis. Accepted values are
-        "time" and "lst"; default is to plot against LST.
     fft_axis: int or str, optional
         Axis over which to perform a Fourier transform. May be specified with one
         of three strings ("freq", "time", "both") or one of three integers (-1, 0,
@@ -699,6 +699,121 @@ def labeled_waterfall(
         cbar.set_label(cbar_label, fontsize=fontsize)
 
     return return_value
+
+def fourier_transform_waterfalls(
+    data,
+    antpairpol=None,
+    freqs=None,
+    times=None,
+    lsts=None,
+    time_or_lst="lst",
+    mode="log",
+    figsize=(14,10),
+    dpi=100,
+    fontsize=None,
+    cmap="best",
+    dynamic_range=None,
+    plot_limits=None,
+    horizon_color=None,
+    freq_taper=None,
+    freq_taper_kwargs=None,
+    time_taper=None,
+    time_taper_kwargs=None,
+):
+    """
+    Plot a 2x2 grid of waterfalls showing all possible Fourier transforms.
+
+    Moving clockwise from the top-left, the plots are as follows:
+        time vs frequency
+        fringe-rate vs frequency
+        fringe-rate vs delay
+        time vs delay
+
+    Time units used for plotting are either JD or LST hours.
+    Frequency units used for plotting are MHz.
+    Fringe-rate units used for plotting are mHz.
+    Delay units used for plotting are ns.
+    
+    Note that these units may not correspond exactly to the units of the related
+    parameters passed. The parameter units for ``freqs`` and ``times`` or ``lsts``
+    are chosen to match the units typically used for recording metadata in
+    :class:`pyuvdata.UVData` objects.
+
+    Parameters
+    ----------
+    data: array-like of complex, or :class:`pyuvdata.UVData` instance
+        Object containing visibility data. If an array is passed, then ``freqs``
+        and either ``times`` or ``lsts`` must be provided, and the array must
+        have shape (``lsts.size``, ``freqs.size``). Otherwise, an ``antpairpol``
+        key must be provided.
+    antpairpol: tuple
+        (ant1, ant2, pol) tuple specifying the baseline and polarization to
+        pull data for if ``data`` is a :class:`pyuvdata.UVData` instance. Ignored
+        if ``data`` is an array-like object.
+    freqs: array-like of float
+        Frequencies corresponding to the observed data, in Hz. Required if ``data``
+        is an array-like object; ignored otherwise.
+    times: array-like of float
+        Observation times, in JD. Required if ``data`` is an array-like object and
+        ``lsts`` is not provided.
+    lsts: array-like of float
+        Observed LSTs, in radians. Required if ``data`` is an array-like object
+        and ``times`` is not provided.
+    time_or_lst: str, optional
+        Either "time" or "lst". Used to specify whether the time axis should be
+        in JD or LST. If ``data`` is an array-like object and only one of ``times``
+        or ``lsts`` is provided, then this parameter is ignored.
+    mode: str, optional
+        Plotting mode to use; must be a mode accepted by :func:`data_mode`. Default
+        is "log", which plots the base-10 logarithm of the absolute value of the data.
+    figsize: tuple of float, optional
+        Size of the figure to be produced, in inches. Default is 14x10.
+    dpi: float, optional
+        Dots-per-inch of the figure. Default is 100.
+    fontsize: float, optional
+        Font size to use for plotting labels, in points.
+    cmap: str or :class:`plt.cm.colors.Colormap` instance
+        Color map to be used when drawing waterfalls. Default is to have the choice
+        be based on the data mode selected: if ``mode`` is "phs", then "twilight"
+        is used; otherwise, "inferno" is used.
+    dynamic_range: dict, optional
+        Dictionary mapping strings to number of orders-of-magnitude to restrict
+        the plot dynamic range to. Accepted strings are as follows:
+            ("time", "freq", "delay", "fringe-rate"): specifying one of these
+            will limit the dynamic range for the associated row or column. For
+            example, passing {"time": 5} will limit the dynamic range of the left
+            column to five orders-of-magnitude, clipping values on the low-end.
+            
+            Any length-2 combination of an entry from the following pairs:
+                ("time", "fringe-rate"), ("freq", "delay")
+            This type of mapping will limit the dynamic range for a single plot
+            with axes specified by the pair specified. For example, passing
+            {("fringe-rate", "delay"): 5} will only limit the dynamic range for
+            the bottom-right plot.
+    plot_limits: dict, optional
+        Dictionary mapping strings to length-2 tuples. The keys designate the
+        dimension ("time", "freq", "fringe-rate", "delay") to crop, and the values
+        give the lower- and upper-bounds of the cropped region. For example, passing
+        {"delay": (-500, 500)} will crop the delay axis to only show delays between
+        -500 ns and +500 ns. Units should be the same as the units used in the plot
+        display. See the beginning of the function documentation for details.
+    horizon_color: str, optional
+        Color of the geometric horizon. If provided, then the geometric horizon is
+        plotted as a vertical line on plots in delay space. Default is to not plot
+        the horizon.
+    freq_taper: str, optional
+        Name of the taper to be applied along the frequency-axis when performing
+        Fourier transforms. Must be a taper supported by :func:`dspec.gen_window`.
+        Default is no taper (an implicit top-hat or boxcar).
+    freq_taper_kwargs: dict, optional
+        Keyword arguments to be used in generating the frequency taper.
+    time_taper: str, optional
+        Name of the taper to be applied along the time-axis when performing Fourier
+        transforms. Default is the same as for the frequency taper.
+    time_taper_kwargs: dict, optional
+        Keyword arguments to be used in generating the time taper.
+    """
+    pass
 
 def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all", 
                         check_metadata=True, freq_taper=None, 
