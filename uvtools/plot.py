@@ -565,7 +565,7 @@ def labeled_waterfall(
 
     Returns
     -------
-    fig: :class:`plt.Figure` instance or :class:`plt.Axes` instance
+    fig or ax: :class:`plt.Figure` instance or :class:`plt.Axes` instance
         Figure or axes object containing the waterfall plot. If ``ax`` was
         provided in the function all, then the same :class:`plt.Axes` instance
         that was passed is returned with the waterfall drawn into it, as well
@@ -724,11 +724,11 @@ def fourier_transform_waterfalls(
     mode="log",
     figsize=(14,10),
     dpi=100,
+    aspect="auto",
     fontsize=None,
     cmap="best",
     dynamic_range=None,
     plot_limits=None,
-    horizon_color=None,
     freq_taper=None,
     freq_taper_kwargs=None,
     time_taper=None,
@@ -784,6 +784,8 @@ def fourier_transform_waterfalls(
         Size of the figure to be produced, in inches. Default is 14x10.
     dpi: float, optional
         Dots-per-inch of the figure. Default is 100.
+    aspect: float or str, optional
+        Aspect ratio to use for each subplot. Default is "auto".
     fontsize: float, optional
         Font size to use for plotting labels, in points.
     cmap: str or :class:`plt.cm.colors.Colormap` instance
@@ -811,10 +813,6 @@ def fourier_transform_waterfalls(
         {"delay": (-500, 500)} will crop the delay axis to only show delays between
         -500 ns and +500 ns. Units should be the same as the units used in the plot
         display. See the beginning of the function documentation for details.
-    horizon_color: str, optional
-        Color of the geometric horizon. If provided, then the geometric horizon is
-        plotted as a vertical line on plots in delay space. Default is to not plot
-        the horizon.
     freq_taper: str, optional
         Name of the taper to be applied along the frequency-axis when performing
         Fourier transforms. Must be a taper supported by :func:`dspec.gen_window`.
@@ -826,8 +824,75 @@ def fourier_transform_waterfalls(
         transforms. Default is the same as for the frequency taper.
     time_taper_kwargs: dict, optional
         Keyword arguments to be used in generating the time taper.
+    
+    Returns
+    -------
+    fig: :class:`plt.Figure` instance
+        Figure containing 2x2 grid of plots visualizing the data in the selected
+        mode for all possible Fourier transforms, with axis labels and colorbars.
     """
-    pass
+    import matplotlib.pyplot as plt
+
+    # Convert potential None-types to empty dictionaries where needed.
+    dynamic_range = dynamic_range or {}
+    plot_limits = plot_limits or {}
+
+    # Figure setup
+    fig = plt.figure(figsize=figsize, dpi=dpi)
+    axes = fig.subplots(2,2)
+    transform_axes = (None, 0, 1, -1)
+    axes_dims = (
+        ("time", "freq"),
+        ("fringe-rate", "freq"),
+        ("time", "delay"),
+        ("fringe-rate", "delay")
+    )
+
+    # Make the plots.
+    for i, ax in enumerate(axes.ravel()):
+        # Determine any adjustments to be made to axes in plotting routine.
+        x_dim, y_dim = axes_dims[i]
+        possible_drng_keys = (x_dim, y_dim, (x_dim, y_dim), (y_dim, x_dim))
+        transform_axis = transform_axes[i]
+        limit_dynamic_range = list(
+            key in dynamic_range.keys()
+            for key in possible_drng_keys
+        )
+        if any(limit_dynamic_range):
+            drng = dynamic_range[possible_drng_keys[limit_dynamic_range.index(True)]]
+        else:
+            drng = None
+
+        # Actually make the plot.
+        ax = labeled_waterfall(
+            data=data,
+            antpairpol=antpairpol,
+            freqs=freqs,
+            times=times,
+            lsts=lsts,
+            time_or_lst=time_or_lst,
+            mode=mode,
+            ax=ax,
+            aspect=aspect,
+            fontsize=fontsize,
+            draw_colorbar=True,
+            cmap=cmap,
+            dynamic_range=drng,
+            fft_axis=transform_axis,
+            freq_taper=freq_taper,
+            freq_taper_kwargs=freq_taper_kwargs,
+            time_taper=time_taper,
+            time_taper_kwargs=time_taper_kwargs,
+        )
+
+        # Adjust the plot boundaries if requested.
+        if x_dim in plot_limits:
+            ax.set_xlim(*plot_limits[x_dim])
+        if y_dim in plot_limits:
+            ax.set_ylim(*plot_limits[y_dim])
+
+    return fig
+
 
 def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all", 
                         check_metadata=True, freq_taper=None, 
