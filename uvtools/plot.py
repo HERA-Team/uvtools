@@ -576,14 +576,28 @@ def labeled_waterfall(
     # Validate parameters.
     if time_or_lst not in ("time", "lst"):
         raise ValueError("time_or_lst must be 'time' or 'lst'.")
+    if np.array(data).dtype != np.dtype('O'):
+        data = np.atleast_2d(data)
+        if not np.iscomplexobj(data):
+            raise TypeError("array-like data must consist of complex numbers.")
+        if data.ndim != 2 or (data.ndim == 2 and 1 in data.shape):
+            raise ValueError("array-like data must be 2-dimensional.")
     if isinstance(data, np.ndarray):
-        if freqs is None or times is None or lsts is None:
+        if freqs is None or (times is None or lsts is None):
             raise ValueError(
                 "freqs, times, and lsts must be provided for plotting an array."
             )
+        if times is None:
+            time_or_lst = "lst"
+            times = lsts / (2 * np.pi) # For Fourier transform purposes
+        else:
+            time_or_lst = "time"
     else:
         try:
             from pyuvdata import UVData
+            # In case UVData is installed and a non-UVData object was passed.
+            if type(data) is not UVData:
+                raise ImportError
         except ImportError:
             raise TypeError("data must either be an ndarray or UVData object.")
         if antpairpol is None:
