@@ -86,7 +86,7 @@ class TestFancyPlotters(unittest.TestCase):
         pass
 
     def test_fourier_transform_waterfalls(self):
-        uvd = self.data
+        uvd = self.uvd
         data = uvd.get_data(0,1,'xx')
         freqs = np.unique(uvd.freq_array) # Hz
         times = np.unique(uvd.time_array) # JD
