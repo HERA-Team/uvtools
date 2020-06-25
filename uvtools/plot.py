@@ -590,7 +590,7 @@ def labeled_waterfall(
         if times is None:
             time_or_lst = "lst"
             times = lsts / (2 * np.pi) # For Fourier transform purposes
-        else:
+        elif lsts is None:
             time_or_lst = "time"
     else:
         try:
@@ -683,9 +683,8 @@ def labeled_waterfall(
             vmin = vmax / 10 ** dynamic_range
 
     # Setup mappable for drawing colorbar.
-    if draw_colorbar:
-        norm = plt.cm.colors.Normalize(vmin=vmin, vmax=vmax)
-        scalar_map = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    norm = plt.cm.colors.Normalize(vmin=vmin, vmax=vmax)
+    scalar_map = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
 
     # Prepare the figure.
     return_value = ax
