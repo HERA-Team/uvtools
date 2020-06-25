@@ -114,8 +114,8 @@ class TestFancyPlotters(unittest.TestCase):
             time_or_lst="time",
         )
         axes = fig.get_axes()
-        x_labels = list(ax.get_xlabel() for ax in axes)
-        y_labels = list(ax.get_ylabel() for ax in axes)
+        xlabels = list(ax.get_xlabel() for ax in axes)
+        ylabels = list(ax.get_ylabel() for ax in axes)
         xlimits = list(ax.get_xlim() for ax in axes)
         ylimits = list(ax.get_ylim() for ax in axes)
 
