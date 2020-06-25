@@ -549,9 +549,9 @@ def labeled_waterfall(
         parameter is ignored.
     fft_axis: int or str, optional
         Axis over which to perform a Fourier transform. May be specified with one
-        of three strings ("freq", "time", "both") or one of three integers (-1, 0,
-        1), with -1 indicating to transform over both axes. Default is to not
-        perform a Fourier transform over any axis.
+        of three strings ("time", "freq", "both") or one of three integers (0, 1,
+        -1), where the integers map to the axes specified by the strings. Default 
+        is to not perform a Fourier transform over any axis.
     freq_taper: str, optional
         Taper to use when performing a Fourier transform along the frequency axis.
         Must be one of the tapers supported by :func:`dspec.gen_window`.
@@ -626,7 +626,7 @@ def labeled_waterfall(
         if fft_axis not in ("freq", "time", "both", -1, 0, 1):
             raise ValueError("fft_axis not recognized.")
         if type(fft_axis) is int:
-            fft_axis = ("freq", "time", "both")[fft_axis]
+            fft_axis = ("time", "freq", "both")[fft_axis]
         if fft_axis in ("freq", "both"):
             delays = utils.fourier_freqs(freqs) * 1e9 # ns
             data = utils.FFT(data, axis=1, taper=freq_taper, **freq_taper_kwargs)
@@ -842,10 +842,10 @@ def fourier_transform_waterfalls(
     axes = fig.subplots(2,2)
     transform_axes = (None, 0, 1, -1)
     axes_dims = (
-        ("time", "freq"),
-        ("fringe-rate", "freq"),
-        ("time", "delay"),
-        ("fringe-rate", "delay")
+        ("freq", "time"),
+        ("freq", "fringe-rate"),
+        ("delay", "time"),
+        ("delay", "fringe-rate")
     )
 
     # Make the plots.
@@ -862,6 +862,12 @@ def fourier_transform_waterfalls(
             drng = dynamic_range[possible_drng_keys[limit_dynamic_range.index(True)]]
         else:
             drng = None
+
+        # Adjust the plot boundaries if requested.
+        if x_dim in plot_limits:
+            ax.set_xlim(*plot_limits[x_dim])
+        if y_dim in plot_limits:
+            ax.set_ylim(*plot_limits[y_dim])
 
         # Actually make the plot.
         ax = labeled_waterfall(
@@ -885,11 +891,6 @@ def fourier_transform_waterfalls(
             time_taper_kwargs=time_taper_kwargs,
         )
 
-        # Adjust the plot boundaries if requested.
-        if x_dim in plot_limits:
-            ax.set_xlim(*plot_limits[x_dim])
-        if y_dim in plot_limits:
-            ax.set_ylim(*plot_limits[y_dim])
 
     return fig
 
