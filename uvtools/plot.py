@@ -583,9 +583,9 @@ def labeled_waterfall(
         if data.ndim != 2 or (data.ndim == 2 and 1 in data.shape):
             raise ValueError("array-like data must be 2-dimensional.")
     if isinstance(data, np.ndarray):
-        if freqs is None or (times is None or lsts is None):
+        if freqs is None or (times is None and lsts is None):
             raise ValueError(
-                "freqs, times, and lsts must be provided for plotting an array."
+                "freqs and either times or lsts must be provided for plotting an array."
             )
         if times is None:
             time_or_lst = "lst"
