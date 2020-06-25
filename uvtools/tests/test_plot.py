@@ -68,7 +68,113 @@ class TestMethods(unittest.TestCase):
         uvt.plot.plot_antpos(antpos)
         #matplotlib.pyplot.show()
         
-    
+class TestFancyPlotters(unittest.TestCase):
+    def setUp(self):
+        import hera_sim
+        sim = hera_sim.Simulator(
+            n_freq=100,
+            n_times=50,
+            antennas={0: [0,0,0], 1: [14.6,0,0]}
+        )
+        sim.add_eor("noiselike_eor")
+        self.uvd = sim.data
+
+    def tearDown(self):
+        pass
+
+    def runTest(self):
+        pass
+
+    def test_fourier_transform_waterfalls(self):
+        uvd = self.data
+        data = uvd.get_data(0,1,'xx')
+        freqs = np.unique(uvd.freq_array) # Hz
+        times = np.unique(uvd.time_array) # JD
+        lsts = np.unique(uvd.lst_array) * 24 / (2 * np.pi) # hours
+        delays = uvt.utils.fourier_freqs(freqs) * 1e9 # ns
+        fringe_rates = uvt.utils.fourier_freqs(times * 24 * 3600) * 1e3 # mHz
+
+        f1, f2 = freqs[10] / 1e6, freqs[90] / 1e6
+        lst1, lst2 = lsts[10], lsts[40]
+        dly1, dly2 = delays[10], delays[90]
+        fr1, fr2 = fringe_rates[10], fringe_rates[40]
+
+        plot_limits = {
+            "time": (lst2, lst1),
+            "freq": (f1, f2),
+            "fringe-rate": (fr2, fr1),
+            "delay": (dly1, dly2)
+        }
+
+        # Test that it works passing a UVData object.
+        fig = uvt.plot.fourier_transform_waterfalls(
+            data=uvd,
+            antpairpol=(0,1,'xx'),
+            plot_limits=plot_limits,
+            time_or_lst="time",
+        )
+        axes = fig.get_axes()
+        x_labels = list(ax.get_xlabel() for ax in axes)
+        y_labels = list(ax.get_ylabel() for ax in axes)
+        xlimits = list(ax.get_xlim() for ax in axes)
+        ylimits = list(ax.get_ylim() for ax in axes)
+
+        assert sum("JD" in ylabel for ylabel in ylabels) == 2
+        assert sum("Fringe Rate" in ylabel for ylabel in ylabels) == 2
+        assert sum("Frequency" in xlabel for xlabel in xlabels) == 2
+        assert sum("Delay" in xlabel for xlabel in xlabels) == 2
+
+        assert sum(np.allclose((lst2, lst1), ylim) for ylim in ylimits) == 2
+        assert sum(np.allclose((f1, f2), xlim) for xlim in xlimits) == 2
+        assert sum(np.allclose((fr2, fr1), ylim) for ylim in ylimits) == 2
+        assert sum(np.allclose((dly1, dly2), xlim) for xlim in xlimits) == 2
+
+        # Now test with an array.
+        fig = uvt.plot.fourier_transform_waterfalls(
+            data=data,
+            freqs=freqs,
+            lsts=lsts,
+        )
+        axes = fig.get_axes()
+        ylabels = list(ax.get_ylabel() for ax in axes)
+        assert sum("LST" in ylabel for ylabel in ylabels) == 2
+
+        fig = uvt.plot.fourier_transform_waterfalls(
+            data=data,
+            freqs=freqs,
+            times=times,
+        )
+        axes = fig.get_axes()
+        ylabels = list(ax.get_ylabel() for ax in axes)
+        assert sum("JD" in ylabel for ylabel in ylabels) == 2
+
+        # Do some exception raising checking.
+        with nt.assert_raises(ValueError):
+            uvt.plot.fourier_transform_waterfalls(
+                data=uvd,
+                antpairpol=(0,1,'xx'),
+                time_or_lst="nan"
+            )
+
+        with nt.assert_raises(TypeError):
+            uvt.plot.fourier_transform_waterfalls(data={})
+
+        with nt.assert_raises(ValueError):
+            uvt.plot.fourier_transform_waterfalls(data=np.ones((3,5,2), dtype=np.complex))
+
+        with nt.assert_raises(ValueError):
+            uvt.plot.fourier_transform_waterfalls(data=data, freqs=freqs)
+
+        with nt.assert_raises(ValueError):
+            uvt.plot.fourier_transform_waterfalls(data=data, times=times)
+
+        with nt.assert_raises(ValueError):
+            uvt.plot.fourier_transform_waterfalls(data=uvd)
+
+        with nt.assert_raises(TypeError):
+            uvt.plot.fourier_transform_waterfalls(data=np.ones((15,20), dtype=np.float))
+
+
 class TestDiffPlotters(unittest.TestCase):
 
     def setUp(self):
