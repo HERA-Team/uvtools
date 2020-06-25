@@ -487,6 +487,8 @@ def labeled_waterfall(
     fontsize=None,
     draw_colorbar=True,
     cmap="best",
+    vmin=None,
+    vmax=None,
     dynamic_range=None,
     fft_axis=None,
     freq_taper=None,
@@ -521,8 +523,9 @@ def labeled_waterfall(
         in JD or LST. If ``data`` is an array-like object and only one of ``times``
         or ``lsts`` is provided, then this parameter is ignored.
     mode: str, optional
-        Plotting mode to use; must be a mode accepted by :func:`data_mode`. Default
-        is "log", which plots the base-10 logarithm of the absolute value of the data.
+        Plotting mode to use; must be one of ("log", "phs", "abs", "real", "imag"). 
+        Default is "log", which plots the base-10 logarithm of the absolute value
+        of the data. See :func:`data_mode` documentation for details.
     ax: :class:`plt.Axes` instance, optional
         :class:`plt.Axes` object to use for plotting the waterfall. If not provided,
         then a new :class:`plt.Figure` object and :class:`plt.Axes` instance is created.
@@ -542,10 +545,20 @@ def labeled_waterfall(
         Colormap to use for plotting the waterfall. Default is to choose a colormap
         appropriate for the plotting mode chosen ("twilight" for plotting phases,
         and "inferno" otherwise).
+    vmin: float, optional
+        Minimum value to use for generating the colormap. This parameter is ignored
+        if ``mode=="phs"``. WARNING: specifying this parameter may result in the
+        colorscale not being mapped correctly if it is not specified in the same
+        units used to plot the data. Default is to calculate this parameter under
+        the hood.
+    vmax: float, optional
+        Maximum value to use for generating the colormap. This parameter is ignored
+        if ``mode=="phs"``. The same warning issued for the ``vmin`` parameter holds.
     dynamic_range: float, optional
         Number of orders of magnitude of dynamic range to plot. For example, setting
         ``dynamic_range=5`` limits the colorbar to range from the maximum value to
         five orders of magnitude below the maximum. If ``mode=="phs"``, then this
+        parameter is ignored. If both ``vmin`` and ``vmax`` are provided, then this
         parameter is ignored.
     fft_axis: int or str, optional
         Axis over which to perform a Fourier transform. May be specified with one
@@ -565,11 +578,10 @@ def labeled_waterfall(
 
     Returns
     -------
-    fig or ax: :class:`plt.Figure` instance or :class:`plt.Axes` instance
-        Figure or axes object containing the waterfall plot. If ``ax`` was
-        provided in the function all, then the same :class:`plt.Axes` instance
-        that was passed is returned with the waterfall drawn into it, as well
-        as labels and a colorbar added.
+    fig: :class:`plt.Figure` instance
+        Figure containing the plot.
+    ax: :class:`plt.Axes` instance
+        Axes object the waterfall is drawn into.
     """
     import matplotlib.pyplot as plt
 
@@ -640,14 +652,24 @@ def labeled_waterfall(
 
     # Update data for plotting.
     data = data_mode(data, mode=mode)
-    vmin, vmax = None, None
 
     # Prepare colorbar parameters.
     if mode == "phs":
         cbar_label = "Phase [radians]"
-        vmin, vmax = -np.pi, np.pi
+        # Allow custom setting of phase bounds.
+        vmin = vmin if vmin is not None else -np.pi
+        vmax = vmax if vmax is not None else np.pi
         if cmap == "best":
-            cmap = "twilight"
+            if np.allclose((vmin, vmax), (-np.pi, np.pi)):
+                # Use a cyclic colormap for boundaries at the phase wrap.
+                cmap = "twilight"
+            elif np.isclose(0.5 * (vmin + vmax), 0, atol=0.01):
+                # Use diverging colormap if phase bounds are not at the
+                # phase wrap, but have mean nearly zero.
+                cmap = "RdBu"
+            else:
+                # In the case of weird phase bounds.
+                cmap = "viridis"
     else:
         if fft_axis == "freq":
             base_label = r"$\tilde{V}(t,\tau)$"
@@ -675,12 +697,22 @@ def labeled_waterfall(
             cmap = "inferno"
 
     # Limit the dynamic range if desired.
-    if dynamic_range is not None and mode != "phs":
-        vmax = data.max()
-        if mode == "log":
-            vmin = vmax - dynamic_range
+    if dynamic_range is not None:
+        if vmin is not None and vmax is not None:
+            # Normalization has already been set.
+            pass
+        elif vmin is not None:
+            if mode == "log":
+                vmax = vmin + dynamic_range
+            else:
+                vmax = vmin * 10 ** dynamic_range
         else:
-            vmin = vmax / 10 ** dynamic_range
+            if vmax is None:
+                vmax = data.max()
+            if mode == "log":
+                vmin = vmax - dynamic_range
+            else:
+                vmin = vmax / 10 ** dynamic_range
 
     # Setup mappable for drawing colorbar.
     norm = plt.cm.colors.Normalize(vmin=vmin, vmax=vmax)
@@ -691,7 +723,8 @@ def labeled_waterfall(
     if ax is None:
         fig = plt.figure(figsize=figsize, dpi=dpi)
         ax = fig.add_subplot(111)
-        return_value = fig
+    else:
+        fig = ax.get_figure()
 
     # Finish setup, then plot.
     ax.set_xlabel(xlabel, fontsize=fontsize)
@@ -704,14 +737,19 @@ def labeled_waterfall(
         extent=(xvals.min(), xvals.max(), yvals.max(), yvals.min()),
     )
     if draw_colorbar:
-        if return_value is ax:
-            fig = ax.get_figure()
-
-        extend = "neither" if dynamic_range is None else "min"
+        # Make colorbar edges pointy if data values exceed colorscale bounds.
+        if data.max() > vmax and data.min() < vmin:
+            extend = "both"
+        elif data.max() > vmax:
+            extend = "max"
+        elif data.min() < vmin:
+            extend = "min"
+        else:
+            extend = "neither"
         cbar = fig.colorbar(mappable=scalar_map, ax=ax, extend=extend)
         cbar.set_label(cbar_label, fontsize=fontsize)
 
-    return return_value
+    return fig, ax
 
 def fourier_transform_waterfalls(
     data,
@@ -777,8 +815,9 @@ def fourier_transform_waterfalls(
         in JD or LST. If ``data`` is an array-like object and only one of ``times``
         or ``lsts`` is provided, then this parameter is ignored.
     mode: str, optional
-        Plotting mode to use; must be a mode accepted by :func:`data_mode`. Default
-        is "log", which plots the base-10 logarithm of the absolute value of the data.
+        Plotting mode to use; must be one of ("log", "phs", "abs", "real", "imag"). 
+        Default is "log", which plots the base-10 logarithm of the absolute value
+        of the data. See :func:`data_mode` documentation for details.
     figsize: tuple of float, optional
         Size of the figure to be produced, in inches. Default is 14x10.
     dpi: float, optional
@@ -888,7 +927,7 @@ def fourier_transform_waterfalls(
             freq_taper_kwargs=freq_taper_kwargs,
             time_taper=time_taper,
             time_taper_kwargs=time_taper_kwargs,
-        )
+        )[1]
 
 
     return fig
