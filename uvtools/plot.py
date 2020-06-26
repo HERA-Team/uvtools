@@ -480,6 +480,7 @@ def labeled_waterfall(
     lsts=None,
     time_or_lst="lst",
     mode="log",
+    set_title=True,
     ax=None,
     figsize=(10,7),
     dpi=100,
@@ -526,6 +527,10 @@ def labeled_waterfall(
         Plotting mode to use; must be one of ("log", "phs", "abs", "real", "imag"). 
         Default is "log", which plots the base-10 logarithm of the absolute value
         of the data. See :func:`data_mode` documentation for details.
+    set_title: bool or str, optional
+        Whether to add a title to the subplot. Default is to add a title using the
+        provided ``antpairpol``. If a string is passed, then that string is used
+        to set the subplot title.
     ax: :class:`plt.Axes` instance, optional
         :class:`plt.Axes` object to use for plotting the waterfall. If not provided,
         then a new :class:`plt.Figure` object and :class:`plt.Axes` instance is created.
@@ -739,6 +744,8 @@ def labeled_waterfall(
         norm=norm,
         extent=(xvals.min(), xvals.max(), yvals.max(), yvals.min()),
     )
+
+    # Optionally draw a colorbar.
     if draw_colorbar:
         # Make colorbar edges pointy if data values exceed colorscale bounds.
         if data.max() > vmax and data.min() < vmin:
@@ -752,6 +759,15 @@ def labeled_waterfall(
         cbar = fig.colorbar(mappable=scalar_map, ax=ax, extend=extend)
         cbar.set_label(cbar_label, fontsize=fontsize)
 
+    # Optionally set a subplot title.
+    if set_title:
+        if isinstance(set_title, str):
+            ax.set_title(set_title, fontsize=fontsize)
+        elif antpairpol is not None:
+            ax.set_title(antpairpol, fontsize=fontsize)
+        else:
+            pass # Not enough information to make a title.
+
     return fig, ax
 
 def fourier_transform_waterfalls(
@@ -762,6 +778,7 @@ def fourier_transform_waterfalls(
     lsts=None,
     time_or_lst="lst",
     mode="log",
+    set_title=True,
     figsize=(14,10),
     dpi=100,
     aspect="auto",
@@ -821,6 +838,10 @@ def fourier_transform_waterfalls(
         Plotting mode to use; must be one of ("log", "phs", "abs", "real", "imag"). 
         Default is "log", which plots the base-10 logarithm of the absolute value
         of the data. See :func:`data_mode` documentation for details.
+    set_title: bool or str, optional
+        Whether to set a title for the figure. If a string is passed, then that
+        string is used for the figure title. Default is to use the provided
+        ``antpairpol`` as the title.
     figsize: tuple of float, optional
         Size of the figure to be produced, in inches. Default is 14x10.
     dpi: float, optional
@@ -919,6 +940,7 @@ def fourier_transform_waterfalls(
             lsts=lsts,
             time_or_lst=time_or_lst,
             mode=mode,
+            set_title=False,
             ax=ax,
             aspect=aspect,
             fontsize=fontsize,
@@ -931,6 +953,43 @@ def fourier_transform_waterfalls(
             time_taper=time_taper,
             time_taper_kwargs=time_taper_kwargs,
         )[1]
+
+    # Set a figure title if desired.
+    if set_title:
+        if type(set_title) is bool:
+            set_title = antpairpol
+        if set_title is not None:
+            # Though complicated, this is the only way I can think of ensuring
+            # that the figure title is positioned reasonably and aesthetically.
+            axes = fig.get_axes()
+            uppermost_y = max(ax.get_position().y1 for ax in axes)
+            top_row = [
+                ax for ax in axes
+                if np.isclose(ax.get_position().y1, uppermost_y)
+            ]
+            axes_widths = [
+                ax.get_position().x1 - ax.get_position().x0
+                for ax in top_row
+            ]
+            colorbars = [
+                ax for ax, width in zip(top_row, axes_widths)
+                if not np.isclose(width, max(axes_widths))
+            ]
+            plots = [ax for ax in top_row if ax not in colorbars]
+            
+            # Find the visual horizontal center of the figure.
+            x1 = min(cbar.get_position().x1 for cbar in colorbars)
+            x2 = max(plot.get_position().x0 for plot in plots)
+            title_position = (0.5 * (x1 + x2), uppermost_y)
+            
+            # Position the title at the apparent "top center" of the figure.
+            fig.text(
+                *title_position,
+                set_title,
+                ha="center",
+                va="bottom",
+                fontsize=fontsize
+            )
 
 
     return fig
