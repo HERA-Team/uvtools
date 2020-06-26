@@ -99,10 +99,9 @@ class TestFancyPlotters(unittest.TestCase):
             vmin=-1,
             vmax=1,
         )
-        assert ax.cmap.name == "RdBu"
-        cbar = list(axes for axes in fig.get_axes() if axes is not ax)[0]
-        assert cbar.vmin == -1
-        assert cbar.vmax == 1
+        image = ax.get_images()[0]
+        assert image.cmap.name == "RdBu"
+        assert np.allclose(image.get_clim(), (-1, 1))
 
         fig, ax = uvt.plot.labeled_waterfall(
             uvd,
@@ -111,10 +110,9 @@ class TestFancyPlotters(unittest.TestCase):
             vmin=-7,
             dynamic_range=2,
         )
-        assert ax.cmap.name == "inferno"
-        cbar = list(axes for axes in fig.get_axes() if axes is not ax)[0]
-        assert cbar.vmin == -7
-        assert cbar.vmax == -5
+        image = ax.get_images()[0]
+        assert image.cmap.name == "inferno"
+        assert np.allclose(image.get_clim(), (-7, -5))
 
         fig, ax = uvt.plot.labeled_waterfall(
             uvd,
@@ -123,9 +121,8 @@ class TestFancyPlotters(unittest.TestCase):
             vmax=-5,
             dynamic_range=1,
         )
-        cbar = list(axes for axes in fig.get_axes() if axes is not ax)[0]
-        assert cbar.vmin == -6
-        assert cbar.vmax == -5
+        image = ax.get_images()[0]
+        assert np.allclose(image.get_clim(), (-6, -5))
 
     def test_fourier_transform_waterfalls(self):
         uvd = self.uvd
