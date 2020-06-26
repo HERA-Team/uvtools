@@ -713,6 +713,9 @@ def labeled_waterfall(
                 vmin = vmax - dynamic_range
             else:
                 vmin = vmax / 10 ** dynamic_range
+    else:
+        vmin = vmin if vmin is not None else data.min()
+        vmax = vmax if vmax is not None else data.max()
 
     # Setup mappable for drawing colorbar.
     norm = plt.cm.colors.Normalize(vmin=vmin, vmax=vmax)
