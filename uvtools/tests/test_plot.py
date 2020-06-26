@@ -85,6 +85,48 @@ class TestFancyPlotters(unittest.TestCase):
     def runTest(self):
         pass
 
+    def test_labeled_waterfall(self):
+        # Most of this functionality is tested in the next test function,
+        # so this will test some features not exposed in
+        # plot.fourier_transform_waterfalls
+        uvd = self.uvd
+        
+        # Dynamic range setting.
+        fig, ax = uvt.plot.labeled_waterfall(
+            uvd,
+            antpairpol=(0,1,"xx"),
+            mode="phs",
+            vmin=-1,
+            vmax=1,
+        )
+        assert ax.cmap.name == "RdBu"
+        cbar = list(axes for axes in fig.get_axes() if axes is not ax)[0]
+        assert cbar.vmin == -1
+        assert cbar.vmax == 1
+
+        fig, ax = uvt.plot.labeled_waterfall(
+            uvd,
+            antpairpol=(0,1,"xx"),
+            mode="log",
+            vmin=-7,
+            dynamic_range=2,
+        )
+        assert ax.cmap.name == "inferno"
+        cbar = list(axes for axes in fig.get_axes() if axes is not ax)[0]
+        assert cbar.vmin == -7
+        assert cbar.vmax == -5
+
+        fig, ax = uvt.plot.labeled_waterfall(
+            uvd,
+            antpairpol=(0,1,"xx"),
+            mode="log",
+            vmax=-5,
+            dynamic_range=1,
+        )
+        cbar = list(axes for axes in fig.get_axes() if axes is not ax)[0]
+        assert cbar.vmin == -6
+        assert cbar.vmax == -5
+
     def test_fourier_transform_waterfalls(self):
         uvd = self.uvd
         data = uvd.get_data(0,1,'xx')
