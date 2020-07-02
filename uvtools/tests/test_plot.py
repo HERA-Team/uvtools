@@ -5,6 +5,7 @@ import unittest
 import uvtools as uvt
 import numpy as np
 from itertools import combinations
+from astropy import units
 
 
 def axes_contains(ax, obj_list):
@@ -169,34 +170,77 @@ class TestFancyPlotters(unittest.TestCase):
         assert sum(np.allclose((dly1, dly2), xlim) for xlim in xlimits) == 2
 
         # Now test with an array.
-        fig = uvt.plot.fourier_transform_waterfalls(
-            data=data,
-            freqs=freqs,
-            lsts=lsts,
-        )
+        plot_times = times - int(times[0]) # For bound checking later
+        lsts = np.unique(uvd.lst_array) # Ensure they're in radians
+        fringe_rates = uvt.utils.fourier_freqs(times * units.day.to("s")) # Hz
+        delays = uvt.utils.fourier_freqs(freqs) # s
+
+        fig = uvt.plot.fourier_transform_waterfalls(data=data, freqs=freqs, lsts=lsts)
         axes = fig.get_axes()
         ylabels = list(ax.get_ylabel() for ax in axes)
         assert sum("LST" in ylabel for ylabel in ylabels) == 2
 
-        fig = uvt.plot.fourier_transform_waterfalls(
-            data=data,
-            freqs=freqs,
-            times=times,
-        )
+        fig = uvt.plot.fourier_transform_waterfalls(data=data, freqs=freqs, times=times)
         axes = fig.get_axes()
         ylabels = list(ax.get_ylabel() for ax in axes)
         assert sum("JD" in ylabel for ylabel in ylabels) == 2
 
+        # Check custom plot units.
+        plot_units = {
+            "time": "hour",
+            "lst": "deg",
+            "freq": "GHz",
+            "fringe-rate": "Hz",
+            "delay": "us",
+        }
+        lstmin, lstmax = np.array([lsts.min(), lsts.max()]) * units.rad.to("deg")
+        tmin, tmax = np.array([plot_times.min(), plot_times.max()]) * units.day.to("hr")
+        fmin, fmax = np.array([freqs.min(), freqs.max()]) * 1e-9  # GHz
+        frmin, frmax = np.array([fringe_rates.min(), fringe_rates.max()])  # Hz
+        dlymin, dlymax = np.array([delays.min(), delays.max()]) * 1e6  # us
+
+        fig = uvt.plot.fourier_transform_waterfalls(
+            data=data, freqs=freqs, lsts=lsts, plot_units=plot_units
+        )
+        axes = fig.get_axes()
+        xlabels = list(ax.get_xlabel() for ax in axes)
+        ylabels = list(ax.get_ylabel() for ax in axes)
+        for xdim in ("freq", "delay"):
+            assert sum(f"[{plot_units[xdim]}]" in xlabel for xlabel in xlabels) == 2
+        for ydim in ("lst", "fringe-rate"):
+            assert sum(f"[{plot_units[ydim]}]" in ylabel for ylabel in ylabels) == 2
+
+        xlimits = list(ax.get_xlim() for ax in axes)
+        ylimits = list(ax.get_ylim() for ax in axes)
+        assert sum(np.allclose(xlims, (fmin, fmax)) for xlims in xlimits) == 2
+        assert sum(np.allclose(xlims, (dlymin, dlymax)) for xlims in xlimits) == 2
+        assert sum(np.allclose(ylims, (frmax, frmin), rtol=0.01) for ylims in ylimits) == 2
+        assert sum(np.allclose(ylims, (lstmax, lstmin)) for ylims in ylimits) == 2
+
+        fig = uvt.plot.fourier_transform_waterfalls(
+            data=data, freqs=freqs, times=times, plot_units=plot_units
+        )
+        axes = fig.get_axes()
+        # Already checked everything but time units, so only check that.
+        ylabels = list(ax.get_ylabel() for ax in axes)
+        assert sum(f"[{plot_units['time']}]" in ylabel for ylabel in ylabels) == 2
+        
+        ylimits = list(ax.get_ylim() for ax in axes)
+        assert sum(np.allclose(ylims, (tmax, tmin)) for ylims in ylimits) == 2
+
         # Do some exception raising checking.
         with nt.assert_raises(ValueError):
             uvt.plot.fourier_transform_waterfalls(
-                data=uvd,
-                antpairpol=(0,1,'xx'),
-                time_or_lst="nan"
+                data=uvd, antpairpol=(0,1,'xx'), time_or_lst="nan"
             )
 
         with nt.assert_raises(TypeError):
             uvt.plot.fourier_transform_waterfalls(data={})
+
+        with nt.assert_raises(TypeError):
+            uvt.plot.fourier_transform_waterfalls(
+                data=data, freqs=freqs, lsts=lsts, plot_units="bad_type"
+            )
 
         with nt.assert_raises(ValueError):
             uvt.plot.fourier_transform_waterfalls(data=np.ones((3,5,2), dtype=np.complex))
