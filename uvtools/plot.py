@@ -480,6 +480,7 @@ def labeled_waterfall(
     times=None,
     lsts=None,
     time_or_lst="lst",
+    plot_units=None,
     mode="log",
     set_title=True,
     ax=None,
@@ -524,6 +525,18 @@ def labeled_waterfall(
         Either "time" or "lst". Used to specify whether the time axis should be
         in JD or LST. If ``data`` is an array-like object and only one of ``times``
         or ``lsts`` is provided, then this parameter is ignored.
+    plot_units: dict, optional
+        Dictionary mapping axis dimension to plotting units. Keys must come from
+        ("lst", "time", "freq", "fringe-rate", "delay"); values must have supported
+        conversion methods in ``astropy``. LST units may be specified either as
+        radian-equivalent units or day-equivalent units. Default is:
+            {
+                "lst": "hour",
+                "time": "day",
+                "freq": "MHz",
+                "fringe-rate": "mHz",
+                "delay": "ns"
+            }
     mode: str, optional
         Plotting mode to use; must be one of ("log", "phs", "abs", "real", "imag"). 
         Default is "log", which plots the base-10 logarithm of the absolute value
@@ -607,9 +620,11 @@ def labeled_waterfall(
             )
         if times is None:
             time_or_lst = "lst"
-            times = lsts / (2 * np.pi) # For Fourier transform purposes
+            times = lsts * units.rad.to("cycle") # For Fourier transform purposes
         elif lsts is None:
             time_or_lst = "time"
+
+        vis_units = "Jy" # Assume data passed as an array is in Jy
     else:
         try:
             from pyuvdata import UVData
@@ -625,17 +640,36 @@ def labeled_waterfall(
         freqs = np.unique(data.freq_array)
         times = np.unique(data.time_array)
         lsts = np.unique(data.lst_array)
+        vis_units = data.vis_units or "Jy"
         data = data.get_data(antpairpol)
     
-    # Prepare axis labels.
-    xvals = freqs / 1e6
-    xlabel = "Frequency [MHz]"
+    # Determine units to use for plotting.
+    provided_plot_units = plot_units or {}
+    if not isinstance(provided_plot_units, dict):
+        raise TypeError("plot_units must be provided as a dictionary.")
+    plot_units = {
+        "lst": "hour",
+        "time": "day",
+        "freq": "MHz",
+        "fringe-rate": "mHz",
+        "delay": "ns"
+    }
+    plot_units.update(provided_plot_units)
+
+    # Configure the plot axes using the desired units.
+    xvals = freqs * units.Hz.to(plot_units["freq"])
+    xlabel = f"Frequency [{plot_units['freq']}]"
     if time_or_lst == "time":
-        yvals = times - int(times[0])
+        yvals = (times - int(times[0])) * units.day.to(plot_units["time"])
         ylabel = f"JD - {int(times[0]):d}"
+        if plot_units["time"] != "day":
+            ylabel += f" [{plot_units['time']}]"
     else:
-        yvals = lsts * units.day.to("hr") / (2 * np.pi)
-        ylabel = "LST [hours]"
+        if units.rad.is_equivalent(plot_units["lst"]):
+            yvals = lsts * units.rad.to(plot_units["lst"])
+        else:
+            yvals = lsts * units.rad.to("cycle") * units.day.to(plot_units["lst"])
+        ylabel = f"LST [{plot_units['lst']}]"
 
     # Do any requested Fourier transforms and update axis labels.
     if fft_axis is not None:
@@ -646,15 +680,16 @@ def labeled_waterfall(
         if type(fft_axis) is int:
             fft_axis = ("time", "freq", "both")[fft_axis]
         if fft_axis in ("freq", "both"):
-            delays = utils.fourier_freqs(freqs) * 1e9 # ns
+            delays = utils.fourier_freqs(freqs) * units.s.to(plot_units["delay"])
             data = utils.FFT(data, axis=1, taper=freq_taper, **freq_taper_kwargs)
             xvals = delays
-            xlabel = "Delay [ns]"
+            xlabel = f"Delay [{plot_units['delay']}]"
         if fft_axis in ("time", "both"):
-            fringe_rates = utils.fourier_freqs(times * units.day.to("s")) * 1e3 # mHz
+            fringe_rates = utils.fourier_freqs(times * units.day.to("s"))
+            fringe_rates *= units.Hz.to(plot_units["fringe-rate"])
             data = utils.FFT(data, axis=0, taper=time_taper, **time_taper_kwargs)
             yvals = fringe_rates
-            ylabel = "Fringe Rate [mHz]"
+            ylabel = f"Fringe Rate [{plot_units['fringe-rate']}]"
 
     # Update data for plotting.
     data = data_mode(data, mode=mode)
@@ -679,16 +714,16 @@ def labeled_waterfall(
     else:
         if fft_axis == "freq":
             base_label = r"$\tilde{V}(t,\tau)$"
-            unit_label = "[Jy Hz]"
+            unit_label = f"[{vis_units} Hz]"
         elif fft_axis == "time":
             base_label = r"$\tilde{V}(f,\nu)$"
-            unit_label = "[Jy s]"
+            unit_label = f"[{vis_units} s]"
         elif fft_axis == "both":
             base_label = r"$\tilde{V}(f,\tau)$"
-            unit_label = "[Jy Hz s]"
+            unit_label = f"[{vis_units} Hz s]"
         else:
             base_label = r"$V(t,\nu)$"
-            unit_label = "[Jy]"
+            unit_label = f"[{vis_units}]"
 
         if mode == "abs":
             cbar_label = f"|{base_label}| {unit_label}"
@@ -778,6 +813,7 @@ def fourier_transform_waterfalls(
     times=None,
     lsts=None,
     time_or_lst="lst",
+    plot_units=None,
     mode="log",
     set_title=True,
     figsize=(14,10),
@@ -800,16 +836,6 @@ def fourier_transform_waterfalls(
         fringe-rate vs frequency
         fringe-rate vs delay
         time vs delay
-
-    Time units used for plotting are either JD or LST hours.
-    Frequency units used for plotting are MHz.
-    Fringe-rate units used for plotting are mHz.
-    Delay units used for plotting are ns.
-    
-    Note that these units may not correspond exactly to the units of the related
-    parameters passed. The parameter units for ``freqs`` and ``times`` or ``lsts``
-    are chosen to match the units typically used for recording metadata in
-    :class:`pyuvdata.UVData` objects.
 
     Parameters
     ----------
@@ -835,6 +861,18 @@ def fourier_transform_waterfalls(
         Either "time" or "lst". Used to specify whether the time axis should be
         in JD or LST. If ``data`` is an array-like object and only one of ``times``
         or ``lsts`` is provided, then this parameter is ignored.
+    plot_units: dict, optional
+        Dictionary mapping axis dimension to plotting units. Keys must come from
+        ("lst", "time", "freq", "fringe-rate", "delay"); values must have supported
+        conversion methods in ``astropy``. LST units may be specified either as
+        radian-equivalent units or day-equivalent units. Default is:
+            {
+                "lst": "hour",
+                "time": "day",
+                "freq": "MHz",
+                "fringe-rate": "mHz",
+                "delay": "ns"
+            }
     mode: str, optional
         Plotting mode to use; must be one of ("log", "phs", "abs", "real", "imag"). 
         Default is "log", which plots the base-10 logarithm of the absolute value
@@ -940,6 +978,7 @@ def fourier_transform_waterfalls(
             times=times,
             lsts=lsts,
             time_or_lst=time_or_lst,
+            plot_units=plot_units,
             mode=mode,
             set_title=False,
             ax=ax,
