@@ -912,8 +912,9 @@ def fourier_transform_waterfalls(
         dimension ("time", "freq", "fringe-rate", "delay") to crop, and the values
         give the lower- and upper-bounds of the cropped region. For example, passing
         {"delay": (-500, 500)} will crop the delay axis to only show delays between
-        -500 ns and +500 ns. Units should be the same as the units used in the plot
-        display. See the beginning of the function documentation for details.
+        -500 ns and +500 ns (assuming delays are plotted in ns). The values passed
+        must be in the same units as the plot units used; see the description of
+        the ``plot_units`` parameter for details on default units.
     freq_taper: str, optional
         Name of the taper to be applied along the frequency-axis when performing
         Fourier transforms. Must be a taper supported by :func:`dspec.gen_window`.
