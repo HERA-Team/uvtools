@@ -481,6 +481,7 @@ def labeled_waterfall(
     lsts=None,
     time_or_lst="lst",
     plot_units=None,
+    data_units="Jy",
     mode="log",
     set_title=True,
     ax=None,
@@ -537,6 +538,11 @@ def labeled_waterfall(
                 "fringe-rate": "mHz",
                 "delay": "ns"
             }
+    data_units: str, optional
+        Units for the provided data. If ``data`` is a :class:`pyuvdata.UVData`
+        instance, then these units are pulled from the object, if they are defined
+        in it (accessed via the ``vis_units`` attribute). Default is to assume the
+        data units are in Jy.
     mode: str, optional
         Plotting mode to use; must be one of ("log", "phs", "abs", "real", "imag"). 
         Default is "log", which plots the base-10 logarithm of the absolute value
@@ -623,8 +629,6 @@ def labeled_waterfall(
             times = lsts * units.rad.to("cycle") # For Fourier transform purposes
         elif lsts is None:
             time_or_lst = "time"
-
-        vis_units = "Jy" # Assume data passed as an array is in Jy
     else:
         try:
             from pyuvdata import UVData
@@ -640,7 +644,7 @@ def labeled_waterfall(
         freqs = np.unique(data.freq_array)
         times = np.unique(data.time_array)
         lsts = np.unique(data.lst_array)
-        vis_units = data.vis_units or "Jy"
+        data_units = data.vis_units or data_units
         data = data.get_data(antpairpol)
     
     # Determine units to use for plotting.
@@ -714,16 +718,16 @@ def labeled_waterfall(
     else:
         if fft_axis == "freq":
             base_label = r"$\tilde{V}(t,\tau)$"
-            unit_label = f"[{vis_units} Hz]"
+            unit_label = f"[{data_units} Hz]"
         elif fft_axis == "time":
             base_label = r"$\tilde{V}(f,\nu)$"
-            unit_label = f"[{vis_units} s]"
+            unit_label = f"[{data_units} s]"
         elif fft_axis == "both":
             base_label = r"$\tilde{V}(f,\tau)$"
-            unit_label = f"[{vis_units} Hz s]"
+            unit_label = f"[{data_units} Hz s]"
         else:
             base_label = r"$V(t,\nu)$"
-            unit_label = f"[{vis_units}]"
+            unit_label = f"[{data_units}]"
 
         if mode == "abs":
             cbar_label = f"|{base_label}| {unit_label}"
@@ -814,6 +818,7 @@ def fourier_transform_waterfalls(
     lsts=None,
     time_or_lst="lst",
     plot_units=None,
+    data_units="Jy",
     mode="log",
     set_title=True,
     figsize=(14,10),
@@ -873,6 +878,11 @@ def fourier_transform_waterfalls(
                 "fringe-rate": "mHz",
                 "delay": "ns"
             }
+    data_units: str, optional
+        Units for the provided data. If ``data`` is a :class:`pyuvdata.UVData`
+        instance, then these units are pulled from the object, if they are defined
+        in it (accessed via the ``vis_units`` attribute). Default is to assume the
+        data units are in Jy.
     mode: str, optional
         Plotting mode to use; must be one of ("log", "phs", "abs", "real", "imag"). 
         Default is "log", which plots the base-10 logarithm of the absolute value
@@ -980,6 +990,7 @@ def fourier_transform_waterfalls(
             lsts=lsts,
             time_or_lst=time_or_lst,
             plot_units=plot_units,
+            data_units=data_units,
             mode=mode,
             set_title=False,
             ax=ax,
