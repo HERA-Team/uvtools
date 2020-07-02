@@ -185,6 +185,14 @@ class TestFancyPlotters(unittest.TestCase):
         ylabels = list(ax.get_ylabel() for ax in axes)
         assert sum("JD" in ylabel for ylabel in ylabels) == 2
 
+        # Check custom data units.
+        fig = uvt.plot.fourier_transform_waterfalls(
+            data=data, freqs=freqs, lsts=lsts, data_units="mK sr"
+        )
+        axes = fig.get_axes()
+        ylabels = list(ax.get_ylabel() for ax in axes)
+        assert sum("mK sr" in ylabel for ylabel in ylabels) == 4
+        
         # Check custom plot units.
         plot_units = {
             "time": "hour",
