@@ -362,7 +362,6 @@ def test_dayenu_filter():
     #now filter foregrounds and test that std of residuals are close to std of noise:
     filtered_noise, _ =  dspec.dayenu_filter(np.arange(-nf/2, nf/2)*df, data_1d, wghts_1d, [1], filter_centers, filter_half_widths,
                                          filter_factors)
-
     #print(np.std((data_1d - fg_tone).real)*np.sqrt(2.))
     #print(np.std((filtered_noise).real)*np.sqrt(2.))
     np.testing.assert_almost_equal( np.std(filtered_noise.real)**2. + np.std(filtered_noise.imag)**2.,
@@ -370,8 +369,18 @@ def test_dayenu_filter():
     #now filter foregrounds and signal and test that std of residuals are close to std of signal.
     filtered_signal, _ =  dspec.dayenu_filter(np.arange(-nf/2, nf/2)*df, fg_sg, wghts_1d, [1], filter_centers, filter_half_widths,
                                               filter_factors)
+
     np.testing.assert_almost_equal( (np.std(filtered_signal.real)**2. + np.std(filtered_signal.imag)**2.)/1e4,
                                   (np.std(sg_tone.real)**2. + np.std(sg_tone.imag)**2.)/1e4, decimal = 0)
+
+    # check that zeros where wgts are zero.
+    wghts_1d[len(wghts_1d)//4] = 0.
+    wghts_1d[len(wghts_1d)//4 + 5] = 0.
+    filtered_noise, _ =  dspec.dayenu_filter(np.arange(-nf/2, nf/2)*df, data_1d, wghts_1d, [1], filter_centers, filter_half_widths,
+                                            filter_factors)
+    nt.assert_true(np.all(filtered_noise[~(wghts_1d.astype(bool))] == 0.))
+
+
     #Next, we test performing a fringe-rate clean. Generate a 50-meter EW baseline with a single
     #source moving overhead perpindicular to baseline
     TEST_CACHE = {}
