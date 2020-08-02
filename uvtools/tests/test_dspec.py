@@ -437,6 +437,17 @@ def test_dayenu_filter():
                                                     filter_half_widths = [[0.001],[100e-9]], filter_factors = [[1e-5],[1e-5]],
                                                     filter_dimensions = [0,1],cache = TEST_CACHE)
 
+    # check for zero residual in flagged regions
+    wgts_2d = np.ones_like(data_2d)
+    wgts_2d[nf // 2+5]  = 0.
+    wgts_2d[:, nf // 4 + 3] = 0.
+    filtered_data_df_fr, _ = dspec.dayenu_filter([np.arange(-nf/2,nf/2)*dt, np.arange(-nf/2,nf/2)*df],
+                                                    data_2d, wgts_2d,
+                                                    filter_centers = [[0.002],[0.]],
+                                                    filter_half_widths = [[0.001],[100e-9]], filter_factors = [[1e-5],[1e-5]],
+                                                    filter_dimensions = [0,1],cache = TEST_CACHE)
+    nt.assert_true(np.all(filtered_data_df_fr[:, nf // 4 + 3] == 0))
+    nt.assert_true(np.all(filtered_data_df_fr[nf // 2 + 5] == 0))
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df_fr.flatten())**2.)),
                                     1., decimal = 1)
 
