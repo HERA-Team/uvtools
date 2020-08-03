@@ -828,7 +828,8 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                 info['status']['axis_%d'%fs][sample_num] = 'skipped'
             if return_matrices:
                 filter_matrices[fs][sample_num]=filter_mat
-
+    output[wgts == 0.] = 0.
+    # set residual equal to zero where weights are zero.
     #1d data will only be filtered across "channels".
     if data_1d and ntimes == 1:
         output = output[0]
