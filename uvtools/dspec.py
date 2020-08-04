@@ -1661,29 +1661,40 @@ def _clean_filter(x, data, wgts, filter_centers, filter_half_widths,
     info['filter_params'] = {'axis_0':{}, 'axis_1':{}}
     info['clean_status'] = {'axis_0':{}, 'axis_1':{}}
     info['status'] = {'axis_0':{}, 'axis_1':{}}
-    if filt2d_mode == 'rect' or not clean2d:
+    if not clean2d:
+        # if we are not in 2d clean mode, then area is the outer product of the
+        # cleaning area in the axis to be cleaned and ones along the axis not to
+        # be cleaned. This is because the filter_width is infinity along the axis
+        # not to be cleaned so _get_filter_area gives all ones.
         for m in range(2):
             for fc, fw in zip(filter_centers[m], filter_half_widths[m]):
                 area_vecs[m] = _get_filter_area(x[m], fc, fw)
         area = np.outer(area_vecs[0], area_vecs[1])
-    elif filt2d_mode == 'plus' and clean2d:
-        area = np.zeros(data.shape)
-        #construct and add a 'plus' for each filtering window pair in each dimension.
-        for fc0, fw0 in zip(filter_centers[0], filter_half_widths[0]):
-            for fc1, fw1 in zip(filter_centers[1], filter_half_widths[1]):
-                area_temp = np.zeros(area.shape)
-                if fc0 >= _x[0].min() and fc0 <= _x[0].max():
-                    #generate area vector centered at zero
-                    av = _get_filter_area(x[1], fc1, fw1)
-                    area_temp[np.argmin(np.abs(_x[0]-fc0)), :] = av
-                if fc1 >= _x[1].min() and fc1 <= _x[1].max():
-                    #generate area vector centered at zero
-                    av = _get_filter_area(x[0], fc0, fw0)
-                    area_temp[:, np.argmin(np.abs(_x[1]-fc1))] = av
-                area += area_temp
-        area = (area>0.).astype(int)
     else:
-        raise ValueError("%s is not a valid filt2d_mode! choose from ['rect', 'plus']"%(filt2d_mode))
+        # if we are doing 2dclean, then either do rectangular or plus mode.
+        area = np.zeros(data.shape)
+        # in rectangle mode, the list of time filter centers / widths and frequency filter centers / widths
+        # specify rectangular regions in 2d Fourier space to CLEAN in. This loop iterates over those centers
+        # and widths.
+        for fc_t, fw_t, fc_f, fw_f in zip(filter_centers[0], filter_half_widths[0], filter_centers[1], filter_half_widths[1]):
+            if filt2d_mode == 'rect':
+                # determine rectangular region by taking outer products of filter areas along fourier time and fourier freq
+                # axes.
+                area_t = np.outer(_get_filter_area(x[0], fc_t, fw_t), _get_filter_area(x[1], fc_nu, fw_nu))
+            elif rilt2d_mode == 'plus':
+                area_t = np.zeros(area.shape)
+                if fc_t >= _x[0].min() and fc_t <= _x[0].max():
+                    #generate area vector centered at zero
+                    av = _get_filter_area(x[1], fc_f, fw_f)
+                    area_temp[np.argmin(np.abs(_x[0]-fc_t)), :] = av
+                if fc_f >= _x[1].min() and fc_f <= _x[1].max():
+                    #generate area vector centered at zero
+                    av = _get_filter_area(x[0], fc_t, fw_t)
+                    area_temp[:, np.argmin(np.abs(_x[1]-fc_f))] = av
+            else:
+                raise ValueError("%s is not a valid filt2d_mode! choose from ['rect', 'plus']"%(filt2d_mode))
+            area += area_t
+        area = (area>0.).astype(int)
     if clean2d:
         _wgts = np.fft.ifft2(window[0] * wgts * window[1])
         _data = np.fft.ifft2(window[0] * data * wgts * window[1])
