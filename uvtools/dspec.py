@@ -1686,11 +1686,11 @@ def _clean_filter(x, data, wgts, filter_centers, filter_half_widths,
                 if fc_t >= _x[0].min() and fc_t <= _x[0].max():
                     #generate area vector centered at zero
                     av = _get_filter_area(x[1], fc_f, fw_f)
-                    area_temp[np.argmin(np.abs(_x[0]-fc_t)), :] = av
+                    area_t[np.argmin(np.abs(_x[0]-fc_t)), :] = av
                 if fc_f >= _x[1].min() and fc_f <= _x[1].max():
                     #generate area vector centered at zero
                     av = _get_filter_area(x[0], fc_t, fw_t)
-                    area_temp[:, np.argmin(np.abs(_x[1]-fc_f))] = av
+                    area_t[:, np.argmin(np.abs(_x[1]-fc_f))] = av
             else:
                 raise ValueError("%s is not a valid filt2d_mode! choose from ['rect', 'plus']"%(filt2d_mode))
             area += area_t
