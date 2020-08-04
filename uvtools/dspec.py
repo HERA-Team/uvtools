@@ -490,10 +490,12 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                                                             filter_half_widths=filter_half_widths, clean2d=filter2d, zero_residual_flags=zero_residual_flags,
                                                              **filter_kwargs)
                        if filter2d:
-                           info['filter_params']['axis_0'] = filter_kwargs
-                           info['filter_params']['axis_1'] = info['filter_params']['axis_0']
+                           for param in filter_kwargs:
+                               info['filter_params']['axis_0'][param] = filter_kwargs[param]
+                               info['filter_params']['axis_1'][param] = info['filter_params']['axis_0'][param]
                        else:
-                           info['filter_params']['axis_1'] = filter_kwargs
+                           for param in filter_kwargs:
+                               info['filter_params']['axis_1'][param] = filter_kwargs[param]
                    if 0 in filter_dims and not filter2d:
                         # undo transposes if we were performing a dimension 0
                         # time filter.
@@ -1720,7 +1722,11 @@ def _clean_filter(x, data, wgts, filter_centers, filter_half_widths,
                 del(_info['res'])
                 info['clean_status']['axis_1'][i] = _info
                 info['status']['axis_1'][i] = 'success'
+        info['filter_params']['axis_1']['area'] = area.astype(bool)
     elif clean2d:
+            #  save area in both dims. Save as a bool to save space.
+            info['filter_params']['axis_0']['area'] = area.astype(bool)
+            info['filter_params']['axis_1']['area'] = info['filter_params']['axis_0']['area']
             # we skip 2d cleans if all the data is close to zero (which can cause an infinite clean loop)
             # or the weights are all equal to zero which can also lead to a clean loop.
             # the maximum of _wgts should be the average value of all cells in 2d wgts.
