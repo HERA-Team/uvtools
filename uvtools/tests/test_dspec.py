@@ -894,6 +894,7 @@ def test_fourier_filter():
     # check that 2d clean with single rectangular region is the same for outer and rect filter2d modes.
     dpss_options1_2d = {'eigenval_cutoff': [[1e-12], [1e-12]], 'filt2d_mode': 'rect'}
     dpss_options2_2d = {'eigenval_cutoff': [[1e-12], [1e-12]], 'filt2d_mode': 'outer'}
+    dpss_options3_2d = {'eigenval_cutoff': [[1e-12], [1e-12]], 'filt2d_mode': 'plus'}
     mdl1, res1, info1 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[1e-8],[1e-8]],
                                              mode='dayenu_dpss_leastsq', filter_dims=[1, 0], **dpss_options1_2d)
@@ -902,6 +903,10 @@ def test_fourier_filter():
                                              mode='dayenu_dpss_leastsq', filter_dims=[1, 0], **dpss_options2_2d)
     nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
     nt.assert_true(np.all(np.isclose(res1, res2)))
+    # assert ValueError for unsupported filt2d_mode
+    nt.assert_raises(ValueError, dspec.fourier_filter, x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
+                     filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[1e-8],[1e-8]],
+                     mode='dayenu_dpss_leastsq', filter_dims=[1, 0], **dpss_options3_2d)
 
 def test_vis_clean():
     # validate that fourier_filter in various clean modes gives close values to vis_clean with equivalent parameters!

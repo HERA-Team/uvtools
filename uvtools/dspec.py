@@ -281,6 +281,13 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                             max_contiguous_edge_flags  : int, optional
                                 if the number of contiguous samples at the edge is greater then this
                                 at either side, skip.
+                            filt2d_mode, string optional
+                                can be in {"rect", "outer"}. If "rect" treat each filter center and filter width in time as defining the bounds
+                                of a separate rectangle that is independently fitted and subtracted from the data in Fourier space. If "outer"
+                                then remove all combinations of rectangular regions that arise from the provided list of time and frequency
+                                regions. Default is "outer".
+                            cache : dict, optional
+                                dictionary for caching fitting matrices.
                         *  dayenu :
                             cache : dict, optional
                                 dictionary for caching fitting matrices.
@@ -303,6 +310,11 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                             max_contiguous_edge_flags : int, optional
                                 if the number of contiguous samples at the edge is greater then this
                                 at either side, skip.
+                            filt2d_mode, string optional
+                                can be in {"rect", "outer"}. If "rect" treat each filter center and filter width in time as defining the bounds
+                                of a separate rectangle that is independently fitted and subtracted from the data in Fourier space. If "outer"
+                                then remove all combinations of rectangular regions that arise from the provided list of time and frequency
+                                regions. Default is "outer".
                             cache : dict, optional
                                 dictionary for caching fitting matrices.
                         * clean :
@@ -1799,21 +1811,17 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                 using scipy.optimize.leastsq
             *'matrix' derive model by directly calculate the fitting matrix
                 [A^T W A]^{-1} A^T W and applying it to the y vector.
-
     filter_dim, int optional
         specify dimension to filter. default 1,
         and if 2d filter, will use both dimensions.
-
     filt2d_mode, string optional
         can be in {"rect", "outer"}. If "rect" treat each filter center and filter width in time as defining the bounds
         of a separate rectangle that is independently fitted and subtracted from the data in Fourier space. If "outer"
         then remove all combinations of rectangular regions that arise from the provided list of time and frequency
         regions. Default is "outer".
-
     skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
         Model is left as 0s, residual is left as data, and info is {'skipped': True} for that
         time. Only works properly when all weights are all between 0 and 1.
-
     max_contiguous_edge_flags : int, optional
         if the number of contiguous samples at the edge is greater then this
         at either side, skip .
@@ -1965,7 +1973,8 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
             # and add the model to the overall model.
             model += model_temp
             # repeate this for all the rectangle bounds provided.
-
+    else:
+        raise ValueError("%s not a supported filt2d_mode ('rect', 'outer')"%filt2d_mode)
     residual = (data - model) * (np.abs(wgts) > 0).astype(float)
     #this will only happen if filter_dims is only zero!
     if filter_dims[0] == 0:
