@@ -470,7 +470,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                                                      filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                                                      filter_factors=suppression_factors, cache=cache, skip_wgt=skip_wgt,
                                                      max_contiguous_edge_flags=max_contiguous_edge_flags)
-                       model = data - residual
+                       model = data - residual * wgts
                        if len(mode) > 1:
                            filt2d_mode = filter_kwargs.pop('filt2d_mode')
                            model, _, info_deconv = _fit_basis_2d(x=x, data=model, filter_centers=filter_centers, filter_dims=filter_dims_d,
