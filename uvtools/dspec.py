@@ -450,7 +450,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                                                      filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                                                      filter_factors=suppression_factors, cache=cache, skip_wgt=skip_wgt,
                                                      max_contiguous_edge_flags=max_contiguous_edge_flags)
-                       model = data - residual
+                       model = data - residual * (np.abs(wgts) > 0.).astype(float)
                        if len(mode) > 1:
                            model, _, info_deconv = _fit_basis_2d(x=x, data=model, filter_centers=filter_centers, filter_dims=filter_dims_d,
                                                                  skip_wgt=skip_wgt, basis=mode[1], method=mode[2], wgts=wgts, basis_options=filter_kwargs,
@@ -763,6 +763,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
     for fs in range(2):
         info['filter_params']['axis_%d'%fs]['filter_centers'] = filter_centers[fs]
         info['filter_params']['axis_%d'%fs]['filter_half_widths'] = filter_half_widths[fs]
+        info['filter_params']['axis_%d'%fs]['filter_factors'] = filter_factors[fs]
         info['filter_params']['axis_%d'%fs]['x'] = x[fs]
         info['filter_params']['axis_%d'%fs]['mode'] = 'dayenu'
     skipped = [[],[]]
