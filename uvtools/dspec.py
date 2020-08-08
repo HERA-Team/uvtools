@@ -450,7 +450,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                                                      filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                                                      filter_factors=suppression_factors, cache=cache, skip_wgt=skip_wgt,
                                                      max_contiguous_edge_flags=max_contiguous_edge_flags)
-                       model = data - residual * (np.abs(wgts) > 0.).astype(float)
+                       model = data - residual
                        if len(mode) > 1:
                            model, _, info_deconv = _fit_basis_2d(x=x, data=model, filter_centers=filter_centers, filter_dims=filter_dims_d,
                                                                  skip_wgt=skip_wgt, basis=mode[1], method=mode[2], wgts=wgts, basis_options=filter_kwargs,
@@ -829,7 +829,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                 info['status']['axis_%d'%fs][sample_num] = 'skipped'
             if return_matrices:
                 filter_matrices[fs][sample_num]=filter_mat
-    output[wgts == 0.] = 0.
+    output = output * (np.abs(wgts) > 0.).astype(float)
     # set residual equal to zero where weights are zero.
     #1d data will only be filtered across "channels".
     if data_1d and ntimes == 1:
