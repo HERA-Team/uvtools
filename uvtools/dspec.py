@@ -785,6 +785,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
     for fs in range(2):
         info['filter_params']['axis_%d'%fs]['filter_centers'] = filter_centers[fs]
         info['filter_params']['axis_%d'%fs]['filter_half_widths'] = filter_half_widths[fs]
+        info['filter_params']['axis_%d'%fs]['filter_factors'] = filter_factors[fs]
         info['filter_params']['axis_%d'%fs]['x'] = x[fs]
         info['filter_params']['axis_%d'%fs]['mode'] = 'dayenu'
     skipped = [[],[]]
