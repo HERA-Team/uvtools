@@ -210,8 +210,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                     mode: string
                         specify filtering mode. Currently supported are
                         'clean', iterative clean
-                        'dpss_lsq', dpss fitting using scipy.optimize.lsq_linear
-                        'dft_lsq', dft fitting using scipy.optimize.lsq_linear
+                        'dpss_leastsq', dpss fitting using scipy.optimize.lsq_linear
+                        'dft_leastsq', dft fitting using scipy.optimize.lsq_linear
                         'dpss_matrix', dpss fitting using direct lin-lsq matrix
                                        computation. Slower then lsq but provides linear
                                        operator that can be used to propagate
