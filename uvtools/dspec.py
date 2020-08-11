@@ -829,7 +829,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                 info['status']['axis_%d'%fs][sample_num] = 'skipped'
             if return_matrices:
                 filter_matrices[fs][sample_num]=filter_mat
-    output = output * (~np.isclose(wgts, 0.)).astype(float)
+    output = output * (~np.isclose(wgts, 0., atol=1e-10)).astype(float)
     # set residual equal to zero where weights are zero.
     #1d data will only be filtered across "channels".
     if data_1d and ntimes == 1:
@@ -1563,7 +1563,7 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     else:
         raise ValueError("Provided 'method', '%s', is not in ['leastsq', 'matrix']."%(method))
     model = amat @ (suppression_vector * cn_out)
-    resid = (y - model) * (np.abs(w) > 0.) #suppress flagged residuals (such as RFI)
+    resid = (y - model) * (~np.isclose(w, 0, atol=1e-10)).astype(float) #suppress flagged residuals (such as RFI)
     return model, resid, info
 
 def _clean_filter(x, data, wgts, filter_centers, filter_half_widths,
@@ -1713,7 +1713,7 @@ def _clean_filter(x, data, wgts, filter_centers, filter_half_widths,
         model = np.fft.fft(_d_cl, axis=1)
     #transpose back if filtering the 0th dimension.
     windmat = np.outer(window[0], window[1])
-    residual = (data - model) * ~np.isclose(wgts * windmat, 0.0)
+    residual = (data - model) * (~np.isclose(wgts * windmat, 0.0, atol=1e-10)).astype(float)
     return model, residual, info
 
 
@@ -1905,7 +1905,7 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
         for k in info:
             info[k]['axis_0'] = copy.deepcopy(info[k]['axis_1'])
             info[k]['axis_1'] = {}
-    residual = residual * (~np.isclose(wgts, 0.)).astype(float) # set residual to zero in flags.
+    residual = residual * (~np.isclose(wgts, 0., atol=1e-10)).astype(float) # set residual to zero in flags.
     return model, residual, info
 
 
