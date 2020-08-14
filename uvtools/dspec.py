@@ -172,7 +172,7 @@ def calc_width(filter_size, real_delta, nsamples):
     return (uthresh, lthresh)
 
 def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
-                   filter_dims=1, skip_wgt=0.1, **filter_kwargs):
+                   filter_dims=1, skip_wgt=0.1, zero_residual_flags=True, **filter_kwargs):
                    '''
                    A filtering function that wraps up all functionality of high_pass_fourier_filter
                    and add support for additional linear fitting options.
@@ -210,8 +210,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                     mode: string
                         specify filtering mode. Currently supported are
                         'clean', iterative clean
-                        'dpss_lsq', dpss fitting using scipy.optimize.lsq_linear
-                        'dft_lsq', dft fitting using scipy.optimize.lsq_linear
+                        'dpss_leastsq', dpss fitting using scipy.optimize.lsq_linear
+                        'dft_leastsq', dft fitting using scipy.optimize.lsq_linear
                         'dpss_matrix', dpss fitting using direct lin-lsq matrix
                                        computation. Slower then lsq but provides linear
                                        operator that can be used to propagate
@@ -245,6 +245,9 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                                  'dpss_matrix' method (see above)
                         'dayenu_clean', apply dayenu filter to data. Deconvolve
                                  subtracted foregrounds with 'clean'.
+                    zero_residual_flags : bool, optional.
+                        If true, set flagged channels in the residual equal to zero.
+                        Default is True.
                     filter_kwargs: additional arguments that are parsed as a dictionary
                         dictionary with options for fitting techniques.
                         if filter2d is true, this should be a 2-tuple or 2-list
@@ -437,6 +440,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                             filter_kwargs['fundamental_period'] = list(fp)
 
                    if mode[0] == 'dayenu':
+                       if zero_residual_flags is None:
+                           zero_residual_flags = True
                        if filter2d:
                           filter_dims_d = [1, 0]
                        else:
@@ -449,16 +454,20 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                        residual, info = dayenu_filter(x=x, data=data, wgts=wgts, filter_dimensions=filter_dims_d,
                                                      filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                                                      filter_factors=suppression_factors, cache=cache, skip_wgt=skip_wgt,
-                                                     max_contiguous_edge_flags=max_contiguous_edge_flags)
+                                                     max_contiguous_edge_flags=max_contiguous_edge_flags,
+                                                     zero_residual_flags=zero_residual_flags)
                        model = data - residual
                        if len(mode) > 1:
                            model, _, info_deconv = _fit_basis_2d(x=x, data=model, filter_centers=filter_centers, filter_dims=filter_dims_d,
                                                                  skip_wgt=skip_wgt, basis=mode[1], method=mode[2], wgts=wgts, basis_options=filter_kwargs,
                                                                  filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
-                                                                 cache=cache, max_contiguous_edge_flags=max_contiguous_edge_flags)
+                                                                 cache=cache, max_contiguous_edge_flags=max_contiguous_edge_flags,
+                                                                 zero_residual_flags=zero_residual_flags)
                            info['info_deconv']=info_deconv
 
                    elif mode[0] in ['dft', 'dpss']:
+                       if zero_residual_flags is None:
+                           zero_residual_flags = True
                        if filter2d:
                            filter_dims_d = [1, 0]
                        else:
@@ -472,10 +481,14 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                        model, residual, info = _fit_basis_2d(x=x, data=data, filter_centers=filter_centers, filter_dims=filter_dims_d,
                                                            skip_wgt=skip_wgt, basis=mode[0], method=mode[1], wgts=wgts, basis_options=filter_kwargs,
                                                            filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
-                                                           cache=cache, max_contiguous_edge_flags=max_contiguous_edge_flags)
+                                                           cache=cache, max_contiguous_edge_flags=max_contiguous_edge_flags,
+                                                           zero_residual_flags=zero_residual_flags)
                    elif mode[0] == 'clean':
+                       if zero_residual_flags is None:
+                           zero_residual_flags = False
                        model, residual, info = _clean_filter(x=x, data=data, wgts=wgts, filter_centers=filter_centers, skip_wgt=skip_wgt,
-                                                            filter_half_widths=filter_half_widths, clean2d=filter2d, **filter_kwargs)
+                                                            filter_half_widths=filter_half_widths, clean2d=filter2d, zero_residual_flags=zero_residual_flags,
+                                                             **filter_kwargs)
                        if filter2d:
                            info['filter_params']['axis_0'] = filter_kwargs
                            info['filter_params']['axis_1'] = info['filter_params']['axis_0']
@@ -598,7 +611,8 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                      alpha=alpha, edgecut_low=edgecut_low, edgecut_hi=edgecut_hi, add_clean_residual=add_clean_residual)
 
 def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_widths, filter_factors,
-                  cache = {}, return_matrices=True, hash_decimal=10, skip_wgt=0.1, max_contiguous_edge_flags=10):
+                  cache = {}, return_matrices=True, hash_decimal=10, skip_wgt=0.1, max_contiguous_edge_flags=10,
+                  zero_residual_flags=True):
     '''
     Apply a linear delay filter to waterfall data.
     Due to performance reasons, linear filtering only supports separable delay/fringe-rate filters.
@@ -628,6 +642,12 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
     skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
         Model is left as 0s, residual is left as data, and info is {'skipped': True} for that
         time. Only works properly when all weights are all between 0 and 1.
+    max_contiguous_edge_flags : int, optional
+        if the number of contiguous samples at the edge is greater then this
+        at either side, skip .
+    zero_residual_flags : bool, optional.
+        If true, set flagged channels in the residual equal to zero.
+        Default is True.
     Returns
     -------
     data: array, 2d clean residual with data filtered along the frequency direction.
@@ -763,6 +783,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
     for fs in range(2):
         info['filter_params']['axis_%d'%fs]['filter_centers'] = filter_centers[fs]
         info['filter_params']['axis_%d'%fs]['filter_half_widths'] = filter_half_widths[fs]
+        info['filter_params']['axis_%d'%fs]['filter_factors'] = filter_factors[fs]
         info['filter_params']['axis_%d'%fs]['x'] = x[fs]
         info['filter_params']['axis_%d'%fs]['mode'] = 'dayenu'
     skipped = [[],[]]
@@ -828,7 +849,8 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                 info['status']['axis_%d'%fs][sample_num] = 'skipped'
             if return_matrices:
                 filter_matrices[fs][sample_num]=filter_mat
-    output[wgts == 0.] = 0.
+    if zero_residual_flags:
+        output = output * (~np.isclose(wgts, 0., atol=1e-10)).astype(float)
     # set residual equal to zero where weights are zero.
     #1d data will only be filtered across "channels".
     if data_1d and ntimes == 1:
@@ -1562,13 +1584,14 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     else:
         raise ValueError("Provided 'method', '%s', is not in ['leastsq', 'matrix']."%(method))
     model = amat @ (suppression_vector * cn_out)
-    resid = (y - model) * (np.abs(w) > 0.) #suppress flagged residuals (such as RFI)
+    resid = (y - model) * (~np.isclose(w, 0, atol=1e-10)).astype(float) #suppress flagged residuals (such as RFI)
     return model, resid, info
 
 def _clean_filter(x, data, wgts, filter_centers, filter_half_widths,
                   clean2d=False, tol=1e-9, window='none', skip_wgt=0.1,
                   maxiter=100, gain=0.1, filt2d_mode='rect', alpha=0.5,
-                  edgecut_low=0, edgecut_hi=0, add_clean_residual=False):
+                  edgecut_low=0, edgecut_hi=0, add_clean_residual=False,
+                  zero_residual_flags=True):
     '''
     core cleaning functionality
     Input sanitation not implemented. Should be called through
@@ -1604,6 +1627,9 @@ def _clean_filter(x, data, wgts, filter_centers, filter_half_widths,
     add_clean_residual : bool, if True, adds the CLEAN residual within the CLEAN bounds
         in fourier space to the CLEAN model. Note that the residual actually returned is
         not the CLEAN residual, but the residual in input data space.
+    zero_residual_flags : bool, optional.
+        If true, set flagged channels in the residual equal to zero.
+        Default is True.
     Returns:
         d_mdl: CLEAN model -- best fit low-pass filter components (CLEAN model) in real space
         d_res: CLEAN residual -- difference of data and d_mdl, nulled at flagged channels
@@ -1711,8 +1737,10 @@ def _clean_filter(x, data, wgts, filter_centers, filter_half_widths,
     else:
         model = np.fft.fft(_d_cl, axis=1)
     #transpose back if filtering the 0th dimension.
-    windmat = np.outer(window[0], window[1])
-    residual = (data - model) * ~np.isclose(wgts * windmat, 0.0)
+    residual = (data - model)
+    if zero_residual_flags:
+        windmat = np.outer(window[0], window[1])
+        residual *= (~np.isclose(wgts * windmat, 0.0, atol=1e-10)).astype(float)
     return model, residual, info
 
 
@@ -1721,7 +1749,8 @@ def _clean_filter(x, data, wgts, filter_centers, filter_half_widths,
 def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                 basis_options, suppression_factors=None,
                 method='leastsq', basis='dft', cache=None,
-                filter_dims = 1, skip_wgt=0.1, max_contiguous_edge_flags=5):
+                filter_dims = 1, skip_wgt=0.1, max_contiguous_edge_flags=5,
+                zero_residual_flags=True):
     """
     A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
     y_model = A @ c
@@ -1789,19 +1818,18 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                 using scipy.optimize.leastsq
             *'matrix' derive model by directly calculate the fitting matrix
                 [A^T W A]^{-1} A^T W and applying it to the y vector.
-
     filter_dim, int optional
         specify dimension to filter. default 1,
         and if 2d filter, will use both dimensions.
-
     skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
         Model is left as 0s, residual is left as data, and info is {'skipped': True} for that
         time. Only works properly when all weights are all between 0 and 1.
-
     max_contiguous_edge_flags : int, optional
         if the number of contiguous samples at the edge is greater then this
         at either side, skip .
-
+    zero_residual_flags : bool, optional.
+        If true, set flagged channels in the residual equal to zero.
+        Default is True.
     Returns
     -------
         model: array-like
@@ -1904,6 +1932,8 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
         for k in info:
             info[k]['axis_0'] = copy.deepcopy(info[k]['axis_1'])
             info[k]['axis_1'] = {}
+    if zero_residual_flags:
+        residual = residual * (~np.isclose(wgts, 0., atol=1e-10)).astype(float) # set residual to zero in flags.
     return model, residual, info
 
 
