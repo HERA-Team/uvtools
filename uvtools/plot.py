@@ -574,6 +574,7 @@ def labeled_waterfall(
 
     # Do any requested Fourier transforms and update axis labels.
     if fft_axis is not None:
+        scale_factor = 1  # To get the FFT data units right.
         freq_taper_kwargs = freq_taper_kwargs or {}
         time_taper_kwargs = time_taper_kwargs or {}
         if fft_axis not in ("freq", "time", "both", -1, 0, 1):
@@ -581,16 +582,19 @@ def labeled_waterfall(
         if type(fft_axis) is int:
             fft_axis = ("time", "freq", "both")[fft_axis]
         if fft_axis in ("freq", "both"):
+            scale_factor *= np.mean(np.diff(freqs))  # Hz
             delays = utils.fourier_freqs(freqs) * units.s.to(plot_units["delay"])
             data = utils.FFT(data, axis=1, taper=freq_taper, **freq_taper_kwargs)
             xvals = delays
             xlabel = f"Delay [{plot_units['delay']}]"
         if fft_axis in ("time", "both"):
+            scale_factor *= np.mean(np.diff(times * units.day.to("s")))
             fringe_rates = utils.fourier_freqs(times * units.day.to("s"))
             fringe_rates *= units.Hz.to(plot_units["fringe-rate"])
             data = utils.FFT(data, axis=0, taper=time_taper, **time_taper_kwargs)
             yvals = fringe_rates
             ylabel = f"Fringe Rate [{plot_units['fringe-rate']}]"
+        data *= scale_factor  # Convert to correct units.
 
     # Update data for plotting.
     data = data_mode(data, mode=mode)

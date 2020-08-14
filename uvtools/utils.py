@@ -1,4 +1,4 @@
-from numpy.fft import fft, fftshift
+from numpy.fft import fft, fftshift, ifftshift
 import numpy as np
 import glob
 
@@ -132,11 +132,24 @@ def FFT(data, axis=-1, taper=None, **kwargs):
         The Fourier transform of the data along the specified axis. The array
         has the same shape as the original data, with the same ordering.
     """
+    # Ensure that the trick for reshaping the window works for 1-D arrays.
+    axis = np.arange(data.ndim)[axis]
     window = dspec.gen_window(taper, data.shape[axis], **kwargs)
     new_shape = tuple([1 if ax != axis else -1 for ax in range(data.ndim)])
     window.shape = new_shape
 
-    return fftshift(fft(fftshift(window * data, axis), axis=axis), axis)
+    # It's not obvious what the correct way to shift the data is; numpy docs
+    # state that fft(A) gives the Fourier transform, with correct phases and
+    # amplitudes, with the convention that positive frequencies are first,
+    # followed by negative frequencies (i.e. fftshift(fft(A)) gives the right
+    # answer ordered to be monotonically increasing in Fourier frequency).
+    # Contrary to that, there are discussions on stackoverflow that suggest
+    # the phases will be incorrect *unless* the data is subjected to an
+    # ifftshift before being transformed; however, some simple tests suggest
+    # that shifting the data prior to transforming actually creates phase
+    # instabilities and conjugates the transformed data relative to what is
+    # expected. So we perform no shifting prior to transforming.
+    return fftshift(fft(window * data, axis=axis), axis)
 
 def fourier_freqs(times):
     """A function for generating Fourier frequencies given 'times'.
