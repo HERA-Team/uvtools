@@ -21,10 +21,12 @@ DAYENU_DEFAULTS_1D = {'suppression_factors' : [1e-9],
                  'max_contiguous_edge_flags' : 10}
 DPSS_DEFAULTS_1D = {'suppression_factors' :  [1e-9],
                'eigenval_cutoff' : [1e-12],
-               'max_contiguous_edge_flags' : 10}
+               'max_contiguous_edge_flags' : 10,
+               'filt2d_mode' : 'outer'}
 DFT_DEFAULTS_1D = {'suppression_factors' : [1e-9],
                 'fundamental_period' : np.nan,
-                'max_contiguous_edge_flags' : 10}
+                'max_contiguous_edge_flags' : 10,
+                'filt2d_mode' : 'outer'}
 
 CLEAN_DEFAULTS_2D = {'tol':1e-9, 'window': ['none', 'none'],
  'alpha':.5, 'maxiter':100, 'gain':0.1,
@@ -34,10 +36,12 @@ DAYENU_DEFAULTS_2D = {'suppression_factors' : [[1e-9], [1e-9]],
                  'max_contiguous_edge_flags' : 10}
 DPSS_DEFAULTS_2D = {'suppression_factors' : [[1e-9], [1e-9]],
                'eigenval_cutoff' : [[1e-12], [1e-12]],
-               'max_contiguous_edge_flags' : 10}
+               'max_contiguous_edge_flags' : 10,
+               'filt2d_mode' : 'outer'}
 DFT_DEFAULTS_2D = {'suppression_factors' : [[1e-9], [1e-9]],
                 'fundamental_period' : [np.nan, np.nan],
-                'max_contiguous_edge_flags' : 10}
+                'max_contiguous_edge_flags' : 10,
+                'filt2d_mode' : 'outer'}
 
 
 def _process_filter_kwargs(kwarg_dict, default_dict):
@@ -139,7 +143,11 @@ def _fourier_filter_hash(filter_centers, filter_half_widths,
     + ('filter_half_widths x N x DF:',) + tuple(np.round(np.asarray(filter_half_widths) * np.mean(np.diff(x)) * len(x), hash_decimal))\
     + ('filter_factors x 1e9:',) + tuple(np.round(np.asarray(filter_factors) * 1e9, hash_decimal))
     if w is not None:
-        filter_key = filter_key + ('weights', ) +  tuple(np.round(w.tolist(), hash_decimal))
+        # hash binary flags as booleans
+        if np.all((w == 0) | (w == 1)):
+            filter_key = filter_key + ('weights', ) +  tuple(w.astype(bool).tolist())
+        else:
+            filter_key = filter_key + ('weights', ) +  tuple(np.round(w.tolist(), hash_decimal))
     filter_key = filter_key + tuple([kwargs[k] for k in kwargs])
     return filter_key
 
@@ -276,6 +284,13 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                             max_contiguous_edge_flags  : int, optional
                                 if the number of contiguous samples at the edge is greater then this
                                 at either side, skip.
+                            filt2d_mode, string optional
+                                can be in {"rect", "outer"}. If "rect" treat each filter center and filter width in time as defining the bounds
+                                of a separate rectangle that is independently fitted and subtracted from the data in Fourier space. If "outer"
+                                then remove all combinations of rectangular regions that arise from the provided list of time and frequency
+                                regions. Default is "outer".
+                            cache : dict, optional
+                                dictionary for caching fitting matrices.
                         *  dayenu :
                             cache : dict, optional
                                 dictionary for caching fitting matrices.
@@ -298,6 +313,11 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                             max_contiguous_edge_flags : int, optional
                                 if the number of contiguous samples at the edge is greater then this
                                 at either side, skip.
+                            filt2d_mode, string optional
+                                can be in {"rect", "outer"}. If "rect" treat each filter center and filter width in time as defining the bounds
+                                of a separate rectangle that is independently fitted and subtracted from the data in Fourier space. If "outer"
+                                then remove all combinations of rectangular regions that arise from the provided list of time and frequency
+                                regions. Default is "outer".
                             cache : dict, optional
                                 dictionary for caching fitting matrices.
                         * clean :
@@ -458,11 +478,12 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                                                      zero_residual_flags=zero_residual_flags)
                        model = data - residual
                        if len(mode) > 1:
+                           filt2d_mode = filter_kwargs.pop('filt2d_mode')
                            model, _, info_deconv = _fit_basis_2d(x=x, data=model, filter_centers=filter_centers, filter_dims=filter_dims_d,
                                                                  skip_wgt=skip_wgt, basis=mode[1], method=mode[2], wgts=wgts, basis_options=filter_kwargs,
                                                                  filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
                                                                  cache=cache, max_contiguous_edge_flags=max_contiguous_edge_flags,
-                                                                 zero_residual_flags=zero_residual_flags)
+                                                                 zero_residual_flags=zero_residual_flags, filt2d_mode=filt2d_mode)
                            info['info_deconv']=info_deconv
 
                    elif mode[0] in ['dft', 'dpss']:
@@ -477,6 +498,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                            filter_dims_d = [1]
                        suppression_factors = filter_kwargs.pop('suppression_factors')
                        max_contiguous_edge_flags = filter_kwargs.pop('max_contiguous_edge_flags')
+                       filt2d_mode = filter_kwargs.pop('filt2d_mode')
                        #if filter2d is True, create fitting_options that is a 2-list for 0 and 1 dimension
                        model, residual, info = _fit_basis_2d(x=x, data=data, filter_centers=filter_centers, filter_dims=filter_dims_d,
                                                            skip_wgt=skip_wgt, basis=mode[0], method=mode[1], wgts=wgts, basis_options=filter_kwargs,
@@ -490,10 +512,12 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                                                             filter_half_widths=filter_half_widths, clean2d=filter2d, zero_residual_flags=zero_residual_flags,
                                                              **filter_kwargs)
                        if filter2d:
-                           info['filter_params']['axis_0'] = filter_kwargs
-                           info['filter_params']['axis_1'] = info['filter_params']['axis_0']
+                           for param in filter_kwargs:
+                               info['filter_params']['axis_0'][param] = filter_kwargs[param]
+                               info['filter_params']['axis_1'][param] = info['filter_params']['axis_0'][param]
                        else:
-                           info['filter_params']['axis_1'] = filter_kwargs
+                           for param in filter_kwargs:
+                               info['filter_params']['axis_1'][param] = filter_kwargs[param]
                    if 0 in filter_dims and not filter2d:
                         # undo transposes if we were performing a dimension 0
                         # time filter.
@@ -1661,29 +1685,40 @@ def _clean_filter(x, data, wgts, filter_centers, filter_half_widths,
     info['filter_params'] = {'axis_0':{}, 'axis_1':{}}
     info['clean_status'] = {'axis_0':{}, 'axis_1':{}}
     info['status'] = {'axis_0':{}, 'axis_1':{}}
-    if filt2d_mode == 'rect' or not clean2d:
+    if not clean2d:
+        # if we are not in 2d clean mode, then area is the outer product of the
+        # cleaning area in the axis to be cleaned and ones along the axis not to
+        # be cleaned. This is because the filter_width is infinity along the axis
+        # not to be cleaned so _get_filter_area gives all ones.
         for m in range(2):
             for fc, fw in zip(filter_centers[m], filter_half_widths[m]):
                 area_vecs[m] = _get_filter_area(x[m], fc, fw)
         area = np.outer(area_vecs[0], area_vecs[1])
-    elif filt2d_mode == 'plus' and clean2d:
-        area = np.zeros(data.shape)
-        #construct and add a 'plus' for each filtering window pair in each dimension.
-        for fc0, fw0 in zip(filter_centers[0], filter_half_widths[0]):
-            for fc1, fw1 in zip(filter_centers[1], filter_half_widths[1]):
-                area_temp = np.zeros(area.shape)
-                if fc0 >= _x[0].min() and fc0 <= _x[0].max():
-                    #generate area vector centered at zero
-                    av = _get_filter_area(x[1], fc1, fw1)
-                    area_temp[np.argmin(np.abs(_x[0]-fc0)), :] = av
-                if fc1 >= _x[1].min() and fc1 <= _x[1].max():
-                    #generate area vector centered at zero
-                    av = _get_filter_area(x[0], fc0, fw0)
-                    area_temp[:, np.argmin(np.abs(_x[1]-fc1))] = av
-                area += area_temp
-        area = (area>0.).astype(int)
     else:
-        raise ValueError("%s is not a valid filt2d_mode! choose from ['rect', 'plus']"%(filt2d_mode))
+        # if we are doing 2dclean, then either do rectangular or plus mode.
+        area = np.zeros(data.shape)
+        # in rectangle mode, the list of time filter centers / widths and frequency filter centers / widths
+        # specify rectangular regions in 2d Fourier space to CLEAN in. This loop iterates over those centers
+        # and widths.
+        for fc_t, fw_t, fc_f, fw_f in zip(filter_centers[0], filter_half_widths[0], filter_centers[1], filter_half_widths[1]):
+            if filt2d_mode == 'rect':
+                # determine rectangular region by taking outer products of filter areas along fourier time and fourier freq
+                # axes.
+                area_t = np.outer(_get_filter_area(x[0], fc_t, fw_t), _get_filter_area(x[1], fc_f, fw_f))
+            elif filt2d_mode == 'plus':
+                area_t = np.zeros(area.shape)
+                if fc_t >= _x[0].min() and fc_t <= _x[0].max():
+                    #generate area vector centered at zero
+                    av = _get_filter_area(x[1], fc_f, fw_f)
+                    area_t[np.argmin(np.abs(_x[0]-fc_t)), :] = av
+                if fc_f >= _x[1].min() and fc_f <= _x[1].max():
+                    #generate area vector centered at zero
+                    av = _get_filter_area(x[0], fc_t, fw_t)
+                    area_t[:, np.argmin(np.abs(_x[1]-fc_f))] = av
+            else:
+                raise ValueError("%s is not a valid filt2d_mode! choose from ['rect', 'plus']"%(filt2d_mode))
+            area += area_t
+        area = (area>0.).astype(int)
     if clean2d:
         _wgts = np.fft.ifft2(window[0] * wgts * window[1])
         _data = np.fft.ifft2(window[0] * data * wgts * window[1])
@@ -1709,7 +1744,11 @@ def _clean_filter(x, data, wgts, filter_centers, filter_half_widths,
                 del(_info['res'])
                 info['clean_status']['axis_1'][i] = _info
                 info['status']['axis_1'][i] = 'success'
+        info['filter_params']['axis_1']['area'] = area.astype(bool)
     elif clean2d:
+            #  save area in both dims. Save as a bool to save space.
+            info['filter_params']['axis_0']['area'] = area.astype(bool)
+            info['filter_params']['axis_1']['area'] = info['filter_params']['axis_0']['area']
             # we skip 2d cleans if all the data is close to zero (which can cause an infinite clean loop)
             # or the weights are all equal to zero which can also lead to a clean loop.
             # the maximum of _wgts should be the average value of all cells in 2d wgts.
@@ -1748,7 +1787,7 @@ def _clean_filter(x, data, wgts, filter_centers, filter_half_widths,
 
 def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                 basis_options, suppression_factors=None,
-                method='leastsq', basis='dft', cache=None,
+                method='leastsq', basis='dft', cache=None, filt2d_mode='outer',
                 filter_dims = 1, skip_wgt=0.1, max_contiguous_edge_flags=5,
                 zero_residual_flags=True):
     """
@@ -1821,6 +1860,11 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
     filter_dim, int optional
         specify dimension to filter. default 1,
         and if 2d filter, will use both dimensions.
+    filt2d_mode, string optional
+        can be in {"rect", "outer"}. If "rect" treat each filter center and filter width in time as defining the bounds
+        of a separate rectangle that is independently fitted and subtracted from the data in Fourier space. If "outer"
+        then remove all combinations of rectangular regions that arise from the provided list of time and frequency
+        regions. Default is "outer".
     skip_wgt: skips filtering rows with very low total weight (unflagged fraction ~< skip_wgt).
         Model is left as 0s, residual is left as data, and info is {'skipped': True} for that
         time. Only works properly when all weights are all between 0 and 1.
@@ -1876,52 +1920,109 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
         basis_options = [{k:basis_options[k][0] for k in basis_options}, {k:basis_options[k][1] for k in basis_options}]
     #filter -1 dimension
     model = np.zeros_like(data)
-    for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
-        if np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
-                                                        and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
-            model[i], _, info_t = _fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
-                                            filter_half_widths=filter_half_widths[1],
-                                            suppression_factors=suppression_factors[1],
-                                            basis_options=basis_options[1], method=method,
-                                            basis=basis, cache=cache)
-            info['status']['axis_1'][i] = 'success'
-        else:
-            info['status']['axis_1'][i] = 'skipped'
-    #and if filter2d, filter the 0 dimension. Note that we feed in the 'model'
-    #set wgts for time filtering to happen on skipped rows
-    info['filter_params'] = {'axis_0':{}, 'axis_1':{}}
-    if np.any([info['status']['axis_1'][i] == 'success' for i in info['status']['axis_1']]):
-        info['filter_params']['axis_1']['method'] = info_t['method']
-        info['filter_params']['axis_1']['basis'] = info_t['basis']
-        info['filter_params']['axis_1']['filter_centers'] = info_t['filter_centers']
-        info['filter_params']['axis_1']['filter_half_widths'] = info_t['filter_half_widths']
-        info['filter_params']['axis_1']['suppression_factors'] = info_t['suppression_factors']
-        info['filter_params']['axis_1']['basis_options'] = info_t['basis_options']
-        info['filter_params']['axis_1']['mode'] = info_t['basis'] + '_' + method
-    if filter2d:
-        wgts_time = np.ones_like(wgts)
-        for i in range(data.shape[0]):
-            if info['status']['axis_1'][i] == 'skipped':
-                wgts_time[i] = 0.
-        for i, _y, _w, in zip(range(model.shape[1]), model.T, wgts_time.T):
+    if filt2d_mode == 'outer' or not filter2d:
+        for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
             if np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
-               and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
-                model.T[i], _, info_t = _fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
-                                                                 filter_half_widths=filter_half_widths[0],
-                                                                 suppression_factors=suppression_factors[0],
-                                                                 basis_options=basis_options[0], method=method,
-                                                                 basis=basis, cache=cache)
-                info['status']['axis_0'][i] = 'success'
+                                                            and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
+                model[i], _, info_t = _fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
+                                                filter_half_widths=filter_half_widths[1],
+                                                suppression_factors=suppression_factors[1],
+                                                basis_options=basis_options[1], method=method,
+                                                basis=basis, cache=cache)
+                info['status']['axis_1'][i] = 'success'
             else:
-                info['status']['axis_0'][i] = 'skipped'
-        if np.any([info['status']['axis_0'][i] == 'success' for i in info['status']['axis_0']]):
-            info['filter_params']['axis_0']['method'] = info_t['method']
-            info['filter_params']['axis_0']['basis'] = info_t['basis']
-            info['filter_params']['axis_0']['filter_centers'] = info_t['filter_centers']
-            info['filter_params']['axis_0']['filter_half_widths'] = info_t['filter_half_widths']
-            info['filter_params']['axis_0']['suppression_factors'] = info_t['suppression_factors']
-            info['filter_params']['axis_0']['basis_options'] = info_t['basis_options']
-
+                info['status']['axis_1'][i] = 'skipped'
+        #and if filter2d, filter the 0 dimension. Note that we feed in the 'model'
+        #set wgts for time filtering to happen on skipped rows
+        info['filter_params'] = {'axis_0':{}, 'axis_1':{}}
+        if np.any([info['status']['axis_1'][i] == 'success' for i in info['status']['axis_1']]):
+            info['filter_params']['axis_1']['method'] = info_t['method']
+            info['filter_params']['axis_1']['basis'] = info_t['basis']
+            info['filter_params']['axis_1']['filter_centers'] = info_t['filter_centers']
+            info['filter_params']['axis_1']['filter_half_widths'] = info_t['filter_half_widths']
+            info['filter_params']['axis_1']['suppression_factors'] = info_t['suppression_factors']
+            info['filter_params']['axis_1']['basis_options'] = info_t['basis_options']
+            info['filter_params']['axis_1']['mode'] = info_t['basis'] + '_' + method
+        if filter2d:
+            wgts_time = np.ones_like(wgts)
+            for i in range(data.shape[0]):
+                if info['status']['axis_1'][i] == 'skipped':
+                    wgts_time[i] = 0.
+            for i, _y, _w, in zip(range(model.shape[1]), model.T, wgts_time.T):
+                if np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
+                   and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
+                    model.T[i], _, info_t = _fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
+                                                                     filter_half_widths=filter_half_widths[0],
+                                                                     suppression_factors=suppression_factors[0],
+                                                                     basis_options=basis_options[0], method=method,
+                                                                     basis=basis, cache=cache)
+                    info['status']['axis_0'][i] = 'success'
+                else:
+                    info['status']['axis_0'][i] = 'skipped'
+            if np.any([info['status']['axis_0'][i] == 'success' for i in info['status']['axis_0']]):
+                info['filter_params']['axis_0']['method'] = info_t['method']
+                info['filter_params']['axis_0']['basis'] = info_t['basis']
+                info['filter_params']['axis_0']['filter_centers'] = info_t['filter_centers']
+                info['filter_params']['axis_0']['filter_half_widths'] = info_t['filter_half_widths']
+                info['filter_params']['axis_0']['suppression_factors'] = info_t['suppression_factors']
+                info['filter_params']['axis_0']['basis_options'] = info_t['basis_options']
+    elif filt2d_mode == 'rect':
+        residual = copy.deepcopy(data)
+        model = np.zeros_like(data)
+        # if filt2d_mode is rect, then iterate through each pair of freq-time rectangular bounds
+        info['filter_params'] = {'axis_0':{'round%d'%r:{} for r in range(len(filter_centers[0]))}, 'axis_1':{'round%d'%r:{} for r in range(len(filter_centers[0]))}}
+        for stepnum, fc_t, fw_t, sf_t, fc_f, fw_f, sf_f in zip(range(len(filter_centers[0])), filter_centers[0], filter_half_widths[0], suppression_factors[0], filter_centers[1], filter_half_widths[1], suppression_factors[1]):
+            # construct model in frequency direction.
+            model_temp = np.zeros_like(data)
+            for i, _y, _w, in zip(range(data.shape[0]), residual, wgts):
+                if np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
+                                                                and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
+                    model_temp[i], _, info_t = _fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=[fc_f],
+                                                    filter_half_widths=[fw_f],
+                                                    suppression_factors=[sf_f],
+                                                    basis_options=basis_options[1], method=method,
+                                                    basis=basis, cache=cache)
+                    info['status']['axis_1'][i] = 'success'
+                else:
+                    info['status']['axis_1'][i] = 'skipped'
+                if np.any([info['status']['axis_1'][i] == 'success' for i in info['status']['axis_1']]):
+                    info['filter_params']['axis_1']['round%d'%stepnum]['method'] = info_t['method']
+                    info['filter_params']['axis_1']['round%d'%stepnum]['basis'] = info_t['basis']
+                    info['filter_params']['axis_1']['round%d'%stepnum]['filter_centers'] = info_t['filter_centers']
+                    info['filter_params']['axis_1']['round%d'%stepnum]['filter_half_widths'] = info_t['filter_half_widths']
+                    info['filter_params']['axis_1']['round%d'%stepnum]['suppression_factors'] = info_t['suppression_factors']
+                    info['filter_params']['axis_1']['round%d'%stepnum]['basis_options'] = info_t['basis_options']
+                    info['filter_params']['axis_1']['round%d'%stepnum]['mode'] = info_t['basis'] + '_' + method
+            wgts_time = np.ones_like(wgts)
+            for i in range(data.shape[0]):
+                if info['status']['axis_1'][i] == 'skipped':
+                    wgts_time[i] = 0.
+            # restrict its time evolution in the time-direction to be consisting of time-basis functions.
+            for i, _y, _w, in zip(range(model.shape[1]), model_temp.T, wgts_time.T):
+                if np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
+                   and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
+                    model_temp.T[i], _, info_t = _fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=[fc_t],
+                                                                     filter_half_widths=[fw_t],
+                                                                     suppression_factors=[sf_t],
+                                                                     basis_options=basis_options[0], method=method,
+                                                                     basis=basis, cache=cache)
+                    info['status']['axis_0'][i] = 'success'
+                else:
+                    info['status']['axis_0'][i] = 'skipped'
+                if np.any([info['status']['axis_0'][i] == 'success' for i in info['status']['axis_0']]):
+                    info['filter_params']['axis_0']['round%d'%stepnum]['method'] = info_t['method']
+                    info['filter_params']['axis_0']['round%d'%stepnum]['basis'] = info_t['basis']
+                    info['filter_params']['axis_0']['round%d'%stepnum]['filter_centers'] = info_t['filter_centers']
+                    info['filter_params']['axis_0']['round%d'%stepnum]['filter_half_widths'] = info_t['filter_half_widths']
+                    info['filter_params']['axis_0']['round%d'%stepnum]['suppression_factors'] = info_t['suppression_factors']
+                    info['filter_params']['axis_0']['round%d'%stepnum]['basis_options'] = info_t['basis_options']
+            # and subtract it (effectively subtracting rectangular Fourier model)
+            residual = (residual - model_temp) * (np.abs(wgts) > 0.).astype(float)
+            # and add the model to the overall model.
+            model += model_temp
+            # repeate this for all the rectangle bounds provided.
+    else:
+        raise ValueError("%s not a supported filt2d_mode ('rect', 'outer')"%filt2d_mode)
     residual = (data - model) * (np.abs(wgts) > 0).astype(float)
     #this will only happen if filter_dims is only zero!
     if filter_dims[0] == 0:
