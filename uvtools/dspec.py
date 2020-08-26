@@ -1682,8 +1682,8 @@ def _clean_filter(x, data, wgts, filter_centers, filter_half_widths,
             if filt2d_mode == 'rect':
                 # determine rectangular region by taking outer products of filter areas along fourier time and fourier freq
                 # axes.
-                area_t = np.outer(_get_filter_area(x[0], fc_t, fw_t), _get_filter_area(x[1], fc_nu, fw_nu))
-            elif rilt2d_mode == 'plus':
+                area_t = np.outer(_get_filter_area(x[0], fc_t, fw_t), _get_filter_area(x[1], fc_f, fw_f))
+            elif filt2d_mode == 'plus':
                 area_t = np.zeros(area.shape)
                 if fc_t >= _x[0].min() and fc_t <= _x[0].max():
                     #generate area vector centered at zero
