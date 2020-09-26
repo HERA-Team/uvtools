@@ -67,7 +67,7 @@ def parse_ants(antstr):
 
 def parse_range(chanstr):
     """Split apart command-line lists/ranges into a list of numbers."""
-    rv = [map(int,s.split('_')) for s in chanstr.split(',')]
+    rv = [[int(ss) for ss in s.split('_')] for s in chanstr.split(',')]
     rv = [np.arange(c[0], c[1]+1) if len(c) == 2 else c for c in rv]
     return np.concatenate(rv)
 
@@ -153,8 +153,8 @@ def sort_func(a, b):
     return 1
 
 #import IPython; IPython.embed()
-bls = data.keys()
-bls.sort(cmp=sort_func)
+bls = list(data.keys())
+bls.sort()
 if len(bls) == 0:
     print('No data to plot.')
     sys.exit(0)
