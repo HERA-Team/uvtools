@@ -860,11 +860,13 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                                                          filter_factors=filter_factors[fs], cache=cache) * wght_mat
                     # only solve for unflagged channels.
                     selection = ~np.isclose(wght,0.)
+                    nsel = np.count_nonzero(selection)
                     res = lsq_linear(filter_mat[selection][:, selection], sample[selection] * wght[selection])
                     if fs == 0:
                         output[selection, sample_num] = res.x
                     elif fs == 1:
                         output[sample_num, selection] = res.x
+                    info['status']['axis_%d'%fs][sample_num] = 'success'
                 else:
                     skipped[fs-1].append(sample_num)
                     info['status']['axis_%d'%fs][sample_num] = 'skipped'

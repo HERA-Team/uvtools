@@ -369,6 +369,10 @@ def test_dayenu_filter():
     #now filter foregrounds and signal and test that std of residuals are close to std of signal.
     filtered_signal, _ =  dspec.dayenu_filter(np.arange(-nf/2, nf/2)*df, fg_sg, wghts_1d, [1], filter_centers, filter_half_widths,
                                               filter_factors)
+    filtered_signal1, _ =  dspec.dayenu_filter(np.arange(-nf/2, nf/2)*df, fg_sg, wghts_1d, [1], filter_centers, filter_half_widths,
+                                              filter_factors, gradient_descent=False)
+
+    nt.assert_true(np.all(np.isclose(filtered_signal, filtered_signal1, rtol=1e-7, atol=1e-3)))
 
     np.testing.assert_almost_equal( (np.std(filtered_signal.real)**2. + np.std(filtered_signal.imag)**2.)/1e4,
                                   (np.std(sg_tone.real)**2. + np.std(sg_tone.imag)**2.)/1e4, decimal = 0)
