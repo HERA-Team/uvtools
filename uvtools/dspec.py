@@ -612,7 +612,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
 
 def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_widths, filter_factors,
                   cache = {}, return_matrices=True, hash_decimal=10, skip_wgt=0.1, max_contiguous_edge_flags=10,
-                  zero_residual_flags=True):
+                  zero_residual_flags=True, gradient_descent=True):
     '''
     Apply a linear delay filter to waterfall data.
     Due to performance reasons, linear filtering only supports separable delay/fringe-rate filters.
@@ -813,42 +813,62 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
             filter_key = _fourier_filter_hash(filter_centers=filter_centers[fs], filter_half_widths=filter_half_widths[fs],
                                               filter_factors=filter_factors[fs], x=x[fs], w=wght,
                                               label='dayenu_filter_matrix')
-            if not filter_key in cache:
-                #only calculate filter matrix and psuedo-inverse explicitly if they are not already cached
-                #(saves calculation time).
+            if not gradient_descent:
+                if not filter_key in cache:
+                    #only calculate filter matrix and psuedo-inverse explicitly if they are not already cached
+                    #(saves calculation time).
+                    if np.count_nonzero(wght) / len(wght) >= skip_wgt and np.count_nonzero(wght[:max_contiguous_edge_flags]) > 0 \
+                       and np.count_nonzero(wght[-max_contiguous_edge_flags:]) >0:
+                        wght_mat = np.outer(wght.T, wght)
+                        filter_mat = dayenu_mat_inv(x=x[fs], filter_centers=filter_centers[fs],
+                                                             filter_half_widths=filter_half_widths[fs],
+                                                             filter_factors=filter_factors[fs], cache=cache) * wght_mat
+                        try:
+                            #Try taking psuedo-inverse. Occasionally I've encountered SVD errors
+                            #when a lot of channels are flagged. Interestingly enough, I haven't
+                            #I'm not sure what the precise conditions for the error are but
+                            #I'm catching it here.
+                            cache[filter_key] = np.linalg.pinv(filter_mat)
+                        except np.linalg.LinAlgError:
+                            # skip if we can't invert or psuedo-invert the matrix.
+                            cache[filter_key] = None
+                    else:
+                        # skip if we don't meet skip_wegith criterion or continuous edge flags
+                        # are to many. This last item isn't really a problem for dayenu
+                        # but it's here for consistancy.
+                        cache[filter_key] = None
+
+                filter_mat = cache[filter_key]
+                if filter_mat is not None:
+                    if fs == 0:
+                        output[:, sample_num] = np.dot(filter_mat, sample)
+                    elif fs == 1:
+                        output[sample_num] = np.dot(filter_mat, sample)
+                    info['status']['axis_%d'%fs][sample_num] = 'success'
+                else:
+                    skipped[fs-1].append(sample_num)
+                    info['status']['axis_%d'%fs][sample_num] = 'skipped'
+                if return_matrices:
+                    filter_matrices[fs][sample_num]=filter_mat
+            else:
+                # solve for resid in dayenu_mat @ resid == data
                 if np.count_nonzero(wght) / len(wght) >= skip_wgt and np.count_nonzero(wght[:max_contiguous_edge_flags]) > 0 \
                    and np.count_nonzero(wght[-max_contiguous_edge_flags:]) >0:
                     wght_mat = np.outer(wght.T, wght)
                     filter_mat = dayenu_mat_inv(x=x[fs], filter_centers=filter_centers[fs],
                                                          filter_half_widths=filter_half_widths[fs],
                                                          filter_factors=filter_factors[fs], cache=cache) * wght_mat
-                    try:
-                        #Try taking psuedo-inverse. Occasionally I've encountered SVD errors
-                        #when a lot of channels are flagged. Interestingly enough, I haven't
-                        #I'm not sure what the precise conditions for the error are but
-                        #I'm catching it here.
-                        cache[filter_key] = np.linalg.pinv(filter_mat)
-                    except np.linalg.LinAlgError:
-                        # skip if we can't invert or psuedo-invert the matrix.
-                        cache[filter_key] = None
+                    # only solve for unflagged channels.
+                    selection = ~np.isclose(wght,0.)
+                    res = lsq_linear(filter_mat[selection][:, selection], sample[selection] * wght[selection])
+                    if fs == 0:
+                        output[selection, sample_num] = res.x
+                    elif fs == 1:
+                        output[sample_num, selection] = res.x
                 else:
-                    # skip if we don't meet skip_wegith criterion or continuous edge flags
-                    # are to many. This last item isn't really a problem for dayenu
-                    # but it's here for consistancy.
-                    cache[filter_key] = None
+                    skipped[fs-1].append(sample_num)
+                    info['status']['axis_%d'%fs][sample_num] = 'skipped'
 
-            filter_mat = cache[filter_key]
-            if filter_mat is not None:
-                if fs == 0:
-                    output[:, sample_num] = np.dot(filter_mat, sample)
-                elif fs == 1:
-                    output[sample_num] = np.dot(filter_mat, sample)
-                info['status']['axis_%d'%fs][sample_num] = 'success'
-            else:
-                skipped[fs-1].append(sample_num)
-                info['status']['axis_%d'%fs][sample_num] = 'skipped'
-            if return_matrices:
-                filter_matrices[fs][sample_num]=filter_mat
     if zero_residual_flags:
         output = output * (~np.isclose(wgts, 0., atol=1e-10)).astype(float)
     # set residual equal to zero where weights are zero.
