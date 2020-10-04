@@ -10,6 +10,7 @@ from six.moves import range
 from scipy.signal import windows
 from warnings import warn
 from scipy.optimize import leastsq, lsq_linear
+from scipy.linalg import solve_toeplitz
 import copy
 
 #DEFAULT PARAMETERS FOR CLEANs
@@ -861,11 +862,17 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                     # only solve for unflagged channels.
                     selection = ~np.isclose(wght,0.)
                     nsel = np.count_nonzero(selection)
-                    res = lsq_linear(filter_mat[selection][:, selection], sample[selection] * wght[selection])
+                    #res = lsq_linear(filter_mat[selection][:, selection], sample[selection] * wght[selection])
+                    #res = res.x
+                    # gemerate a toeplitz matrix
+                    first_row = filter_mat[selection][:, selection][0]
+                    first_col = filter_mat[selection][:, selection][:, 0]
+                    res = solve_toeplitz((first_col, first_row), (sample * wgt)[selection])
+
                     if fs == 0:
-                        output[selection, sample_num] = res.x
+                        output[selection, sample_num] = res
                     elif fs == 1:
-                        output[sample_num, selection] = res.x
+                        output[sample_num, selection] = res
                     info['status']['axis_%d'%fs][sample_num] = 'success'
                 else:
                     skipped[fs-1].append(sample_num)
