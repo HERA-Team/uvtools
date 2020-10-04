@@ -862,12 +862,13 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                     # only solve for unflagged channels.
                     selection = ~np.isclose(wght,0.)
                     nsel = np.count_nonzero(selection)
-                    #res = lsq_linear(filter_mat[selection][:, selection], sample[selection] * wght[selection])
-                    #res = res.x
+                    res = lsq_linear(filter_mat[selection][:, selection], sample[selection] * wght[selection])
+                    res = res.x
+                    # TOEPLITZ WONT WORK IF WE HAVE CHANNEL FLAGS!!!
                     # gemerate a toeplitz matrix
-                    first_row = filter_mat[selection][:, selection][0]
-                    first_col = filter_mat[selection][:, selection][:, 0]
-                    res = solve_toeplitz((first_col, first_row), (sample * wgt)[selection])
+                    #first_row = filter_mat[selection][:, selection][0]
+                    #first_col = filter_mat[selection][:, selection][:, 0]
+                    #res = solve_toeplitz((first_col, first_row), (sample * wgt)[selection])
 
                     if fs == 0:
                         output[selection, sample_num] = res
