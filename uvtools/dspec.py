@@ -2089,7 +2089,8 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         if nterms is None:
             nterms = []
             for fn,fw in enumerate(filter_half_widths):
-                dpss_vectors = windows.dpss(nf, nf * df * fw, nf)
+                # also handle case where nf * df * fw >= nf/2.
+                dpss_vectors = windows.dpss(nf, np.min([nf * df * fw, (nf-1)/2.]), nf)
                 if not eigenval_cutoff is None:
                     smat = np.sinc(2 * fw * (xg-yg)) * 2 * df * fw
                     eigvals = np.sum((smat @ dpss_vectors.T) * dpss_vectors.T, axis=0)
@@ -2111,7 +2112,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         #next, construct A matrix.
         amat = []
         for fc, fw, nt in zip(filter_centers,filter_half_widths, nterms):
-            amat.append(np.exp(2j * np.pi * (yg[:,:nt]-xc) * fc ) * windows.dpss(nf, nf * df * fw, nt).T )
+            amat.append(np.exp(2j * np.pi * (yg[:,:nt]-xc) * fc ) * windows.dpss(nf, np.min([nf * df * fw, (nt-1)/2.]), nt).T )
         cache[opkey] = ( np.hstack(amat), nterms )
     return cache[opkey]
 
