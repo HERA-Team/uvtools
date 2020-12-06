@@ -443,7 +443,20 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                             filter_kwargs['fundamental_period'] = fp[0]
                         else:
                             filter_kwargs['fundamental_period'] = list(fp)
-
+                   # if filter_half_widths are less then zero
+                   # then do not perform any filtering
+                   # by flagging everything.
+                   for fw in filter_half_widths:
+                       if filter2d and np.any(fw <= 0.0):
+                           filter_half_widths=[[1.],[1.]]
+                           wgts=np.zeros_like(wgts)
+                           warn("Filter half-width provided that is less then zero. Skipping.")
+                           break
+                       elif: fw <= 0.0:
+                           filter_half_widths=[1.]
+                           wgts=np.zeros_like(wgts)
+                           warn("Filter half-width provided that is less then zero. Skipping.")
+                           break
                    if mode[0] == 'dayenu':
                        if zero_residual_flags is None:
                            zero_residual_flags = True
