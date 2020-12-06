@@ -452,7 +452,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                            wgts=np.zeros_like(wgts)
                            warn("Filter half-width provided that is less then zero. Skipping.")
                            break
-                       elif: fw <= 0.0:
+                       elif fw <= 0.0:
                            filter_half_widths=[1.]
                            wgts=np.zeros_like(wgts)
                            warn("Filter half-width provided that is less then zero. Skipping.")
