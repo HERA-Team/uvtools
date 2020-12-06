@@ -436,7 +436,9 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                                 if np.isnan(fp[m]):
                                     fp[m] = 2. * (x[m].max() - x[m].min())
                         else:
-                            fp = [2. * (x.max() - x.min())]
+                            if np.isnan(fp[0]):
+                                fp = [2. * (x.max() - x.min())]
+
                         if len(fp) == 1:
                             filter_kwargs['fundamental_period'] = fp[0]
                         else:
