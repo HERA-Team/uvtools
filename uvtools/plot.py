@@ -555,7 +555,7 @@ def labeled_waterfall(
             )
         freqs = np.unique(data.freq_array)
         times = np.unique(data.time_array)
-        lst_inds = sorted(np.unique(times, return_index=True)[1])
+        lst_inds = sorted(np.unique(data.time_array, return_index=True)[1])
         lsts = data.lst_array[lst_inds]
         data_units = data.vis_units or data_units
         data = data.get_data(antpairpol)
@@ -710,7 +710,7 @@ def labeled_waterfall(
     )
     ax.set_xticks(xticks)
     ax.set_yticks(yticks)
-    ax.set_xticklabels([f"{xval:.3f}" for xval in xvals[::xvals.size // Nticks_x]])
+    ax.set_xticklabels([f"{xval:.2f}" for xval in xvals[::xvals.size // Nticks_x]])
     ax.set_yticklabels([f"{yval:.3f}" for yval in yvals[::yvals.size // Nticks_y]])
 
     # Optionally draw a colorbar.
