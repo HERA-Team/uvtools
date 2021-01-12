@@ -691,6 +691,11 @@ def labeled_waterfall(
     else:
         fig = ax.get_figure()
 
+    # Choose the number of ticks to use for each axis.
+    if type(Nticks) is int:
+        Nticks = (Nticks,) * 2
+    Nticks_x, Nticks_y = Nticks
+
     # Finish setup, then plot.
     ax.set_xlabel(xlabel, fontsize=fontsize)
     ax.set_ylabel(ylabel, fontsize=fontsize)
@@ -699,8 +704,9 @@ def labeled_waterfall(
         aspect=aspect,
         cmap=cmap,
         norm=norm,
-        extent=(xvals.min(), xvals.max(), yvals.max(), yvals.min()),
     )
+    ax.set_xticks(xvals[::xvals.size // Nticks_x])
+    ax.set_yticks(yvals[::yvals.size // Nticks_y])
 
     # Optionally draw a colorbar.
     if draw_colorbar:
