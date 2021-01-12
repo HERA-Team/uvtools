@@ -711,7 +711,7 @@ def labeled_waterfall(
     ax.set_xticks(xticks)
     ax.set_yticks(yticks)
     ax.set_xticklabels([f"{xval:.2f}" for xval in xvals[::xvals.size // Nticks_x]])
-    ax.set_yticklabels([f"{yval:.3f}" for yval in yvals[::yvals.size // Nticks_y]])
+    ax.set_yticklabels([f"{yval:.2f}" for yval in yvals[::yvals.size // Nticks_y]])
 
     # Optionally draw a colorbar.
     if draw_colorbar:
