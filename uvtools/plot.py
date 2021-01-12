@@ -391,6 +391,7 @@ def labeled_waterfall(
     vmin=None,
     vmax=None,
     dynamic_range=None,
+    Nticks=6,
     fft_axis=None,
     freq_taper=None,
     freq_taper_kwargs=None,
@@ -482,6 +483,11 @@ def labeled_waterfall(
         five orders of magnitude below the maximum. If ``mode=="phs"``, then this
         parameter is ignored. If both ``vmin`` and ``vmax`` are provided, then this
         parameter is ignored.
+    Nticks: int or iterable of int, optional
+        Number of tick marks to use on the plot axes. If a single number is passed,
+        then the same number of ticks are used on both axes. If an iterable is
+        passed, then it must be length 2 and specify the number of ticks to use on
+        the x- and y-axes, respectively. Default is to use 6 ticks per axis.
     fft_axis: int or str, optional
         Axis over which to perform a Fourier transform. May be specified with one
         of three strings ("time", "freq", "both") or one of three integers (0, 1,
@@ -516,6 +522,15 @@ def labeled_waterfall(
             raise TypeError("array-like data must consist of complex numbers.")
         if data.ndim != 2 or (data.ndim == 2 and 1 in data.shape):
             raise ValueError("array-like data must be 2-dimensional.")
+    if type(Nticks) is not int:
+        try:
+            _ = iter(Nticks)
+            if len(Nticks) != 2 or not all(type(Ntick) is int for Ntick in Nticks):
+                raise TypeError
+        except TypeError:
+            raise TypeError(
+                "Nticks must be an integer or length-2 iterable of integers."
+            )
     if isinstance(data, np.ndarray):
         if freqs is None or (times is None and lsts is None):
             raise ValueError(
