@@ -555,7 +555,8 @@ def labeled_waterfall(
             )
         freqs = np.unique(data.freq_array)
         times = np.unique(data.time_array)
-        lsts = np.unique(data.lst_array)
+        lst_inds = sorted(np.unique(times, return_index=True)[1])
+        lsts = data.lst_array[lst_inds]
         data_units = data.vis_units or data_units
         data = data.get_data(antpairpol)
 
