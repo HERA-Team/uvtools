@@ -695,6 +695,8 @@ def labeled_waterfall(
     if type(Nticks) is int:
         Nticks = (Nticks,) * 2
     Nticks_x, Nticks_y = Nticks
+    xticks = np.linspace(0, 1, Nticks_x)
+    yticks = np.linspace(0, 1, Nticks_y)
 
     # Finish setup, then plot.
     ax.set_xlabel(xlabel, fontsize=fontsize)
@@ -704,9 +706,12 @@ def labeled_waterfall(
         aspect=aspect,
         cmap=cmap,
         norm=norm,
+        extent=(0, 1, 1, 0),
     )
-    ax.set_xticks(xvals[::xvals.size // Nticks_x])
-    ax.set_yticks(yvals[::yvals.size // Nticks_y])
+    ax.set_xticks(xticks)
+    ax.set_yticks(yticks)
+    ax.set_xticklabels([f"{xval:.3f}" for xval in xvals[::xvals.size // Nticks_x]])
+    ax.set_yticklabels([f"{yval:.3f}" for yval in yvals[::yvals.size // Nticks_y]])
 
     # Optionally draw a colorbar.
     if draw_colorbar:
