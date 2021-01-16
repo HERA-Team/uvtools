@@ -510,6 +510,18 @@ def labeled_waterfall(
         Figure containing the plot.
     ax: :class:`plt.Axes` instance
         Axes object the waterfall is drawn into.
+
+    Notes
+    -----
+    If you are plotting data with LSTs listed on the time axis and passing a
+    ndarray to the ``data`` parameter, then care should be taken when providing
+    the LST array. If you are pulling the LSTs from a ``pyuvdata.UVData`` object,
+    then you should *not* use ``np.unique`` to extract the unique LSTs from the
+    ``UVData.lst_array`` attribute--this will sort the LSTs, which *will* cause
+    problems if there is a phase wrap in the LSTs. If you find yourself faced
+    with this situation, a relatively simple solution can be found in the source
+    code for this function: see the end of the block of code following the
+    "# Validate parameters." comment.
     """
     import matplotlib.pyplot as plt
 
