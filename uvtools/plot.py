@@ -691,12 +691,15 @@ def labeled_waterfall(
     else:
         fig = ax.get_figure()
 
-    # Choose the number of ticks to use for each axis.
-    if type(Nticks) is int:
-        Nticks = (Nticks,) * 2
-    Nticks_x, Nticks_y = Nticks
-    xticks = np.linspace(0, 1, Nticks_x)
-    yticks = np.linspace(0, 1, Nticks_y)
+    # Choose bounds for setting plot extent.
+    xmin, xmax = xvals.min(), xvals.max()
+    # Special handling for LSTs since they can wrap.
+    if time_or_lst == "lst" and fft_axis not in ("time", "both"):
+        adjust_yaxis = True
+        ymin, ymax = 0, len(lsts) - 1
+    else:
+        adjust_yaxis = False
+        ymin, ymax = yvals.min(), yvals.max()
 
     # Finish setup, then plot.
     ax.set_xlabel(xlabel, fontsize=fontsize)
@@ -706,12 +709,14 @@ def labeled_waterfall(
         aspect=aspect,
         cmap=cmap,
         norm=norm,
-        extent=(0, 1, 1, 0),
+        extent=(xmin, xmax, ymax, ymin),
     )
-    ax.set_xticks(xticks)
-    ax.set_yticks(yticks)
-    ax.set_xticklabels([f"{xval:.2f}" for xval in xvals[::xvals.size // Nticks_x]])
-    ax.set_yticklabels([f"{yval:.2f}" for yval in yvals[::yvals.size // Nticks_y]])
+    if adjust_yaxis:
+        # This is a bit of a hack, but it gets the job done.
+        ax.set_yticks(ax.get_yticks()[:-1])
+        ax.set_yticklabels(
+            f"{yval:.2f}" for yval in yvals[ax.get_yticks().astype(int)]
+        )
 
     # Optionally draw a colorbar.
     if draw_colorbar:
