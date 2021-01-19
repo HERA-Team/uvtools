@@ -808,7 +808,8 @@ def test_fourier_filter():
     #check that fringe rate filter model gives similar results to delay filter.
     nt.assert_true(np.all(np.isclose(mdl1[~f],mdl5[~f], rtol=1e-2)))
 
-    #perform some sanity checks on handling of nans in dft_leastsq
+    #perform some sanity checks on handling of nans in dft_leastsq. If nans are present in fundamental period
+    #then the default behavior should be to set fundamental period to 2 * bandwidth.
     mdl, res, info = dspec.fourier_filter(x=freqs, data=d[0], wgts=w[0], filter_centers=[0.],
                                              filter_half_widths=[bl_len], suppression_factors=[1e-9],
                                              mode='dft_leastsq')
