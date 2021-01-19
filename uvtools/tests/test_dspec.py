@@ -784,7 +784,6 @@ def test_fourier_filter():
     mdl11d, res11d, info11d = dspec.fourier_filter(x=freqs, data=d[0], wgts=w[0], filter_centers=[0.],
                                              filter_half_widths=[bl_len], suppression_factors=[0.],
                                              mode='dpss_leastsq', **dpss_options1)
-    #perform some sanity checks on handling of nans in dft_leastsq
 
     #test that the info is properly switched. fourier_filter processes all data in frequency_mode and takes transposes for time
     #filtering mode.
@@ -817,7 +816,13 @@ def test_fourier_filter():
     nt.assert_true(np.isclose(info['filter_params']['axis_1']['basis_options']['fundamental_period'],
                               2 * (freqs.max() - freqs.min())))
 
-
+    #check that user provided fundamental period agrees with whats in info.
+    mdl, res, info = dspec.fourier_filter(x=freqs, data=d[0], wgts=w[0], filter_centers=[0.],
+                                             filter_half_widths=[bl_len], suppression_factors=[1e-9],
+                                             mode='dft_leastsq', fundamental_period=4. * (freqs.max() - freqs.min()))
+    # check that the filter_period is indeed equal to 1 / (2 * bandwidth)
+    nt.assert_true(np.isclose(info['filter_params']['axis_1']['basis_options']['fundamental_period'],
+                              4. * (freqs.max() - freqs.min())))
 
     #check fringe rate filter with dft mode
     mdl6, res6, info6 = dspec.fourier_filter(x=times, data=d, wgts=w, filter_centers=[0.],
@@ -855,6 +860,7 @@ def test_fourier_filter():
     #perform 2d dayenu filter with dpss and dft deconvolution.
     dpss_options1_2d = {'eigenval_cutoff': [[1e-12], [1e-12]]}
     dft_options1_2d = {'fundamental_period': [np.nan, np.nan]}
+    dft_options2_2d = {'fundamental_period': [4 * (times.max() - times.min()), 4 * (freqs.max() - freqs.min())]}
 
     mdl9, res9, info9 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[1e-8],[1e-8]],
@@ -912,6 +918,17 @@ def test_fourier_filter():
     nt.assert_raises(ValueError, dspec.fourier_filter,x=flog, data=d, wgts=w, filter_centers=[0.],
                                                   filter_half_widths=[bl_len],
                                                   mode='clean', filter_dims=[1], **{'tol':1e-5})
+
+    # check that fundamental period in 2d dft fit is correctly assigned.
+    mdl_dft, res_dft, info_dft = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
+                                             filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
+                                             mode='dft_leastsq', filter_dims=[1, 0], **dft_options2_2d)
+
+    nt.assert_true(np.isclose(info_dft['filter_params']['axis_1']['basis_options']['fundamental_period'],
+                              dft_options2_2d['fundamental_period'][1]))
+    nt.assert_true(np.isclose(info_dft['filter_params']['axis_0']['basis_options']['fundamental_period'],
+                              dft_options2_2d['fundamental_period'][0]))
+
 def test_vis_clean():
     # validate that fourier_filter in various clean modes gives close values to vis_clean with equivalent parameters!
     uvd = UVData()
