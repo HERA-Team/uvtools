@@ -431,9 +431,14 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                    _process_filter_kwargs(filter_kwargs, defaults)
                    if 'dft' in mode:
                         fp = np.asarray(filter_kwargs['fundamental_period']).flatten()
-                        for m in range(len(fp)):
-                            if np.isnan(fp[m]):
-                                fp[m] = 2. * (x[m].max() - x[m].min())
+                        if filter2d:
+                            for m in range(len(fp)):
+                                if np.isnan(fp[m]):
+                                    fp[m] = 2. * (x[m].max() - x[m].min())
+                        else:
+                            if np.isnan(fp[0]):
+                                fp = [2. * (x.max() - x.min())]
+
                         if len(fp) == 1:
                             filter_kwargs['fundamental_period'] = fp[0]
                         else:

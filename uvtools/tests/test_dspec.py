@@ -204,6 +204,8 @@ class TestMethods(unittest.TestCase):
             nt.assert_true(np.all(np.isclose(win, win3*np.sqrt(np.mean(win**2.)),atol=1e-6)))
 
         nt.assert_raises(ValueError, dspec.gen_window, 'foo', 200)
+        # check Ncut ValueError
+        nt.assert_raises(ValueError, dspec.gen_window, 'bh', 200, edgecut_hi=101, edgecut_low=100)
 
 
 def test_dft_operator():
@@ -358,7 +360,10 @@ def test_dayenu_filter():
     nt.assert_raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_1d, wgts=wghts_1d, filter_dimensions=[2],
                      filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                      filter_factors=filter_factors)
-
+    # check error if negative filter_factor provided
+    nt.assert_raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_1d, wgts=wghts_1d, filter_dimensions=[0],
+                     filter_centers=filter_centers, filter_half_widths=filter_half_widths,
+                     filter_factors=[-1e-9])
     #now filter foregrounds and test that std of residuals are close to std of noise:
     filtered_noise, _ =  dspec.dayenu_filter(np.arange(-nf/2, nf/2)*df, data_1d, wghts_1d, [1], filter_centers, filter_half_widths,
                                          filter_factors)
@@ -379,6 +384,7 @@ def test_dayenu_filter():
     filtered_noise, _ =  dspec.dayenu_filter(np.arange(-nf/2, nf/2)*df, data_1d, wghts_1d, [1], filter_centers, filter_half_widths,
                                             filter_factors)
     nt.assert_true(np.all(filtered_noise[~(wghts_1d.astype(bool))] == 0.))
+
 
 
     #Next, we test performing a fringe-rate clean. Generate a 50-meter EW baseline with a single
@@ -402,6 +408,10 @@ def test_dayenu_filter():
     nt.assert_raises(ValueError, dspec.dayenu_filter, x=['time is a construct', np.arange(-nf/2, nf/2)*df], data=data_2d, wgts=np.ones_like(data_2d), filter_dimensions=[1, 0],
                      filter_centers=[[0.],[0.]], filter_half_widths=[[1e-3], [100e-9]],
                      filter_factors=[[1e-9], [1e-9]])
+    # check value error if length of one of the filter_centers is greater then 2
+    nt.assert_raises(ValueError, dspec.dayenu_filter, x=[times, np.arange(-nf/2, nf/2)*df], data=data_2d, wgts=np.ones_like(data_2d), filter_dimensions=[1, 0],
+                     filter_centers=[[0.], [0.]], filter_half_widths=[[1e-3], [100e-9]],
+                     filter_factors=[[1e-9], [1e-9], [1e-9]])
 
     #now, only filter fringe-rate domain. The fringe rate for a source
     #overhead should be roughly 0.0036 for this baseline.
@@ -797,6 +807,24 @@ def test_fourier_filter():
 
     #check that fringe rate filter model gives similar results to delay filter.
     nt.assert_true(np.all(np.isclose(mdl1[~f],mdl5[~f], rtol=1e-2)))
+
+    #perform some sanity checks on handling of nans in dft_leastsq. If nans are present in fundamental period
+    #then the default behavior should be to set fundamental period to 2 * bandwidth.
+    mdl, res, info = dspec.fourier_filter(x=freqs, data=d[0], wgts=w[0], filter_centers=[0.],
+                                             filter_half_widths=[bl_len], suppression_factors=[1e-9],
+                                             mode='dft_leastsq')
+    # check that the filter_period is indeed equal to 1 / (2 * bandwidth)
+    nt.assert_true(np.isclose(info['filter_params']['axis_1']['basis_options']['fundamental_period'],
+                              2 * (freqs.max() - freqs.min())))
+
+    #check that user provided fundamental period agrees with whats in info.
+    mdl, res, info = dspec.fourier_filter(x=freqs, data=d[0], wgts=w[0], filter_centers=[0.],
+                                             filter_half_widths=[bl_len], suppression_factors=[1e-9],
+                                             mode='dft_leastsq', fundamental_period=4. * (freqs.max() - freqs.min()))
+    # check that the filter_period is indeed equal to 1 / (2 * bandwidth)
+    nt.assert_true(np.isclose(info['filter_params']['axis_1']['basis_options']['fundamental_period'],
+                              4. * (freqs.max() - freqs.min())))
+
     #check fringe rate filter with dft mode
     mdl6, res6, info6 = dspec.fourier_filter(x=times, data=d, wgts=w, filter_centers=[0.],
                                              filter_half_widths=[fr_len], suppression_factors=[0.], filter_dims=0,
@@ -833,6 +861,7 @@ def test_fourier_filter():
     #perform 2d dayenu filter with dpss and dft deconvolution.
     dpss_options1_2d = {'eigenval_cutoff': [[1e-12], [1e-12]]}
     dft_options1_2d = {'fundamental_period': [np.nan, np.nan]}
+    dft_options2_2d = {'fundamental_period': [4 * (times.max() - times.min()), 4 * (freqs.max() - freqs.min())]}
 
     mdl9, res9, info9 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[1e-8],[1e-8]],
@@ -890,6 +919,17 @@ def test_fourier_filter():
     nt.assert_raises(ValueError, dspec.fourier_filter,x=flog, data=d, wgts=w, filter_centers=[0.],
                                                   filter_half_widths=[bl_len],
                                                   mode='clean', filter_dims=[1], **{'tol':1e-5})
+
+    # check that fundamental period in 2d dft fit is correctly assigned.
+    mdl_dft, res_dft, info_dft = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
+                                             filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
+                                             mode='dft_leastsq', filter_dims=[1, 0], **dft_options2_2d)
+
+    nt.assert_true(np.isclose(info_dft['filter_params']['axis_1']['basis_options']['fundamental_period'],
+                              dft_options2_2d['fundamental_period'][1]))
+    nt.assert_true(np.isclose(info_dft['filter_params']['axis_0']['basis_options']['fundamental_period'],
+                              dft_options2_2d['fundamental_period'][0]))
+
 def test_vis_clean():
     # validate that fourier_filter in various clean modes gives close values to vis_clean with equivalent parameters!
     uvd = UVData()
