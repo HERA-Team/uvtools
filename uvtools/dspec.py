@@ -2066,7 +2066,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
                                  label='dpss_operator', crit_val=tuple(crit_provided_value[0]))
     if not opkey in cache:
         #check that xs are equally spaced.
-        if not np.all(np.isclose(np.diff(x), np.mean(np.diff(x))), rtol=0., atol=xtol * np.mean(np.diff(x))):
+        if not np.all(np.isclose(np.diff(x), np.mean(np.diff(x)), rtol=0., atol=xtol * np.mean(np.diff(x)))):
             #for now, don't support DPSS iterpolation unless x is equally spaced.
             #In principal, I should be able to compute off-grid DPSS points using
             #the fourier integral of the DPSWF
