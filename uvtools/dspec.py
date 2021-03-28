@@ -1999,7 +1999,7 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
 
 def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cutoff=None,
         edge_suppression=None, nterms=None, avg_suppression=None, xc=None, hash_decimal=10,
-        xtol=0.1):
+        xtol=1e-3):
     """
     Calculates DPSS operator with multiple delay windows to fit data. Frequencies
     must be equally spaced (unlike Fourier operator). Users can specify how the
