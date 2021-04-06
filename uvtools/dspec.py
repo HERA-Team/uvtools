@@ -1998,7 +1998,8 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
 
 
 def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cutoff=None,
-        edge_suppression=None, nterms=None, avg_suppression=None, xc=None, hash_decimal=10):
+        edge_suppression=None, nterms=None, avg_suppression=None, xc=None, hash_decimal=10,
+        xtol=1e-3):
     """
     Calculates DPSS operator with multiple delay windows to fit data. Frequencies
     must be equally spaced (unlike Fourier operator). Users can specify how the
@@ -2033,6 +2034,9 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         all tones inside of the filter width instead of a single tone.
     xc: float optional
     hash_decimal: number of decimals to round for floating point dict keys.
+    xtol: fraction of average diff that the diff between all x-values must be within
+          the average diff to be considered
+          equally spaced. Default is 1e-3
 
     Returns
     ----------
@@ -2062,7 +2066,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
                                  label='dpss_operator', crit_val=tuple(crit_provided_value[0]))
     if not opkey in cache:
         #check that xs are equally spaced.
-        if not np.all(np.isclose(np.diff(x), np.mean(np.diff(x)))):
+        if not np.all(np.isclose(np.diff(x), np.mean(np.diff(x)), rtol=0., atol=np.abs(xtol * np.mean(np.diff(x))))):
             #for now, don't support DPSS iterpolation unless x is equally spaced.
             #In principal, I should be able to compute off-grid DPSS points using
             #the fourier integral of the DPSWF
