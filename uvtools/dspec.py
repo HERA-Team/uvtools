@@ -2036,7 +2036,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
     hash_decimal: number of decimals to round for floating point dict keys.
     xtol: fraction of average diff that the diff between all x-values must be within
           the average diff to be considered
-          equally spaced. Default is 0.1
+          equally spaced. Default is 1e-3
 
     Returns
     ----------
