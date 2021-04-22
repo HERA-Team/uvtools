@@ -87,7 +87,7 @@ class TestMethods(unittest.TestCase):
         #check that skip_wgt is properly passed to clean
         wgts[0,:72] = 0.
         dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL, skip_wgt=0.5, mode='clean')
-        assert nfo['status']['axis_1'][0] == 'skipped'
+        assert info['status']['axis_1'][0] == 'skipped'
         assert info['status']['axis_1'][1] == 'success'
 
     def test_fourier_model(self):
@@ -194,7 +194,7 @@ class TestMethods(unittest.TestCase):
                   'cosinesum-9term', 'cosinesum-11term']:
             win = dspec.gen_window(w, 100)
             assert len(win) == 100
-            assert isinstance(win, np.ndarray))
+            assert isinstance(win, np.ndarray)
             assert win.min() >= 0.0
             assert win.max() <= 1.0
             pytest.raises(ValueError, dspec.gen_window, w, 100, normalization='foo')
@@ -823,7 +823,7 @@ def test_fourier_filter():
                                              mode='dft_leastsq', fundamental_period=4. * (freqs.max() - freqs.min()))
     # check that the filter_period is indeed equal to 1 / (2 * bandwidth)
     assert np.isclose(info['filter_params']['axis_1']['basis_options']['fundamental_period'],
-                      4. * (freqs.max() - freqs.min())))
+                      4. * (freqs.max() - freqs.min()))
 
     #check fringe rate filter with dft mode
     mdl6, res6, info6 = dspec.fourier_filter(x=times, data=d, wgts=w, filter_centers=[0.],
@@ -928,7 +928,7 @@ def test_fourier_filter():
     assert np.isclose(info_dft['filter_params']['axis_1']['basis_options']['fundamental_period'],
                       dft_options2_2d['fundamental_period'][1])
     assert np.isclose(info_dft['filter_params']['axis_0']['basis_options']['fundamental_period'],
-                      dft_options2_2d['fundamental_period'][0]))
+                      dft_options2_2d['fundamental_period'][0])
 
 def test_vis_clean():
     # validate that fourier_filter in various clean modes gives close values to vis_clean with equivalent parameters!

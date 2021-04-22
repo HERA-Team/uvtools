@@ -34,7 +34,7 @@ def test_search_data():
 
     # matched pols
     dfs, dps = uvt.utils.search_data(templates, pols, matched_pols=True)
-    nt.assert_equal(len(dfs), 2)
+    assert len(dfs) ==  2
     assert len(dfs[0]) ==  len(dfs[1])
     assert len(dfs[0]) ==  2
     assert np.all(['.xx.' in df for df in dfs[0]])
@@ -50,7 +50,7 @@ def test_search_data():
 
     # flatten
     dfs, dps = uvt.utils.search_data(templates, pols, flatten=True)
-    assert len(dfs) == ,
+    assert len(dfs) == 4
     assert isinstance(dfs[0], (str, np.str))
 
     for f in allfiles:
