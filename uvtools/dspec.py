@@ -146,7 +146,7 @@ def place_data_on_uniform_grid(x, y, w, xtol=1e-3):
               boolean array indicating which x-values were inserted.
     """
     xdiff = np.diff(x)
-    dx = np.diff(x).min()
+    dx = np.abs(np.diff(x)).min() * np.sign(np.diff(x)[0])
     # first, check whether x, y, w already on a grid.
     # if they are, just return them.
     if np.allclose(xdiff, dx, rtol=0, atol=dx * xtol):
@@ -157,7 +157,7 @@ def place_data_on_uniform_grid(x, y, w, xtol=1e-3):
         return xout, yout, wout, inserted
     # next, check that the array is not on a grid and if it isn't, return x, y, w
     for i in range(len(x) - 1):
-        grid_spacing =  (x[i + 1] - x[i]) / xfundamental
+        grid_spacing =  (x[i + 1] - x[i]) / dx
         integer_spacing = np.round(grid_spacing)
         if not np.isclose(integer_spacing, grid_spacing, rtol=0, atol=xtol):
             xout = x
@@ -166,13 +166,14 @@ def place_data_on_uniform_grid(x, y, w, xtol=1e-3):
             inserted = np.zeros(len(x), dtype=bool)
             return xout, yout, wout, inserted
     # if the array is on a grid, then construct filled in grid.
-    xout = np.linspace(x.min(), x.max(), int(np.round((x.max() - x.min()) / dx)))
+    nx_grid =int(np.round((x[-1] - x[0]) / dx)) + 1
+    xout = np.linspace(x[0], x[-1], nx_grid)
     yout = np.zeros(xout.shape, dtype=np.complex128)
     wout = np.zeros(xout.shape, dtype=np.float)
-    inserted = np.ones(len(x), dtype=bool)
+    inserted = np.ones(len(xout), dtype=bool)
     # fill in original data and weights.
     for x_index, xt in enumerate(x):
-        output_index = np.argmin(np.abs(xout - xt))[0]
+        output_index = np.argmin(np.abs(xout - xt))
         yout[output_index] = y[x_index]
         wout[output_index] = w[x_index]
         inserted[output_index] = False

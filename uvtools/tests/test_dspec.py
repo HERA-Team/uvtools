@@ -2,6 +2,7 @@ import unittest
 import uvtools.dspec as dspec
 import numpy as np, random
 import pytest
+import copy
 from pyuvdata import UVData
 from uvtools.data import DATA_PATH
 import os
@@ -1054,6 +1055,32 @@ def test_vis_clean():
     assert np.all(np.isclose(mdl3, mdl1))
 
 
+def test_place_data_on_uniform_grid():
+    # first, generate uniformly spaced x values and ensure that we get the same thing back.
+    xt = np.arange(0, 100) * 1.23157
+    yt = np.random.randn(len(xt)) + 1j * np.random.randn(len(xt))
+    wt = np.ones(len(xt))
+    for m in range(100):
+        wt[np.random.randint(low=0, high=len(xt), size=20)] = 0.0
+        xout, yout, wout, inserted = dspec.place_data_on_uniform_grid(xt, yt, wt)
+        assert np.allclose(xout, xt)
+        assert np.allclose(yout, yt)
+        assert np.allclose(wout, wt)
+        # remove 10 random grid points and check that
+        # we succisfully reconstruct grid.
+        to_remove = np.random.randint(low=1, high=len(xt)-1, size=10)
+        to_keep = np.array([i for i in range(len(xt)) if i not in to_remove])
+        xtt = xt[to_keep]
+        ytt = yt[to_keep]
+        wtt = wt[to_keep]
+        xout, yout, wout, inserted = dspec.place_data_on_uniform_grid(xtt, ytt, wtt)
+        assert np.allclose(xout, xt)
+        assert np.allclose(yout[to_keep], yt[to_keep])
+        assert np.allclose(yout[to_remove], 0.0)
+        assert np.allclose(wout[to_remove], 0.0)
+        assert np.allclose(wout[to_keep], wt[to_keep])
+
+
 def test__fit_basis_1d():
     #perform dpss interpolation, leastsq
     fs = np.arange(-50,50)
@@ -1092,7 +1119,24 @@ def test__fit_basis_1d():
     assert np.all(np.isclose(mod3, mod4, atol=1e-2))
 
     assert np.all(np.isclose((mod2+resid2)*wgts, dw, atol=1e-6))
+    # now remove ten random channels.
+    to_remove = [2, 10, 11, 23, 54, 71, 87, 88, 89, 97]
+    to_keep = np.array([i for i in range(len(fs)) if i not in to_remove])
 
+    mod5, resid5, info5 = dspec._fit_basis_1d(fs[to_keep], dw[to_keep], wgts[to_keep], [0.], [5./50.], basis_options=dft_opts,
+                                    method='leastsq', basis='dft')
+
+    dwt = copy.deepcopy(dw)
+    wgtst = copy.deepcopy(wgts)
+
+    dwt[to_remove] = 0.0
+    wgtst[to_remove] = 0.0
+
+    mod6, resid6, info6 = dspec._fit_basis_1d(fs, dwt, wgtst, [0.], [5./50.], basis_options=dft_opts,
+                                    method='leastsq', basis='dft')
+
+    assert np.allclose(mod5, mod6[to_keep])
+    assert np.allclose(resid5, resid6[to_keep])
 
 if __name__ == '__main__':
     unittest.main()
