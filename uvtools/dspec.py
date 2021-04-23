@@ -2310,3 +2310,81 @@ def dayenu_mat_inv(x, filter_centers, filter_half_widths,
     else:
         sdwi_mat = cache[filter_key]
     return sdwi_mat
+
+
+def multibaseline_linear_filter_matrix_inv(baseline_vectors, wavelengths, eta_factor, suppression=1e-9,
+                                           cutoff_wavelength=None,
+                                           cache=None, no_regularization=False, hash_decimal=10):
+    """
+    The inverse of a simple covariance filter for a baseline matrix.
+
+    Parameters
+    ----------
+    x: array like
+        array-like list of arbitrary frequencies. If this is supplied, evaluate sinc_downweight_mat at these frequencies
+        instead of linear array of nchan.
+    filter_centers: float or list
+        float or list of floats of centers of delay filter windows in nanosec
+    filter_half_widths: float or list
+        float or list of floats of half-widths of delay filter windows in nanosec
+    filter_factors: float or list
+        float or list of floats of filtering factors.
+    cache: dictionary, optional dictionary storing filter matrices with keys
+    hash_decimal int, number of decimals to consider when hashing x
+    tuple(x) + (filter_centers) + (filter_half_widths) + \
+    (filter_factors)
+
+
+
+    !!!-------------
+    WARNING: The following parameters are intended for theoretical
+    studies of how inverse sinc-weighting functions
+    but should not be changed from defaults in practical data analysis!
+    !!!------------
+        wrap: bool, If true, add a wrap around, equivalent to situation
+              where we want sinc weights to be the IDFT of a diagonal matrix
+        wrap_interval: integer, interval of wrap around in units of nf * df (bandwidth)
+        nwraps: number of wraps to include.
+        no_regularization: bool,  if True, do not include diagonal regularization.
+
+    Returns
+    ----------
+     (nchan, nchan) complex inverse of the tophat filtering matrix assuming that the delay-space covariance is diagonal and zero outside
+         of the horizon
+    """
+    if cache is None:
+        cache = {}
+    if isinstance(filter_factors,(float,int, np.int, np.float)):
+        filter_factors = [filter_factors]
+    if isinstance(filter_centers, (float, int, np.int, np.float)):
+        filter_centers = [filter_centers]
+    if isinstance(filter_half_widths, (float, int, np.int, np.float)):
+        filter_half_widths = [filter_half_widths]
+
+    nchan = len(x)
+
+    filter_key = _fourier_filter_hash(filter_centers=filter_centers, filter_half_widths=filter_half_widths,
+                                         filter_factors=filter_factors, x=x, w=None, hash_decimal=hash_decimal,
+                                         label='dayenu_matrix_inverse', wrap=wrap, wrap_interval=wrap_interval,
+                                         nwraps=nwraps, no_regularization=no_regularization)
+    if not filter_key in cache:
+        fx, fy = np.meshgrid(x,x)
+        sdwi_mat = np.identity(fx.shape[0]).astype(np.complex128)
+        if no_regularization:
+            sdwi_mat *= 0.
+        for fc, fw, ff in zip(filter_centers, filter_half_widths, filter_factors):
+            if not ff == 0:
+                if not wrap:
+                    sdwi_mat = sdwi_mat + np.sinc( 2. * (fx-fy) * fw ).astype(np.complex128)\
+                            * np.exp(-2j * np.pi * (fx-fy) * fc) / ff
+                else:
+                    bwidth = x[-1] - x[0] + (x[1]-x[0])
+                    for wnum in np.arange(-nwraps//2, nwraps//2):
+                        offset = bwidth * wnum * wrap_interval
+                        sdwi_mat = sdwi_mat + \
+                        np.sinc( 2. *  (fx-fy - offset) * fw  ).astype(np.complex128)\
+                        * np.exp(-2j * np.pi * (fx-fy - offset) * fc) / ff
+        cache[filter_key] = sdwi_mat
+    else:
+        sdwi_mat = cache[filter_key]
+    return sdwi_mat
