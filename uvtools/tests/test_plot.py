@@ -1,4 +1,4 @@
-import nose.tools as nt
+import pytest
 import matplotlib
 import matplotlib.pyplot as plt
 import unittest
@@ -11,7 +11,7 @@ from astropy import units
 def axes_contains(ax, obj_list):
     """Check that a matplotlib.Axes instance contains certain elements.
 
-    This function was taken directly from the ``test_plot`` module of 
+    This function was taken directly from the ``test_plot`` module of
     ``hera_pspec``.
 
     Parameters
@@ -40,7 +40,7 @@ def axes_contains(ax, obj_list):
     return True
 
 class TestMethods(unittest.TestCase):
-    
+
     def test_data_mode(self):
         data = np.ones(100) - 1j*np.ones(100)
         d = uvt.plot.data_mode(data, mode='abs')
@@ -54,7 +54,7 @@ class TestMethods(unittest.TestCase):
         d = uvt.plot.data_mode(data, mode='imag')
         self.assertTrue(np.all(d == -1))
         self.assertRaises(ValueError, uvt.plot.data_mode, data, mode='')
-    
+
     def test_waterfall(self):
         import matplotlib
         data = np.ones((10,10)) - 1j*np.ones((10,10))
@@ -62,13 +62,13 @@ class TestMethods(unittest.TestCase):
             uvt.plot.waterfall(data, mode=mode)
             #matplotlib.pyplot.show()
             matplotlib.pyplot.clf()
-    
+
     def test_plot_antpos(self):
         antpos = {i: [i,i,0] for i in range(10)}
         import matplotlib
         uvt.plot.plot_antpos(antpos)
         #matplotlib.pyplot.show()
-        
+
 class TestFancyPlotters(unittest.TestCase):
     def setUp(self):
         import hera_sim
@@ -91,7 +91,7 @@ class TestFancyPlotters(unittest.TestCase):
         # so this will test some features not exposed in
         # plot.fourier_transform_waterfalls
         uvd = self.uvd
-        
+
         # Dynamic range setting.
         fig, ax = uvt.plot.labeled_waterfall(
             uvd,
@@ -192,7 +192,7 @@ class TestFancyPlotters(unittest.TestCase):
         axes = fig.get_axes()
         ylabels = list(ax.get_ylabel() for ax in axes)
         assert sum("mK sr" in ylabel for ylabel in ylabels) == 4
-        
+
         # Check custom plot units.
         plot_units = {
             "time": "hour",
@@ -232,37 +232,37 @@ class TestFancyPlotters(unittest.TestCase):
         # Already checked everything but time units, so only check that.
         ylabels = list(ax.get_ylabel() for ax in axes)
         assert sum(f"[{plot_units['time']}]" in ylabel for ylabel in ylabels) == 2
-        
+
         ylimits = list(ax.get_ylim() for ax in axes)
         assert sum(np.allclose(ylims, (tmax, tmin)) for ylims in ylimits) == 2
 
         # Do some exception raising checking.
-        with nt.assert_raises(ValueError):
+        with pytest.raises(ValueError):
             uvt.plot.fourier_transform_waterfalls(
                 data=uvd, antpairpol=(0,1,'xx'), time_or_lst="nan"
             )
 
-        with nt.assert_raises(TypeError):
+        with pytest.raises(TypeError):
             uvt.plot.fourier_transform_waterfalls(data={})
 
-        with nt.assert_raises(TypeError):
+        with pytest.raises(TypeError):
             uvt.plot.fourier_transform_waterfalls(
                 data=data, freqs=freqs, lsts=lsts, plot_units="bad_type"
             )
 
-        with nt.assert_raises(ValueError):
+        with pytest.raises(ValueError):
             uvt.plot.fourier_transform_waterfalls(data=np.ones((3,5,2), dtype=np.complex))
 
-        with nt.assert_raises(ValueError):
+        with pytest.raises(ValueError):
             uvt.plot.fourier_transform_waterfalls(data=data, freqs=freqs)
 
-        with nt.assert_raises(ValueError):
+        with pytest.raises(ValueError):
             uvt.plot.fourier_transform_waterfalls(data=data, times=times)
 
-        with nt.assert_raises(ValueError):
+        with pytest.raises(ValueError):
             uvt.plot.fourier_transform_waterfalls(data=uvd)
 
-        with nt.assert_raises(TypeError):
+        with pytest.raises(TypeError):
             uvt.plot.fourier_transform_waterfalls(data=np.ones((15,20), dtype=np.float))
 
 
@@ -286,9 +286,9 @@ class TestDiffPlotters(unittest.TestCase):
         df1 = 1e8 / 1024
         df2 = 2e8 / 1024
         # actually mock up the data
-        sim = hera_sim.Simulator(n_freq=10, n_times=10, 
+        sim = hera_sim.Simulator(n_freq=10, n_times=10,
                                  antennas=antennas,
-                                 integration_time=dt1, 
+                                 integration_time=dt1,
                                  channel_width=df1)
         self.uvd1 = copy.deepcopy(sim.data)
         sim.add_eor("noiselike_eor")
@@ -299,15 +299,15 @@ class TestDiffPlotters(unittest.TestCase):
         sim.data.vis_units = 'mK'
         self.uvd_bad_vis_units = copy.deepcopy(sim.data)
         # mismatched baselines
-        sim = hera_sim.Simulator(n_freq=10, n_times=10, 
+        sim = hera_sim.Simulator(n_freq=10, n_times=10,
                                  antennas=offset_ants,
                                  integration_time=dt1,
                                  channel_width=df1)
         self.uvd_bad_bls = copy.deepcopy(sim.data)
         # wrong number of antennas
-        sim = hera_sim.Simulator(n_freq=10, n_times=10, 
+        sim = hera_sim.Simulator(n_freq=10, n_times=10,
                                  antennas=bad_ants,
-                                 integration_time=dt1, 
+                                 integration_time=dt1,
                                  channel_width=df1)
         self.uvd_bad_ants = copy.deepcopy(sim.data)
         # bad Nfreq
@@ -317,21 +317,21 @@ class TestDiffPlotters(unittest.TestCase):
                                  channel_width=df1)
         self.uvd_bad_Nfreq = copy.deepcopy(sim.data)
         # bad Ntimes
-        sim = hera_sim.Simulator(n_freq=10, n_times=50, 
+        sim = hera_sim.Simulator(n_freq=10, n_times=50,
                                  antennas=antennas,
-                                 integration_time=dt1, 
+                                 integration_time=dt1,
                                  channel_width=df1)
         self.uvd_bad_Ntimes = copy.deepcopy(sim.data)
         # bad integration time
-        sim = hera_sim.Simulator(n_freq=10, n_times=10, 
+        sim = hera_sim.Simulator(n_freq=10, n_times=10,
                                  antennas=antennas,
-                                 integration_time=dt2, 
+                                 integration_time=dt2,
                                  channel_width=df1)
         self.uvd_bad_int_time = copy.deepcopy(sim.data)
         # bad channel width
-        sim = hera_sim.Simulator(n_freq=10, n_times=10, 
+        sim = hera_sim.Simulator(n_freq=10, n_times=10,
                                  antennas=antennas,
-                                 integration_time=dt1, 
+                                 integration_time=dt1,
                                  channel_width=df2)
         self.uvd_bad_chan_width = copy.deepcopy(sim.data)
 
@@ -384,7 +384,7 @@ class TestDiffPlotters(unittest.TestCase):
             elements = [(plt.Subplot, Nplots),]
             for dimension in dimensions:
                 fig = uvt.plot.plot_diff_1d(
-                    self.uvd1, self.uvd2, self.antpairpol, 
+                    self.uvd1, self.uvd2, self.antpairpol,
                     plot_type=plot_type, dimension=dimension
                 )
 
@@ -402,7 +402,7 @@ class TestDiffPlotters(unittest.TestCase):
                         dim = duals[dimension]
                     else:
                         dim = dimension if i // 3 == 0 else duals[dimension]
-                    
+
                     # account for the fact that it plots against lst if
                     # plotting along the time axis
                     dim = "lst" if dim == "time" else dim
@@ -426,7 +426,7 @@ class TestDiffPlotters(unittest.TestCase):
 
         # check that it works when an axis has length 1
         fig = uvt.plot.plot_diff_1d(
-                self.uvd_1d_freqs, self.uvd_1d_freqs, self.antpairpol, 
+                self.uvd_1d_freqs, self.uvd_1d_freqs, self.antpairpol,
                 plot_type="normal"
         )
 
@@ -437,7 +437,7 @@ class TestDiffPlotters(unittest.TestCase):
         # one per colorbar
         elements = [(plt.Subplot, 6),]
         self.assertTrue(axes_contains(fig, elements))
-        
+
         # now check that we get three images and three colorbars
         Nimages = 0
         Ncbars = 0
@@ -449,7 +449,7 @@ class TestDiffPlotters(unittest.TestCase):
             self.assertTrue(contains_image or contains_cbar)
             Nimages += int(contains_image)
             Ncbars += int(contains_cbar)
-        
+
         self.assertTrue(Nimages == 3)
         self.assertTrue(Ncbars == 3)
 
@@ -458,17 +458,17 @@ class TestDiffPlotters(unittest.TestCase):
 
 
     def test_plot_diff_waterfall(self):
-        plot_types = ("time_vs_freq", "time_vs_dly", 
+        plot_types = ("time_vs_freq", "time_vs_dly",
                       "fr_vs_freq", "fr_vs_dly")
         # get all combinations
-        plot_types = [list(combinations(plot_types, r)) 
+        plot_types = [list(combinations(plot_types, r))
                       for r in range(1, len(plot_types) + 1)]
 
         # unpack the nested list
         plot_types = [item for items in plot_types for item in items]
 
-        # loop over all combinations of plot types, check that the 
-        # right number of subplots are made, noting how many different 
+        # loop over all combinations of plot types, check that the
+        # right number of subplots are made, noting how many different
         # differences are taken and how many plot types there are
         # also account for colorbars techincally being subplots
         for plot_type in plot_types:
@@ -479,19 +479,19 @@ class TestDiffPlotters(unittest.TestCase):
             Nsubplots = 2 * Nplots
             # make the list of objects to search for
             elements = [(plt.Subplot, Nsubplots),]
-            
+
             # actually make the plot
-            fig = uvt.plot.plot_diff_waterfall(self.uvd1, self.uvd2, 
+            fig = uvt.plot.plot_diff_waterfall(self.uvd1, self.uvd2,
                                                self.antpairpol,
                                                plot_type=plot_type)
-            
+
             # check that the correct number of subplots are made
             self.assertTrue(axes_contains(fig, elements))
 
             Nimages = 0
             Ncbars = 0
             for ax in fig.axes:
-                # check that each Axes object contains either an 
+                # check that each Axes object contains either an
                 # AxesImage (from imshow) or a QuadMesh (from colorbar)
                 image = [(matplotlib.image.AxesImage, 1),]
                 cbar = [(matplotlib.collections.QuadMesh, 1),]
@@ -500,7 +500,7 @@ class TestDiffPlotters(unittest.TestCase):
                 Nimages += int(contains_image)
                 Ncbars += int(contains_cbar)
                 self.assertTrue(contains_image or contains_cbar)
-            
+
             # check that the amount of colorbars and images is correct
             self.assertTrue(Nimages == Nplots)
             self.assertTrue(Ncbars == Nplots)
@@ -525,12 +525,11 @@ class TestDiffPlotters(unittest.TestCase):
                 continue
             if not attr.startswith("uvd_bad"):
                 continue
-            nt.assert_raises(uvt.utils.MetadataError, 
-                             uvt.plot.plot_diff_uv,
-                             self.uvd1, value,
-                             check_metadata=True)
+            pytest.raises(uvt.utils.MetadataError,
+                          uvt.plot.plot_diff_uv,
+                          self.uvd1, value,
+                          check_metadata=True)
 
 
 if __name__ == '__main__':
     unittest.main()
-
