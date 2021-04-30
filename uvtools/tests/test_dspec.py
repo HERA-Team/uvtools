@@ -55,8 +55,8 @@ def test_delay_filter_1D():
     data = np.random.normal(size=NCHAN)
     wgts = np.ones_like(data)
     dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=1e-9)
-    assert np.average(data) == pytest.approx(np.average(dmdl), 1e-3)
-    assert np.average(dres) == pytest.approx(0, 1e-3)
+    assert np.allclose(np.average(data), np.average(dmdl), rtol=0, atol=1e-3)
+    assert np.allclose(np.average(dres), 0.0, rtol=0, atol=1e-3)
 
     #check that skip_wgt is properly passed to clean
     wgts[:72] = 0.
