@@ -171,7 +171,8 @@ def test_skip_wgt():
     np.testing.assert_allclose(dmdl[0,:], np.zeros_like(dmdl[0,:]), atol=NCHAN*TOL)
     np.testing.assert_allclose(dres[0,:], (data * wgts)[0,:], atol=NCHAN*TOL)
     assert len(info['status']['axis_1']) == NTIMES
-    assert np.all([info['status']['axis_1'][i] == 'skipped' for i in list(info['status']['axis_1'])[::-1]])
+    assert np.all([info['status']['axis_1'][i] == 'skipped' for i in list(info['status']['axis_1'])[:1]])
+    assert not np.any([info['status']['axis_1'][i] == 'skipped' for i in list(info['status']['axis_1'])[1:]])
 
 def test_calc_width():
     # test single filter_size

@@ -82,10 +82,8 @@ class TestFancyPlotters():
     def tearDown(self):
         pass
 
-    def runTest(self):
-        pass
-
     def test_labeled_waterfall(self):
+        self.setUp()
         # Most of this functionality is tested in the next test function,
         # so this will test some features not exposed in
         # plot.fourier_transform_waterfalls
@@ -123,8 +121,10 @@ class TestFancyPlotters():
         )
         image = ax.get_images()[0]
         assert np.allclose(image.get_clim(), (-6, -5))
+        self.tearDown()
 
     def test_fourier_transform_waterfalls(self):
+        self.setUp()
         uvd = self.uvd
         data = uvd.get_data(0,1,'xx')
         freqs = np.unique(uvd.freq_array) # Hz
@@ -263,9 +263,9 @@ class TestFancyPlotters():
 
         with pytest.raises(TypeError):
             plot.fourier_transform_waterfalls(data=np.ones((15,20), dtype=np.float))
+        self.tearDown()
 
-
-class TestDiffPlotters(unittest.TestCase):
+class TestDiffPlotters():
 
     def setUp(self):
         # make some mock data
@@ -368,10 +368,8 @@ class TestDiffPlotters(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def runTest(self):
-        pass
-
     def test_plot_diff_1d(self):
+        self.setUp()
         # list possible plot types and dimensions
         plot_types = ("normal", "fourier", "both")
         dimensions = ("time", "freq")
@@ -428,8 +426,10 @@ class TestDiffPlotters(unittest.TestCase):
                 self.uvd_1d_freqs, self.uvd_1d_freqs, self.antpairpol,
                 plot_type="normal"
         )
+        self.tearDown()
 
     def test_plot_diff_uv(self):
+        self.setUp()
         # plot something
         fig = plot.plot_diff_uv(self.uvd1, self.uvd2)
         # check for six instances of subplots, one per image and
@@ -454,9 +454,11 @@ class TestDiffPlotters(unittest.TestCase):
 
         # close the figure
         plt.close(fig)
+        self.tearDown()
 
 
     def test_plot_diff_waterfall(self):
+        self.setUp()
         plot_types = ("time_vs_freq", "time_vs_dly",
                       "fr_vs_freq", "fr_vs_dly")
         # get all combinations
@@ -506,8 +508,10 @@ class TestDiffPlotters(unittest.TestCase):
 
             # now close the figure
             plt.close(fig)
+            self.tearDown()
 
     def test_plot_diff_waterfall_with_tapers(self):
+        self.setUp()
         # since the above test makes sure the figures are correctly configured,
         # this one will just make sure nothing breaks when a taper is specified
         fig = plot.plot_diff_waterfall(
@@ -516,8 +520,10 @@ class TestDiffPlotters(unittest.TestCase):
         )
 
         plt.close(fig)
+        self.tearDown()
 
     def test_check_metadata(self):
+        self.setUp()
         for attr, value in self.__dict__.items():
             if attr.startswith("uvd_1d"):
                 utils.check_uvd_pair_metadata(value, value)
@@ -528,7 +534,4 @@ class TestDiffPlotters(unittest.TestCase):
                           plot.plot_diff_uv,
                           self.uvd1, value,
                           check_metadata=True)
-
-
-if __name__ == '__main__':
-    unittest.main()
+        self.tearDown()
