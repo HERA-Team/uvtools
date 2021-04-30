@@ -43,16 +43,16 @@ def axes_contains(ax, obj_list):
     def test_data_mode(self):
         data = np.ones(100) - 1j*np.ones(100)
         d = plot.data_mode(data, mode='abs')
-        self.assertTrue(np.all(d == np.sqrt(2)))
+        assert np.all(d == np.sqrt(2))
         d = plot.data_mode(data, mode='log')
-        self.assertTrue(np.all(d == np.log10(np.sqrt(2))))
+        assert np.all(d == np.log10(np.sqrt(2)))
         d = plot.data_mode(data, mode='phs')
-        self.assertTrue(np.all(d == -np.pi/4))
+        assert np.all(d == -np.pi/4)
         d = plot.data_mode(data, mode='real')
-        self.assertTrue(np.all(d == 1))
+        assert np.all(d == 1)
         d = plot.data_mode(data, mode='imag')
-        self.assertTrue(np.all(d == -1))
-        self.assertRaises(ValueError, plot.data_mode, data, mode='')
+        assert np.all(d == -1)
+        pytest.raises(ValueError, plot.data_mode, data, mode='')
 
     def test_waterfall(self):
         import matplotlib
@@ -386,7 +386,7 @@ class TestDiffPlotters():
                 )
 
                 # check the number of plots is correct
-                self.assertTrue(axes_contains(fig, elements))
+                assert axes_contains(fig, elements)
 
                 # check that the plots are labeled correctly
                 for i, ax in enumerate(fig.axes):
@@ -405,7 +405,7 @@ class TestDiffPlotters():
                     dim = "lst" if dim == "time" else dim
 
                     # make sure that the label is correct
-                    self.assertTrue(xlabel.startswith(dim))
+                    assert xlabel.startswith(dim)
 
         plt.close(fig)
 
@@ -419,7 +419,7 @@ class TestDiffPlotters():
         # make sure that it's plotting in frequency space
         ax = fig.axes[0]
         xlabel = ax.get_xlabel().lower()
-        self.assertTrue(xlabel.startswith('freq'))
+        assert xlabel.startswith('freq')
 
         # check that it works when an axis has length 1
         fig = plot.plot_diff_1d(
@@ -435,7 +435,7 @@ class TestDiffPlotters():
         # check for six instances of subplots, one per image and
         # one per colorbar
         elements = [(plt.Subplot, 6),]
-        self.assertTrue(axes_contains(fig, elements))
+        assert axes_contains(fig, elements)
 
         # now check that we get three images and three colorbars
         Nimages = 0
@@ -445,12 +445,12 @@ class TestDiffPlotters():
             cbar = [(matplotlib.collections.QuadMesh, 1),]
             contains_image = axes_contains(ax, image)
             contains_cbar = axes_contains(ax, cbar)
-            self.assertTrue(contains_image or contains_cbar)
+            assert contains_image or contains_cbar
             Nimages += int(contains_image)
             Ncbars += int(contains_cbar)
 
-        self.assertTrue(Nimages == 3)
-        self.assertTrue(Ncbars == 3)
+        assert Nimages == 3
+        assert Ncbars == 3
 
         # close the figure
         plt.close(fig)
@@ -487,7 +487,7 @@ class TestDiffPlotters():
                                                plot_type=plot_type)
 
             # check that the correct number of subplots are made
-            self.assertTrue(axes_contains(fig, elements))
+            assert axes_contains(fig, elements)
 
             Nimages = 0
             Ncbars = 0
@@ -500,11 +500,11 @@ class TestDiffPlotters():
                 contains_cbar = axes_contains(ax, cbar)
                 Nimages += int(contains_image)
                 Ncbars += int(contains_cbar)
-                self.assertTrue(contains_image or contains_cbar)
+                assert contains_image or contains_cbar
 
             # check that the amount of colorbars and images is correct
-            self.assertTrue(Nimages == Nplots)
-            self.assertTrue(Ncbars == Nplots)
+            assert Nimages == Nplots
+            assert Ncbars == Nplots
 
             # now close the figure
             plt.close(fig)
