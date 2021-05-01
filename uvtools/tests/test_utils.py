@@ -1,6 +1,6 @@
 import pytest
+import uvtools as uvt
 import numpy as np
-from .. import utils
 import glob
 import os
 import sys
@@ -22,7 +22,7 @@ def test_search_data():
     templates = sorted(files + ["zen.inp.{pol}.uv"])
 
     # search data
-    dfs, dps = utils.search_data(templates, pols)
+    dfs, dps = uvt.utils.search_data(templates, pols)
     assert len(dfs) ==  2
     assert len(dfs[0]) ==  len(dfs[1])
     assert len(dfs[1]) ==  2
@@ -33,23 +33,23 @@ def test_search_data():
     assert np.all(['.xx.' in df for df in dfs[0]])
 
     # matched pols
-    dfs, dps = utils.search_data(templates, pols, matched_pols=True)
+    dfs, dps = uvt.utils.search_data(templates, pols, matched_pols=True)
     assert len(dfs) ==  2
     assert len(dfs[0]) ==  len(dfs[1])
     assert len(dfs[0]) ==  2
     assert np.all(['.xx.' in df for df in dfs[0]])
-    dfs, dps = utils.search_data(files, pols + ['pI'], matched_pols=True)
+    dfs, dps = uvt.utils.search_data(files, pols + ['pI'], matched_pols=True)
     assert len(dfs) ==  0
 
     # reverse nesting
-    dfs, dps = utils.search_data(templates, pols, reverse_nesting=True)
+    dfs, dps = uvt.utils.search_data(templates, pols, reverse_nesting=True)
     assert len(dfs) ==  2
     assert len(dfs[0]) ==  len(dfs[1])
     assert len(dfs[1]) ==  2
     assert np.all(['.bar.' in df for df in dfs[0]])
 
     # flatten
-    dfs, dps = utils.search_data(templates, pols, flatten=True)
+    dfs, dps = uvt.utils.search_data(templates, pols, flatten=True)
     assert len(dfs) == 4
     assert isinstance(dfs[0], (str, np.str))
 
