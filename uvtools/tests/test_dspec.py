@@ -1052,56 +1052,6 @@ def test_vis_clean():
     assert np.all(np.isclose(res3, res1))
     assert np.all(np.isclose(mdl3, mdl1))
 
-
-def test_place_data_on_uniform_grid():
-    # first, generate uniformly spaced x values and ensure that we get the same thing back.
-    xt = np.arange(0, 100) * 1.23157
-    yt = np.random.randn(len(xt)) + 1j * np.random.randn(len(xt))
-    wt = np.ones(len(xt))
-    for m in range(100):
-        wt[np.random.randint(low=0, high=len(xt), size=20)] = 0.0
-        xout, yout, wout, inserted = dspec.place_data_on_uniform_grid(xt, yt, wt)
-        assert np.allclose(xout, xt)
-        assert np.allclose(yout, yt)
-        assert np.allclose(wout, wt)
-        # remove 10 random grid points and check that
-        # we succisfully reconstruct grid.
-        to_remove = np.random.randint(low=1, high=len(xt)-1, size=10)
-        to_keep = np.array([i for i in range(len(xt)) if i not in to_remove])
-        xtt = xt[to_keep]
-        ytt = yt[to_keep]
-        wtt = wt[to_keep]
-        xout, yout, wout, inserted = dspec.place_data_on_uniform_grid(xtt, ytt, wtt)
-        assert np.allclose(xout, xt)
-        assert np.allclose(yout[to_keep], yt[to_keep])
-        assert np.allclose(yout[to_remove], 0.0)
-        assert np.allclose(wout[to_remove], 0.0)
-        assert np.allclose(wout[to_keep], wt[to_keep])
-
-    # try negative grid.
-    xt = np.arange(0, 100) * -3.8271
-    yt = np.random.randn(len(xt)) + 1j * np.random.randn(len(xt))
-    wt = np.ones(len(xt))
-    for m in range(100):
-        wt[np.random.randint(low=0, high=len(xt), size=20)] = 0.0
-        xout, yout, wout, inserted = dspec.place_data_on_uniform_grid(xt, yt, wt)
-        assert np.allclose(xout, xt)
-        assert np.allclose(yout, yt)
-        assert np.allclose(wout, wt)
-        # remove 10 random grid points and check that
-        # we succisfully reconstruct grid.
-        to_remove = np.random.randint(low=1, high=len(xt)-1, size=10)
-        to_keep = np.array([i for i in range(len(xt)) if i not in to_remove])
-        xtt = xt[to_keep]
-        ytt = yt[to_keep]
-        wtt = wt[to_keep]
-        xout, yout, wout, inserted = dspec.place_data_on_uniform_grid(xtt, ytt, wtt)
-        assert np.allclose(xout, xt)
-        assert np.allclose(yout[to_keep], yt[to_keep])
-        assert np.allclose(yout[to_remove], 0.0)
-        assert np.allclose(wout[to_remove], 0.0)
-        assert np.allclose(wout[to_keep], wt[to_keep])
-
 def test__fit_basis_1d():
     #perform dpss interpolation, leastsq
     fs = np.arange(-50,50)
