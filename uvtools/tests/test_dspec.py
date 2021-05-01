@@ -7,6 +7,7 @@ from uvtools.data import DATA_PATH
 import os
 import scipy.signal.windows as windows
 import warnings
+import copy
 random.seed(0)
 
 class TestMethods(unittest.TestCase):
