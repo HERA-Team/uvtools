@@ -1,7 +1,6 @@
 from .. import dspec
 import numpy as np, random
 import pytest
-import copy
 from pyuvdata import UVData
 from uvtools.data import DATA_PATH
 import os
