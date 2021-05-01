@@ -1140,3 +1140,21 @@ def test__fit_basis_1d():
     assert np.all(np.isclose(mod3, mod4, atol=1e-2))
 
     assert np.all(np.isclose((mod2+resid2)*wgts, dw, atol=1e-6))
+    # now remove ten random channels.
+    to_remove = [2, 10, 11, 23, 54, 71, 87, 88, 89, 97]
+    to_keep = np.array([i for i in range(len(fs)) if i not in to_remove])
+
+    mod5, resid5, info5 = dspec._fit_basis_1d(fs[to_keep], dw[to_keep], wgts[to_keep], [0.], [5./50.], basis_options=dft_opts,
+                                    method='leastsq', basis='dft')
+
+    dwt = copy.deepcopy(dw)
+    wgtst = copy.deepcopy(wgts)
+
+    dwt[to_remove] = 0.0
+    wgtst[to_remove] = 0.0
+
+    mod6, resid6, info6 = dspec._fit_basis_1d(fs, dwt, wgtst, [0.], [5./50.], basis_options=dft_opts,
+                                    method='leastsq', basis='dft')
+
+    assert np.allclose(mod5, mod6[to_keep])
+    assert np.allclose(resid5, resid6[to_keep])
