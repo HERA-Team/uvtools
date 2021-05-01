@@ -109,77 +109,6 @@ def _get_filter_area(x, filter_center, filter_width):
     return av
 
 
-def place_data_on_uniform_grid(x, y, w, xtol=1e-3):
-    """
-    If possible, place data on a uniformly spaced grid.
-
-    Parameters
-    ----------
-    x: array-like,
-        array of x-values.
-    y: array-like,
-        array of y-values.
-    w: array-like,
-        array of weights.
-    xtol: float, optional.
-        fractional error tolerance to determine if x-values are
-        on an incomplete grid.
-
-    Returns
-    -------
-        xout: array-like
-              If the separations on x are multiples of a single underlying minimum unit
-              returns x with all multiples of the fundamental unit filled in.
-              If x is already uniformly spaced, returns x unchanged. If separations are not
-              multiples of fundamental unit, also returns x unchanged.
-        yout: array-like
-              If the separations on x are multiples of a single underlying minimum unit
-              returns y with all multiples of the fundamental unit filled in with zeros.
-              If x is already uniformly spaced, returns y unchanged. If separations are not
-              multiples of fundamental unit, also returns y unchanged.
-        wout: array-like
-              If the separations on x are multiples of a single underlying minimum unit
-              returns w with all multiples of the fundamental unit filled in with zeros.
-              If x is already uniformly spaced, returns w unchanged. If separations are not
-              multiples of fundamental unit, also returns w unchanged.
-        inserted: array-like
-              boolean array indicating which x-values were inserted.
-    """
-    xdiff = np.diff(x)
-    dx = np.abs(np.diff(x)).min() * np.sign(np.diff(x)[0])
-    # first, check whether x, y, w already on a grid.
-    # if they are, just return them.
-    if np.allclose(xdiff, dx, rtol=0, atol=dx * xtol):
-        xout = x
-        yout = y
-        wout = w
-        inserted = np.zeros(len(x), dtype=bool)
-        return xout, yout, wout, inserted
-    # next, check that the array is not on a grid and if it isn't, return x, y, w
-    for i in range(len(x) - 1):
-        grid_spacing =  (x[i + 1] - x[i]) / dx
-        integer_spacing = np.round(grid_spacing)
-        if not np.isclose(integer_spacing, grid_spacing, rtol=0, atol=xtol):
-            xout = x
-            yout = y
-            wout = w
-            inserted = np.zeros(len(x), dtype=bool)
-            return xout, yout, wout, inserted
-    # if the array is on a grid, then construct filled in grid.
-    nx_grid =int(np.round((x[-1] - x[0]) / dx)) + 1
-    xout = np.linspace(x[0], x[-1], nx_grid)
-    yout = np.zeros(xout.shape, dtype=np.complex128)
-    wout = np.zeros(xout.shape, dtype=np.float)
-    inserted = np.ones(len(xout), dtype=bool)
-    # fill in original data and weights.
-    for x_index, xt in enumerate(x):
-        output_index = np.argmin(np.abs(xout - xt))
-        yout[output_index] = y[x_index]
-        wout[output_index] = w[x_index]
-        inserted[output_index] = False
-
-    return xout, yout, wout, inserted
-
 
 def _fourier_filter_hash(filter_centers, filter_half_widths,
                          filter_factors, x, w=None, hash_decimal=10, **kwargs):
@@ -1525,7 +1454,7 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False,
 
 def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
                 basis_options, suppression_factors=None, hash_decimal=10,
-                method='leastsq', basis='dft', build_uniform_grid=True, cache=None):
+                method='leastsq', basis='dft', cache=None):
     """
     A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
     y_model = A @ c
@@ -1590,13 +1519,7 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
                 using scipy.optimize.leastsq
             *'matrix' derive model by directly calculate the fitting matrix
                 [A^T W A]^{-1} A^T W and applying it to the y vector.
-    basis: string, specifying basis to use for interpolation.
-    build_uniform_grid: bool,, optional
-        If True, check if non-uniformities in x are equal to integer multiples of the
-        smallest separation. If so, insert x-values, zero data, and zero weights before filtering.
-        The standard use-case for this is if we are performing fringe-rate filtering on uniformly
-        sampled data but we happen to be missing some observations / integrations because of correlator
-        or librarian dropouts.
+
 
     Returns:
         model: array-like
@@ -1618,11 +1541,6 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
                   if the method == 'matrix'.
 
     """
-    # fill in missing grid points with zero-weights
-    # and zero data if we have
-    # build_uniform_grid=True.
-    if build_uniform_grid:
-        x, y, w, inserted = place_data_on_uniform_grid(x, y, w)
     if cache is None:
         cache = {}
     info = copy.deepcopy(basis_options)
@@ -1672,11 +1590,6 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
         raise ValueError("Provided 'method', '%s', is not in ['leastsq', 'matrix']."%(method))
     model = amat @ (suppression_vector * cn_out)
     resid = (y - model) * (~np.isclose(w, 0, atol=1e-10)).astype(float) #suppress flagged residuals (such as RFI)
-    # remove inserted grid values.
-    if build_uniform_grid:
-        model = model[~inserted]
-        resid = resid[~inserted]
-
     return model, resid, info
 
 def _clean_filter(x, data, wgts, filter_centers, filter_half_widths,
