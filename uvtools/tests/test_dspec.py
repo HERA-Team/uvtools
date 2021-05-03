@@ -1054,60 +1054,46 @@ def test_vis_clean():
     assert np.all(np.isclose(res3, res1))
     assert np.all(np.isclose(mdl3, mdl1))
 
-def test_place_data_on_uniform_grid():
+def test_place_data_on_uniform_grid_data_already_gridded():
     # first, generate uniformly spaced x values and ensure that we get the same thing back.
     xt = np.arange(0, 100) * 1.23157
     yt = np.random.randn(len(xt)) + 1j * np.random.randn(len(xt))
     wt = np.ones(len(xt))
-    for m in range(1):
-        wt[np.random.randint(low=0, high=len(xt), size=20)] = 0.0
-        xout, yout, wout, inserted = dspec.place_data_on_uniform_grid(xt, yt, wt)
-        assert np.allclose(xout, xt)
-        assert np.allclose(yout, yt)
-        assert np.allclose(wout, wt)
-        # remove 10 random grid points and check that
-        # we succisfully reconstruct grid.
-        to_remove = np.random.randint(low=1, high=len(xt)-1, size=10)
-        to_keep = np.array([i for i in range(len(xt)) if i not in to_remove])
-        xtt = xt[to_keep]
-        ytt = yt[to_keep]
-        wtt = wt[to_keep]
-        xout, yout, wout, inserted = dspec.place_data_on_uniform_grid(xtt, ytt, wtt)
-        assert np.allclose(xout, xt)
-        assert np.allclose(yout[to_keep], yt[to_keep])
-        assert np.allclose(yout[to_remove], 0.0)
-        assert np.allclose(wout[to_remove], 0.0)
-        assert np.allclose(wout[to_keep], wt[to_keep])
+    wt[np.random.randint(low=0, high=len(xt), size=20)] = 0.0
+    xout, yout, wout, inserted = dspec.place_data_on_uniform_grid(xt, yt, wt)
+    assert np.allclose(xout, xt)
+    assert np.allclose(yout, yt)
+    assert np.allclose(wout, wt)
 
-    # try negative grid.
-    xt = np.arange(0, 100) * -3.8271
+@pytest.mark.parametrize("dx", [1.23157, -3.8271])
+def test_place_data_on_uniform_grid_data_on_incomplete_grid(dx):
+    # test when data is not uniformly spaced but the non-uniform spacings
+    # have a lowest common multiple (they are incompletely sampling a grid).
+    xt = np.arange(0, 100) * dx
     yt = np.random.randn(len(xt)) + 1j * np.random.randn(len(xt))
     wt = np.ones(len(xt))
-    for m in range(100):
-        wt[np.random.randint(low=0, high=len(xt), size=20)] = 0.0
-        xout, yout, wout, inserted = dspec.place_data_on_uniform_grid(xt, yt, wt)
-        assert np.allclose(xout, xt)
-        assert np.allclose(yout, yt)
-        assert np.allclose(wout, wt)
-        # remove 10 random grid points and check that
-        # we succisfully reconstruct grid.
-        to_remove = np.random.randint(low=1, high=len(xt)-1, size=10)
-        to_keep = np.array([i for i in range(len(xt)) if i not in to_remove])
-        xtt = xt[to_keep]
-        ytt = yt[to_keep]
-        wtt = wt[to_keep]
-        xout, yout, wout, inserted = dspec.place_data_on_uniform_grid(xtt, ytt, wtt)
-        assert np.allclose(xout, xt)
-        assert np.allclose(yout[to_keep], yt[to_keep])
-        assert np.allclose(yout[to_remove], 0.0)
-        assert np.allclose(wout[to_remove], 0.0)
-        assert np.allclose(wout[to_keep], wt[to_keep])
+    # remove 10 random grid points and check that
+    # we succisfully reconstruct grid.
+    to_remove = np.random.randint(low=1, high=len(xt)-1, size=10)
+    to_keep = np.array([i for i in range(len(xt)) if i not in to_remove])
+    xtt = xt[to_keep]
+    ytt = yt[to_keep]
+    wtt = wt[to_keep]
+    xout, yout, wout, inserted = dspec.place_data_on_uniform_grid(xtt, ytt, wtt)
+    assert np.allclose(xout, xt)
+    assert np.allclose(yout[to_keep], yt[to_keep])
+    assert np.allclose(yout[to_remove], 0.0)
+    assert np.allclose(wout[to_remove], 0.0)
+    assert np.allclose(wout[to_keep], wt[to_keep])
 
-    # test non-grid data.
+def test_place_data_on_uniform_grid_not_griddable():
+    # When data cannot be placed on a uniform grid,
+    # just pass it through with a warning.
     x = np.array([0, 0.1, 0.25, 0.4, 0.5])
     dng = np.random.randn(len(x))
     wng = np.ones_like(x)
-    xout, dout, wout, inserted = dspec.place_data_on_uniform_grid(x, dng, wng)
+    with pytest.warns(RuntimeWarning):
+        xout, dout, wout, inserted = dspec.place_data_on_uniform_grid(x, dng, wng)
     assert np.allclose(xout, x)
     assert np.allclose(dout, dng)
     assert np.allclose(wout, wng)
@@ -1151,6 +1137,19 @@ def test__fit_basis_1d():
     assert np.all(np.isclose(mod3, mod4, atol=1e-2))
 
     assert np.all(np.isclose((mod2+resid2)*wgts, dw, atol=1e-6))
+
+def test_fit_basis_1d_with_missing_channels():
+    fs = np.arange(-50,50)
+    #here is some data
+    data = np.exp(2j * np.pi * 3.5/50. * fs) + 5*np.exp(2j * np.pi * 2.1/50. * fs)
+    data += np.exp(-2j * np.pi * 0.7/50. * fs) + 5*np.exp(2j * np.pi * -1.36/50. * fs)
+    #here are some weights with flags
+    wgts = np.ones_like(data)
+    wgts[6] = 0
+    wgts[17] = 0
+    dw = data*wgts
+    # dft fitting options
+    dft_opts={'fundamental_period':200.}
     # now remove ten random channels.
     to_remove = [2, 10, 11, 23, 54, 71, 87, 88, 89, 97]
     to_keep = np.array([i for i in range(len(fs)) if i not in to_remove])
