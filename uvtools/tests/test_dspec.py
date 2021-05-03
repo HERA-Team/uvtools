@@ -1,5 +1,5 @@
 import unittest
-import uvtools.dspec as dspec
+from uvtools import dspec
 import numpy as np, random
 import pytest
 from pyuvdata import UVData
@@ -1059,7 +1059,7 @@ def test_place_data_on_uniform_grid():
     xt = np.arange(0, 100) * 1.23157
     yt = np.random.randn(len(xt)) + 1j * np.random.randn(len(xt))
     wt = np.ones(len(xt))
-    for m in range(100):
+    for m in range(1):
         wt[np.random.randint(low=0, high=len(xt), size=20)] = 0.0
         xout, yout, wout, inserted = dspec.place_data_on_uniform_grid(xt, yt, wt)
         assert np.allclose(xout, xt)
@@ -1102,6 +1102,16 @@ def test_place_data_on_uniform_grid():
         assert np.allclose(yout[to_remove], 0.0)
         assert np.allclose(wout[to_remove], 0.0)
         assert np.allclose(wout[to_keep], wt[to_keep])
+
+    # test non-grid data.
+    x = np.array([0, 0.1, 0.25, 0.4, 0.5])
+    dng = np.random.randn(len(x))
+    wng = np.ones_like(x)
+    xout, dout, wout, inserted = dspec.place_data_on_uniform_grid(x, dng, wng)
+    assert np.allclose(xout, x)
+    assert np.allclose(dout, dng)
+    assert np.allclose(wout, wng)
+    assert np.allclose(inserted, 0.0)
 
 def test__fit_basis_1d():
     #perform dpss interpolation, leastsq

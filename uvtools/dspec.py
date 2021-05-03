@@ -109,6 +109,94 @@ def _get_filter_area(x, filter_center, filter_width):
     return av
 
 
+def place_data_on_uniform_grid(x, data, weights, xtol=1e-3):
+    """If possible, place data on a uniformly spaced grid.
+
+    Given a vector of x-values (x), with data and weights,
+    this function determines whether there are gaps in the
+    provided x-values that are multiples of the minimum
+    distance between x-values or whether any gaps are
+    integer multiples of a fundamental grid spacing.
+    If there are gaps that are integer multiples of a
+    fundamental spacing, this function restores these
+    x-values and inserts zero-valued
+    data and zero-valued weights at their location,
+    returning equally spaced data and weights that are
+    effectively flagged at the missing x-values.
+    This supports filtering data that was regularly sampled but has
+    missing samples due to (for example) correlator dropouts since
+    several of our filtering methods (DPSS fits and CLEAN) require data
+    to be sampled on an equally spaced grid.
+
+    Parameters
+    ----------
+    x: array-like,
+        array of x-values.
+    data: array-like,
+        array of y-values.
+        Should be the same length as x.
+    weights: array-like,
+        array of weights.
+        Should be the same length as x.
+    xtol: float, optional.
+        fractional error tolerance to determine if x-values are
+        on an incomplete grid.
+
+    Returns
+    -------
+        xout: array-like
+              If the separations on x are multiples of a single underlying minimum unit
+              returns x with all multiples of the fundamental unit filled in.
+              If x is already uniformly spaced, returns x unchanged. If separations are not
+              multiples of fundamental unit, also returns x unchanged.
+        yout: array-like
+              If the separations on x are multiples of a single underlying minimum unit
+              returns y with all multiples of the fundamental unit filled in with zeros.
+              If x is already uniformly spaced, returns y unchanged. If separations are not
+              multiples of fundamental unit, also returns y unchanged.
+        wout: array-like
+              If the separations on x are multiples of a single underlying minimum unit
+              returns w with all multiples of the fundamental unit filled in with zeros.
+              If x is already uniformly spaced, returns w unchanged. If separations are not
+              multiples of fundamental unit, also returns w unchanged.
+        inserted: array-like
+              boolean array indicating which x-values were inserted.
+    """
+    xdiff = np.diff(x)
+    dx = np.abs(np.diff(x)).min() * np.sign(np.diff(x)[0])
+    # first, check whether x, y, w already on a grid.
+    # if they are, just return them.
+    if np.allclose(xdiff, dx, rtol=0, atol=dx * xtol):
+        xout = x
+        dout = data
+        wout = weights
+        inserted = np.zeros(len(x), dtype=bool)
+        return xout, dout, wout, inserted
+    # next, check that the array is not on a grid and if it isn't, return x, y, w
+    for i in range(len(x) - 1):
+        grid_spacing =  (x[i + 1] - x[i]) / dx
+        integer_spacing = np.round(grid_spacing)
+        if not np.isclose(integer_spacing, grid_spacing, rtol=0, atol=xtol):
+            xout = x
+            dout = data
+            wout = weights
+            inserted = np.zeros(len(x), dtype=bool)
+            return xout, dout, wout, inserted
+    # if the array is on a grid, then construct filled in grid.
+    grid_size =int(np.round((x[-1] - x[0]) / dx)) + 1
+    xout = np.linspace(x[0], x[-1], grid_size)
+    dout = np.zeros(grid_size, dtype=np.complex128)
+    wout = np.zeros(grid_size, dtype=np.float)
+    inserted = np.ones(grid_size, dtype=bool)
+    # fill in original data and weights.
+    for x_index, xt in enumerate(x):
+        output_index = np.argmin(np.abs(xout - xt))
+        dout[output_index] = data[x_index]
+        wout[output_index] = weights[x_index]
+        inserted[output_index] = False
+
+    return xout, dout, wout, inserted
+
 
 def _fourier_filter_hash(filter_centers, filter_half_widths,
                          filter_factors, x, w=None, hash_decimal=10, **kwargs):
