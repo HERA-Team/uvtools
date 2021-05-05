@@ -1,6 +1,6 @@
 # uvtools
 [![Build Status](https://travis-ci.org/HERA-Team/uvtools.svg?branch=master)](https://travis-ci.org/HERA-Team/uvtools)
-[![codecov](https://codecov.io/gh/HERA-Team/uvtools/branch/master/graph/badge.svg?token=BImdA3Oz6u)](https://codecov.io/gh/HERA-Team/uvtools)
+[![codecov](https://codecov.io/gh/HERA-Team/uvtools/branch/main/graph/badge.svg?token=BImdA3Oz6u)](https://codecov.io/gh/HERA-Team/uvtools)
 
 Tools useful for the handling, visualization, and analysis of interferometric data.
 
