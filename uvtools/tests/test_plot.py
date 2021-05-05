@@ -2,7 +2,7 @@ import pytest
 import matplotlib
 import matplotlib.pyplot as plt
 import unittest
-import uvtools as uvt
+from .. import plot, utils
 import numpy as np
 from itertools import combinations
 from astropy import units
@@ -39,37 +39,36 @@ def axes_contains(ax, obj_list):
     # Return True if no problems found
     return True
 
-class TestMethods(unittest.TestCase):
 
     def test_data_mode(self):
         data = np.ones(100) - 1j*np.ones(100)
-        d = uvt.plot.data_mode(data, mode='abs')
-        self.assertTrue(np.all(d == np.sqrt(2)))
-        d = uvt.plot.data_mode(data, mode='log')
-        self.assertTrue(np.all(d == np.log10(np.sqrt(2))))
-        d = uvt.plot.data_mode(data, mode='phs')
-        self.assertTrue(np.all(d == -np.pi/4))
-        d = uvt.plot.data_mode(data, mode='real')
-        self.assertTrue(np.all(d == 1))
-        d = uvt.plot.data_mode(data, mode='imag')
-        self.assertTrue(np.all(d == -1))
-        self.assertRaises(ValueError, uvt.plot.data_mode, data, mode='')
+        d = plot.data_mode(data, mode='abs')
+        assert np.all(d == np.sqrt(2))
+        d = plot.data_mode(data, mode='log')
+        assert np.all(d == np.log10(np.sqrt(2)))
+        d = plot.data_mode(data, mode='phs')
+        assert np.all(d == -np.pi/4)
+        d = plot.data_mode(data, mode='real')
+        assert np.all(d == 1)
+        d = plot.data_mode(data, mode='imag')
+        assert np.all(d == -1)
+        pytest.raises(ValueError, plot.data_mode, data, mode='')
 
     def test_waterfall(self):
         import matplotlib
         data = np.ones((10,10)) - 1j*np.ones((10,10))
         for mode in ('abs','log','phs','real','imag'):
-            uvt.plot.waterfall(data, mode=mode)
+            plot.waterfall(data, mode=mode)
             #matplotlib.pyplot.show()
             matplotlib.pyplot.clf()
 
     def test_plot_antpos(self):
         antpos = {i: [i,i,0] for i in range(10)}
         import matplotlib
-        uvt.plot.plot_antpos(antpos)
+        plot.plot_antpos(antpos)
         #matplotlib.pyplot.show()
 
-class TestFancyPlotters(unittest.TestCase):
+class TestFancyPlotters():
     def setUp(self):
         import hera_sim
         sim = hera_sim.Simulator(
@@ -83,17 +82,15 @@ class TestFancyPlotters(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def runTest(self):
-        pass
-
     def test_labeled_waterfall(self):
+        self.setUp()
         # Most of this functionality is tested in the next test function,
         # so this will test some features not exposed in
         # plot.fourier_transform_waterfalls
         uvd = self.uvd
 
         # Dynamic range setting.
-        fig, ax = uvt.plot.labeled_waterfall(
+        fig, ax = plot.labeled_waterfall(
             uvd,
             antpairpol=(0,1,"xx"),
             mode="phs",
@@ -104,7 +101,7 @@ class TestFancyPlotters(unittest.TestCase):
         assert image.cmap.name == "RdBu"
         assert np.allclose(image.get_clim(), (-1, 1))
 
-        fig, ax = uvt.plot.labeled_waterfall(
+        fig, ax = plot.labeled_waterfall(
             uvd,
             antpairpol=(0,1,"xx"),
             mode="log",
@@ -115,7 +112,7 @@ class TestFancyPlotters(unittest.TestCase):
         assert image.cmap.name == "inferno"
         assert np.allclose(image.get_clim(), (-7, -5))
 
-        fig, ax = uvt.plot.labeled_waterfall(
+        fig, ax = plot.labeled_waterfall(
             uvd,
             antpairpol=(0,1,"xx"),
             mode="log",
@@ -124,15 +121,17 @@ class TestFancyPlotters(unittest.TestCase):
         )
         image = ax.get_images()[0]
         assert np.allclose(image.get_clim(), (-6, -5))
+        self.tearDown()
 
     def test_fourier_transform_waterfalls(self):
+        self.setUp()
         uvd = self.uvd
         data = uvd.get_data(0,1,'xx')
         freqs = np.unique(uvd.freq_array) # Hz
         times = np.unique(uvd.time_array) # JD
         lsts = np.unique(uvd.lst_array) * 24 / (2 * np.pi) # hours
-        delays = uvt.utils.fourier_freqs(freqs) * 1e9 # ns
-        fringe_rates = uvt.utils.fourier_freqs(times * 24 * 3600) * 1e3 # mHz
+        delays = utils.fourier_freqs(freqs) * 1e9 # ns
+        fringe_rates = utils.fourier_freqs(times * 24 * 3600) * 1e3 # mHz
 
         f1, f2 = freqs[10] / 1e6, freqs[90] / 1e6
         lst1, lst2 = lsts[10], lsts[40]
@@ -147,7 +146,7 @@ class TestFancyPlotters(unittest.TestCase):
         }
 
         # Test that it works passing a UVData object.
-        fig = uvt.plot.fourier_transform_waterfalls(
+        fig = plot.fourier_transform_waterfalls(
             data=uvd,
             antpairpol=(0,1,'xx'),
             plot_limits=plot_limits,
@@ -172,21 +171,21 @@ class TestFancyPlotters(unittest.TestCase):
         # Now test with an array.
         plot_times = times - int(times[0]) # For bound checking later
         lsts = np.unique(uvd.lst_array) # Ensure they're in radians
-        fringe_rates = uvt.utils.fourier_freqs(times * units.day.to("s")) # Hz
-        delays = uvt.utils.fourier_freqs(freqs) # s
+        fringe_rates = utils.fourier_freqs(times * units.day.to("s")) # Hz
+        delays = utils.fourier_freqs(freqs) # s
 
-        fig = uvt.plot.fourier_transform_waterfalls(data=data, freqs=freqs, lsts=lsts)
+        fig = plot.fourier_transform_waterfalls(data=data, freqs=freqs, lsts=lsts)
         axes = fig.get_axes()
         ylabels = list(ax.get_ylabel() for ax in axes)
         assert sum("LST" in ylabel for ylabel in ylabels) == 2
 
-        fig = uvt.plot.fourier_transform_waterfalls(data=data, freqs=freqs, times=times)
+        fig = plot.fourier_transform_waterfalls(data=data, freqs=freqs, times=times)
         axes = fig.get_axes()
         ylabels = list(ax.get_ylabel() for ax in axes)
         assert sum("JD" in ylabel for ylabel in ylabels) == 2
 
         # Check custom data units.
-        fig = uvt.plot.fourier_transform_waterfalls(
+        fig = plot.fourier_transform_waterfalls(
             data=data, freqs=freqs, lsts=lsts, data_units="mK sr"
         )
         axes = fig.get_axes()
@@ -207,7 +206,7 @@ class TestFancyPlotters(unittest.TestCase):
         frmin, frmax = np.array([fringe_rates.min(), fringe_rates.max()])  # Hz
         dlymin, dlymax = np.array([delays.min(), delays.max()]) * 1e6  # us
 
-        fig = uvt.plot.fourier_transform_waterfalls(
+        fig = plot.fourier_transform_waterfalls(
             data=data, freqs=freqs, lsts=lsts, plot_units=plot_units
         )
         axes = fig.get_axes()
@@ -225,7 +224,7 @@ class TestFancyPlotters(unittest.TestCase):
         assert sum(np.allclose(ylims, (frmax, frmin), rtol=0.01) for ylims in ylimits) == 2
         assert sum(np.allclose(ylims, (lstmax, lstmin)) for ylims in ylimits) == 2
 
-        fig = uvt.plot.fourier_transform_waterfalls(
+        fig = plot.fourier_transform_waterfalls(
             data=data, freqs=freqs, times=times, plot_units=plot_units
         )
         axes = fig.get_axes()
@@ -238,35 +237,35 @@ class TestFancyPlotters(unittest.TestCase):
 
         # Do some exception raising checking.
         with pytest.raises(ValueError):
-            uvt.plot.fourier_transform_waterfalls(
+            plot.fourier_transform_waterfalls(
                 data=uvd, antpairpol=(0,1,'xx'), time_or_lst="nan"
             )
 
         with pytest.raises(TypeError):
-            uvt.plot.fourier_transform_waterfalls(data={})
+            plot.fourier_transform_waterfalls(data={})
 
         with pytest.raises(TypeError):
-            uvt.plot.fourier_transform_waterfalls(
+            plot.fourier_transform_waterfalls(
                 data=data, freqs=freqs, lsts=lsts, plot_units="bad_type"
             )
 
         with pytest.raises(ValueError):
-            uvt.plot.fourier_transform_waterfalls(data=np.ones((3,5,2), dtype=np.complex))
+            plot.fourier_transform_waterfalls(data=np.ones((3,5,2), dtype=np.complex))
 
         with pytest.raises(ValueError):
-            uvt.plot.fourier_transform_waterfalls(data=data, freqs=freqs)
+            plot.fourier_transform_waterfalls(data=data, freqs=freqs)
 
         with pytest.raises(ValueError):
-            uvt.plot.fourier_transform_waterfalls(data=data, times=times)
+            plot.fourier_transform_waterfalls(data=data, times=times)
 
         with pytest.raises(ValueError):
-            uvt.plot.fourier_transform_waterfalls(data=uvd)
+            plot.fourier_transform_waterfalls(data=uvd)
 
         with pytest.raises(TypeError):
-            uvt.plot.fourier_transform_waterfalls(data=np.ones((15,20), dtype=np.float))
+            plot.fourier_transform_waterfalls(data=np.ones((15,20), dtype=np.float))
+        self.tearDown()
 
-
-class TestDiffPlotters(unittest.TestCase):
+class TestDiffPlotters():
 
     def setUp(self):
         # make some mock data
@@ -369,10 +368,8 @@ class TestDiffPlotters(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def runTest(self):
-        pass
-
     def test_plot_diff_1d(self):
+        self.setUp()
         # list possible plot types and dimensions
         plot_types = ("normal", "fourier", "both")
         dimensions = ("time", "freq")
@@ -383,13 +380,13 @@ class TestDiffPlotters(unittest.TestCase):
             Nplots = 6 if plot_type == "both" else 3
             elements = [(plt.Subplot, Nplots),]
             for dimension in dimensions:
-                fig = uvt.plot.plot_diff_1d(
+                fig = plot.plot_diff_1d(
                     self.uvd1, self.uvd2, self.antpairpol,
                     plot_type=plot_type, dimension=dimension
                 )
 
                 # check the number of plots is correct
-                self.assertTrue(axes_contains(fig, elements))
+                assert axes_contains(fig, elements)
 
                 # check that the plots are labeled correctly
                 for i, ax in enumerate(fig.axes):
@@ -408,35 +405,37 @@ class TestDiffPlotters(unittest.TestCase):
                     dim = "lst" if dim == "time" else dim
 
                     # make sure that the label is correct
-                    self.assertTrue(xlabel.startswith(dim))
+                    assert xlabel.startswith(dim)
 
         plt.close(fig)
 
         # now test the auto-dimension-choosing feature
 
         # make just one row of plots
-        fig = uvt.plot.plot_diff_1d(
+        fig = plot.plot_diff_1d(
             self.sim.data, self.sim.data, self.antpairpol, plot_type="normal"
         )
 
         # make sure that it's plotting in frequency space
         ax = fig.axes[0]
         xlabel = ax.get_xlabel().lower()
-        self.assertTrue(xlabel.startswith('freq'))
+        assert xlabel.startswith('freq')
 
         # check that it works when an axis has length 1
-        fig = uvt.plot.plot_diff_1d(
+        fig = plot.plot_diff_1d(
                 self.uvd_1d_freqs, self.uvd_1d_freqs, self.antpairpol,
                 plot_type="normal"
         )
+        self.tearDown()
 
     def test_plot_diff_uv(self):
+        self.setUp()
         # plot something
-        fig = uvt.plot.plot_diff_uv(self.uvd1, self.uvd2)
+        fig = plot.plot_diff_uv(self.uvd1, self.uvd2)
         # check for six instances of subplots, one per image and
         # one per colorbar
         elements = [(plt.Subplot, 6),]
-        self.assertTrue(axes_contains(fig, elements))
+        assert axes_contains(fig, elements)
 
         # now check that we get three images and three colorbars
         Nimages = 0
@@ -446,18 +445,20 @@ class TestDiffPlotters(unittest.TestCase):
             cbar = [(matplotlib.collections.QuadMesh, 1),]
             contains_image = axes_contains(ax, image)
             contains_cbar = axes_contains(ax, cbar)
-            self.assertTrue(contains_image or contains_cbar)
+            assert contains_image or contains_cbar
             Nimages += int(contains_image)
             Ncbars += int(contains_cbar)
 
-        self.assertTrue(Nimages == 3)
-        self.assertTrue(Ncbars == 3)
+        assert Nimages == 3
+        assert Ncbars == 3
 
         # close the figure
         plt.close(fig)
+        self.tearDown()
 
 
     def test_plot_diff_waterfall(self):
+        self.setUp()
         plot_types = ("time_vs_freq", "time_vs_dly",
                       "fr_vs_freq", "fr_vs_dly")
         # get all combinations
@@ -481,12 +482,12 @@ class TestDiffPlotters(unittest.TestCase):
             elements = [(plt.Subplot, Nsubplots),]
 
             # actually make the plot
-            fig = uvt.plot.plot_diff_waterfall(self.uvd1, self.uvd2,
+            fig = plot.plot_diff_waterfall(self.uvd1, self.uvd2,
                                                self.antpairpol,
                                                plot_type=plot_type)
 
             # check that the correct number of subplots are made
-            self.assertTrue(axes_contains(fig, elements))
+            assert axes_contains(fig, elements)
 
             Nimages = 0
             Ncbars = 0
@@ -499,37 +500,38 @@ class TestDiffPlotters(unittest.TestCase):
                 contains_cbar = axes_contains(ax, cbar)
                 Nimages += int(contains_image)
                 Ncbars += int(contains_cbar)
-                self.assertTrue(contains_image or contains_cbar)
+                assert contains_image or contains_cbar
 
             # check that the amount of colorbars and images is correct
-            self.assertTrue(Nimages == Nplots)
-            self.assertTrue(Ncbars == Nplots)
+            assert Nimages == Nplots
+            assert Ncbars == Nplots
 
             # now close the figure
             plt.close(fig)
+            self.tearDown()
 
     def test_plot_diff_waterfall_with_tapers(self):
+        self.setUp()
         # since the above test makes sure the figures are correctly configured,
         # this one will just make sure nothing breaks when a taper is specified
-        fig = uvt.plot.plot_diff_waterfall(
+        fig = plot.plot_diff_waterfall(
             self.uvd1, self.uvd2, self.antpairpol, freq_taper='blackman-harris',
             time_taper='hann'
         )
 
         plt.close(fig)
+        self.tearDown()
 
     def test_check_metadata(self):
+        self.setUp()
         for attr, value in self.__dict__.items():
             if attr.startswith("uvd_1d"):
-                uvt.utils.check_uvd_pair_metadata(value, value)
+                utils.check_uvd_pair_metadata(value, value)
                 continue
             if not attr.startswith("uvd_bad"):
                 continue
-            pytest.raises(uvt.utils.MetadataError,
-                          uvt.plot.plot_diff_uv,
+            pytest.raises(utils.MetadataError,
+                          plot.plot_diff_uv,
                           self.uvd1, value,
                           check_metadata=True)
-
-
-if __name__ == '__main__':
-    unittest.main()
+        self.tearDown()
