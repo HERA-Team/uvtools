@@ -7,6 +7,7 @@ import os
 import scipy.signal.windows as windows
 import warnings
 random.seed(0)
+import copy
 
 def test_wedge_width():
     # Test boundaries of delay bins
