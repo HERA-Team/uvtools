@@ -231,9 +231,9 @@ def test_dpss_operator():
     NF = 100
     DF = 100e3
     freqs = np.arange(-NF/2, NF/2)*DF + 150e6
-    freqs_bad = freqs[[0, 12, 14, 18, 22]]
+    freqs_bad = np.array([1.100912386458, 1.22317, 2.12341260, 3.234632462, 5.32348356887])
     pytest.raises(ValueError, dspec.dpss_operator, x=freqs_bad, filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5])
-    pytest.raises(ValueError, dspec.dpss_operator, x = freqs , filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5], avg_suppression=[1e-12])
+    pytest.raises(ValueError, dspec.dpss_operator, x=freqs , filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5], avg_suppression=[1e-12])
     #now calculate DPSS operator matrices using different cutoff criteria. The columns
     #should be the same up to the minimum number of columns of the three techniques.
     amat1, ncol1 = dspec.dpss_operator(freqs, [0.], [100e-9], eigenval_cutoff=[1e-9])

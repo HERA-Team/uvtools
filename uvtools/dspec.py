@@ -2153,8 +2153,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
     if not opkey in cache:
         # try placing x on a uniform grid.
         x, _, _, inserted = place_data_on_uniform_grid(x, np.zeros(len(x)), np.ones(len(x)))
-        #check that xs are equally spaced.
-        if not np.all(np.isclose(np.diff(x), np.mean(np.diff(x)), rtol=0., atol=np.abs(xtol * np.mean(np.diff(x))))):
+        if not np.allclose(np.diff(x), np.median(np.diff(x)), rtol=0., atol=np.abs(xtol * np.median(np.diff(x)))):
             #for now, don't support DPSS iterpolation unless x is equally spaced.
             #In principal, I should be able to compute off-grid DPSS points using
             #the fourier integral of the DPSWF
@@ -2192,8 +2191,12 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         for fc, fw, nt in zip(filter_centers,filter_half_widths, nterms):
             amat.append(np.exp(2j * np.pi * (yg[:,:nt]-xc) * fc ) * windows.dpss(nf, nf * df * fw, nt).T )
         # only select inserted frequencies in A-matrix.
-        amat = np.hstack(amat)[~inserted, :]
-        cache[opkey] = ( np.hstack(amat), nterms )
+        if len(amat) > 1:
+            amat = np.hstack(amat)
+        else:
+            amat = amat[0]
+        amat = amat[~inserted, :]
+        cache[opkey] = (amat, nterms)
     return cache[opkey]
 
 
