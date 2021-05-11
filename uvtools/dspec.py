@@ -2152,7 +2152,10 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
                                  label='dpss_operator', crit_val=tuple(crit_provided_value[0]))
     if not opkey in cache:
         # try placing x on a uniform grid.
+        # x is a version of x with the in-between grid values filled in and inserted is a boolean vector
+        # set to True wherever a value for x was inserted and False otherwise.
         x, _, _, inserted = place_data_on_uniform_grid(x, np.zeros(len(x)), np.ones(len(x)))
+        # if this is not successful, then throw a value error..
         if not np.allclose(np.diff(x), np.median(np.diff(x)), rtol=0., atol=np.abs(xtol * np.median(np.diff(x)))):
             #for now, don't support DPSS iterpolation unless x is equally spaced.
             #In principal, I should be able to compute off-grid DPSS points using
@@ -2190,11 +2193,13 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         amat = []
         for fc, fw, nt in zip(filter_centers,filter_half_widths, nterms):
             amat.append(np.exp(2j * np.pi * (yg[:,:nt]-xc) * fc ) * windows.dpss(nf, nf * df * fw, nt).T )
-        # only select inserted frequencies in A-matrix.
         if len(amat) > 1:
             amat = np.hstack(amat)
         else:
             amat = amat[0]
+        # we used the regularly spaced inserted grid to generate our fitting basis vectors
+        # but we dont need them for the actual fit.
+        # so here we keep only the non-inserted rows of the design matrix.
         amat = amat[~inserted, :]
         cache[opkey] = (amat, nterms)
     return cache[opkey]
