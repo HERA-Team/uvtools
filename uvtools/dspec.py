@@ -2151,6 +2151,8 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
                                  w=None, hash_decimal=hash_decimal,
                                  label='dpss_operator', crit_val=tuple(crit_provided_value[0]))
     if not opkey in cache:
+        # try placing x on a uniform grid.
+        x, _, _, inserted = place_data_on_uniform_grid(x, np.zeros(len(x)), np.ones(len(x)))
         #check that xs are equally spaced.
         if not np.all(np.isclose(np.diff(x), np.mean(np.diff(x)), rtol=0., atol=np.abs(xtol * np.mean(np.diff(x))))):
             #for now, don't support DPSS iterpolation unless x is equally spaced.
@@ -2189,6 +2191,8 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         amat = []
         for fc, fw, nt in zip(filter_centers,filter_half_widths, nterms):
             amat.append(np.exp(2j * np.pi * (yg[:,:nt]-xc) * fc ) * windows.dpss(nf, nf * df * fw, nt).T )
+        # only select inserted frequencies in A-matrix.
+        amat = np.hstack(amat)[~inserted, :]
         cache[opkey] = ( np.hstack(amat), nterms )
     return cache[opkey]
 
