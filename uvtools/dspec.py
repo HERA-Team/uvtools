@@ -40,6 +40,280 @@ DFT_DEFAULTS_2D = {'suppression_factors' : [[1e-9], [1e-9]],
                 'max_contiguous_edge_flags' : 10}
 
 
+
+def find_discontinuity_edges(x, xtol=1e-3):
+    """Find edges based on discontinuity in x-axis
+
+    Parameters
+    ----------
+    x: array-like
+        1d numpy array of x-values.
+    xtol: float, optional
+        fractional discontinuity in diff of xs above which an edge will be identified.
+
+    Returns
+    -------
+    edgesd: list
+        list of 2-tuples of indices of (lower bound inclusive, upper-bound (exclusive))
+        of contiguous x-indices.
+    Examples:
+            x = [0, 1, 4, 9] -> [(0, 2) (2, 3), (3, 4)]
+            x = [0, 1, 2, 4, 5, 6, 7, 11, 12] -> [(0, 3), (3, 7), (7, 8), (8, 9)]
+    """
+    xdiff = np.diff(x)
+    discontinuities = np.where(~np.isclose(xdiff, np.min(np.abs(xdiff)) * np.sign(xdiff[0]),
+                               rtol=0.0, atol=np.abs(np.min(xdiff)) * xtol))[0]
+    if len(discontinuities) == 0:
+        edges = [(0, len(x))]
+    elif len(discontinuities) == 1:
+        edges = [(0, discontinuities[0] + 1), (discontinuities[0] + 1, len(x))]
+    else:
+        edges = [(0, discontinuities[0] + 1)]
+        for i in range(len(discontinuities) - 1):
+            edges.append((discontinuities[i] + 1, discontinuities[i + 1] + 1))
+        edges.append((discontinuities[-1] + 1, len(x)))
+    return edges
+
+
+
+def truncate_flagged_edges(data_in, weights_in, x, ax='freq', treat_spectral_breaks_as_edges=True, xtol=1e-3):
+    """
+    cut away edge channels and integrations that are completely flagged
+
+    Parameters
+    ----------
+    data_in : array-like, 2d (Ntimes, Nfreqs)
+        data from which to remove edge integrations and channels that are completely flagged.
+    weights_in : array-like, 2d
+        weights to determine which edge integrations and channels are completely flagged
+        (close to zero). Will also be truncated.
+    x : array-like, 1-d (or 2-tuple/list of arrays)
+        x-values for data axis that we are truncating.
+        if ax=='both', should be a 2-tuple or 2-list of 1-d arrays.
+    ax : string, optional
+        axis to truncate flagged edges from. Should be 'freq' to truncate
+        completely flagged edge channels, 'time' to truncate completely flagged
+        edge integrations, or 'both' to do both.
+    treat_spectral_breaks_as_edges : bool, optional
+        If true, also flag the edges of spectral breaks
+        (where the x axis has a discontinuity, e.g. if we have multiple spectral windows that are not contiguous.)
+        default is True
+
+    Returns
+    -------
+    xout : array-like 1d (or 2-list if ax=='both').
+            x with completely flagged edges trimmed off.
+    dout : array-like 2d.
+            data_in with completely flagged edges trimmed off.
+    wout : array-like 2d.
+            weights_in with completely flagged edges trimmed off.
+    edges : 2-list of lists of 2-tuples
+            the width of the edges trimmed.
+            first list is time dim, second list is freq dim.
+            these lists can be greater then length 1 if treat_spectral_breaks_as_edges = True
+    chunks : 2-list of lists of 2-tuples
+            indices indicating the chunk edges that edge widths are reference too.
+            first list is time dim, second list is freq dim.
+            these lists can be greater then length 1 if treat_spectral_breaks_as_edges = True
+    """
+    # if axis == 'time', just use freq mode
+    # on transposed arrays.
+    if ax == 'time':
+        xout, dout, wout, edges, chunks = truncate_flagged_edges(data_in.T, weights_in.T, x)
+        dout = dout.T
+        wout = wout.T
+        edges = [edges[1], [(0, 0)]]
+        chunks = [chunks[1], [(0, data_in.shape[1])]]
+    else:
+        # Identify all contiguous chunks.
+        if treat_spectral_breaks_as_edges:
+            chunks = find_discontinuity_edges(x)
+        else:
+            chunks = [(0, data_in.shape[1])]
+        inds_left = []
+        inds_right = []
+        # Identify edge channels that are flagged.
+        for chunk in chunks:
+            chunkslice = slice(chunk[0], chunk[1])
+            unflagged_chans = np.where(~np.all(np.isclose(weights_in[:, chunkslice], 0.0), axis=0))[0]
+            if np.count_nonzero(unflagged_chans) > 0:
+                # truncate data to be filtered where appropriate.
+                inds_left.append(np.min(unflagged_chans))
+                inds_right.append(np.max(unflagged_chans) + 1)
+        if len(inds_left) > 1:
+            dout = np.hstack([data_in[:, chunk[0] + ind_left: chunk[0] + ind_right] for ind_left, ind_right, chunk in zip(inds_left, inds_right, chunks)])
+            wout = np.hstack([weights_in[:, chunk[0] + ind_left: chunk[0] + ind_right] for ind_left, ind_right, chunk in zip(inds_left, inds_right, chunks)])
+        else:
+            dout = data_in[:, ind_left: ind_right]
+            wout = weights_in[:, ind_left: ind_right]
+        edges = [(ind_left, chunk[1] - ind_right) for ind_left, ind_right, chunk in zip(inds_left, inds_right, chunks)]
+        if ax == 'both':
+            x1 = np.hstack([x[1][chunk[0] + ind_left: chunk[0] + ind_right] for ind_left, ind_right, chunk in zip(inds_left, inds_right, chunks)])
+            x0, dout, wout, e0, c0 = truncate_flagged_edges(dout, wout, x[0], ax='time')
+            xout = [x0, x1]
+            edges = [e0[0], edges]
+            chunks = [c0[0], chunks]
+        else:
+            xout = np.hstack(x[chunk[0] + ind_left: chunk[0] + ind_right] for ind_left, ind_right, chunk in zip(inds_left, inds_right, chunks)])
+            edges = [[(0, 0)], edges]
+            chunks = [[(0, data_in.shape[0])], chunks]
+    return xout, dout, wout, edges, chunks
+
+
+def flag_rows_with_flags_within_edge_distance(weights_in, min_flag_edge_distance, ax='freq'):
+    """
+    flag integrations (and/or channels) with flags within min_flag_edge_distance of edge.
+
+    Parameters
+    -----------
+    weights_in : array-like, 2d (Ntimes, Nfreqs)
+        weights to check for flags within min_edge distance of edge along specified axis.
+        will set all weights in each row with flags within min_flag_edge_distance to zero.
+    min_flag_edge_distance : integer (or two-tuple / list)
+        any row of weights_in with zero weights within min_edge distance
+        of edge will be set to zero.
+    ax : str, optional
+        string specifying which axis to flag edges of.
+        valid options include 'freq', 'time', 'both'.
+        default is 'freq'
+    Returns
+    -------
+    wout, array-like 2d
+        weights with rows or columns with zero weights
+        within min_flag_edge_distance set entirely to zero.
+
+    """
+    if ax == 'time':
+        wout = flag_rows_with_flags_within_edge_distance(weights_in.T, min_flag_edge_distance).T
+    else:
+        wout = copy.deepcopy(weights_in)
+        for rownum, wrow in enumerate(wout):
+            if ax == 'both':
+                if np.any(np.isclose(wout[rownum, :min_flag_edge_distance[1]], 0.0)) | np.any(np.isclose(wout[rownum, -min_flag_edge_distance[1] - 1:], 0.0)):
+                    wout[rownum, :] = 0.
+            elif np.any(np.isclose(wout[rownum, :min_flag_edge_distance], 0.0)) | np.any(np.isclose(wout[rownum, -min_flag_edge_distance - 1:], 0.0)):
+                wout[rownum, :] = 0.
+        if ax == 'both':
+            wout = flag_rows_with_flags_within_edge_distance(wout, min_flag_edge_distance[0], ax='time')
+    return wout
+
+
+def flag_rows_with_contiguous_flags(weights_in, max_contiguous_flag, ax='freq'):
+    """
+    flag any row or column with contiguous zero-weights over a specified limit.
+
+    Parameters
+    ----------
+    weights_in : array-like, 2d (Ntimes, Nfreqs)
+        weights to check. any row (ax='time') or col (ax='freq')
+        with contiguous regions of zero with length greater then max_contiguous_flag
+        will be set to zero.
+    max_contiguous_flag : integer (or 2-list/tuple if ax='both')
+        flag any row or column when any N series of contiguous bins in weights_in
+        along the axis are zero, where N = max_contiguous_flags
+    ax : str, optional
+        axis to perform flagging over. options=['time', 'freq', 'both'], default='freq'
+    """
+    if ax == 'time':
+        wout = flag_rows_with_contiguous_flags(weights_in.T, max_contiguous_flag).T
+    else:
+        wout = copy.deepcopy(weights_in)
+        for rownum, wrow in enumerate(wout):
+            max_contiguous = 0  # keeps track of the largest contig flags in integration.
+            current_flag_length = 0  # keeps track of current contig flag size.
+            on_flag = False  # keep track if currently on a flag.
+            # iterate over each channel in integration.
+            for wr in wrow:
+                on_flag = (wr == 0)  # if weights are zero, on a flag.
+                # if on a flag, +1 current flag size.
+                if on_flag:
+                    current_flag_length += 1
+                else:
+                    # otherwise, check if the current flag len > max.
+                    # update max_contiguous if appropriate.
+                    if current_flag_length >= max_contiguous:
+                        max_contiguous = current_flag_length
+                    current_flag_length = 0
+            if ax == 'both':
+                if max_contiguous >= max_contiguous_flag[1]:
+                    wout[rownum][:] = 0.
+            elif max_contiguous >= max_contiguous_flag:
+                wout[rownum][:] = 0.
+        if ax == 'both':
+            wout = flag_rows_with_contiguous_flags(wout, max_contiguous_flag[0], ax='time')
+    return wout
+
+
+def get_max_contiguous_flag_from_filter_periods(x, filter_centers, filter_half_widths):
+    """
+    determine maximum contiguous flags from filter periods
+
+    Parameters
+    ----------
+    x : array-like, 1d or 2-tuple
+        x (and y) axes of data to determine maximum contiguous flags from.
+    filter_centers : list or 2-tuple/list of lists
+        centers of filtering-windows.
+    filter_half_widths : list or 2-tuple list of lists
+        half-widths of filtering windows.
+
+    Returns
+    -------
+    max_contiguous_flag: int or 2-list containing the width of a region corresponding
+        to the largest delay in the filter centers and filter_widths
+    """
+    if len(x) == 2:
+        dx = [np.median(np.diff(x[0])), np.median(np.diff(x[1]))]
+        max_filter_freq = [np.max(np.abs(np.hstack([[fc - fw, fc + fw] for fc, fw in zip(filter_centers[0], filter_half_widths[0])]))),
+                           np.max(np.abs(np.hstack([[fc - fw, fc + fw] for fc, fw in zip(filter_centers[1], filter_half_widths[1])])))]
+        return [int(1. / (max_filter_freq[0] * dx[0])), int(1. / (max_filter_freq[1] * dx[1]))]
+    else:
+        dx = np.median(np.diff(x))
+        max_filter_freq = np.max(np.abs(np.hstack([[fc - fw, fc + fw] for fc, fw in zip(filter_centers, filter_half_widths)])))
+        return int(1. / (max_filter_freq * dx))
+
+
+def flag_model_rms(skipped, d, w, mdl, mdl_w=None, model_rms_threshold=1.1, ax='freq'):
+    """
+    flag integrations or channels where the RMS of the model > RMS of the data
+
+    Parameters
+    ----------
+    skipped : array-like 2d, bool
+        existing clean_flags
+    d : array-like 2d, complex
+        the data waterfall.
+    w : array-like 2d, float
+        data weights waterfall. RMS of data will only be determined
+        over voxels where |w| > 0.
+    mdl : array-like 2d, complex
+        model waterfall.
+    mdl_w : array-like 2d, float, optional
+        model weights waterfall. RMS of model will be determined
+        over voxels where |mdl_w| > 0.
+        default is None. When None provided, mdl_w set to 1 everywhere.
+    model_rms_threshold : float, optional
+        flag integrations and/or channels if RMS of model > RMS of data x model_rms_threshold
+        default is 1.1
+    ax : str, optional
+        axis to flag over.
+    """
+    if mdl_w is None:
+        mdl_w = np.ones_like(w)
+    if ax == 'freq' or ax == 'both':
+        for i in range(mdl.shape[0]):
+            if np.any(~skipped[i]):
+                if np.mean(np.abs(mdl[i, ~np.isclose(np.abs(mdl_w[i]), 0.0)]) ** 2.) ** .5 >= model_rms_threshold * np.mean(np.abs(d[i, ~np.isclose(np.abs(w[i]), 0.0)]) ** 2.) ** .5:
+                    skipped[i] = True
+    if ax == 'time' or ax == 'both':
+        for i in range(mdl.shape[1]):
+            if np.any(~skipped[:, i]):
+                if np.mean(np.abs(mdl[~np.isclose(np.abs(mdl_w[:, i]), 0.0), i]) ** 2.) ** .5 >= model_rms_threshold * np.mean(np.abs(d[~np.isclose(np.abs(w[:, i]), 0.0), i]) ** 2.) ** .5:
+                    skipped[:, i] = True
+    return skipped
+
+
+
 def _process_filter_kwargs(kwarg_dict, default_dict):
         """
         Utility function to complete a dictionary of kwargs
@@ -258,7 +532,11 @@ def calc_width(filter_size, real_delta, nsamples):
     return (uthresh, lthresh)
 
 def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
-                   filter_dims=1, skip_wgt=0.1, zero_residual_flags=True, **filter_kwargs):
+                   filter_dims=1, skip_wgt=0.1, zero_residual_flags=True,
+                   max_contiguous_edge_flags=None, skip_flagged_edges=None,
+                   skip_contiguous_flags=None, max_contiguous_flag=None,
+                   skip_if_flag_within_edge_distance=None,
+                   **filter_kwargs):
                    '''
                    A filtering function that wraps up all functionality of high_pass_fourier_filter
                    and add support for additional linear fitting options.
@@ -513,6 +791,26 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                            defaults = CLEAN_DEFAULTS_2D
                        else:
                            defaults = CLEAN_DEFAULTS_1D
+
+                if max_contiguous_edge_flags is not None:
+                    and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
+                                                                    and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0
+
+                if skip_flagged_edges:
+                    xp, din, win, edges, chunks = truncate_flagged_edges(data, weights, x, filter_dims=filter_dims)
+                else:
+                    din = d
+                    win = w
+                    xp = x
+                # skip integrations with contiguous edge flags exceeding desired limit
+                # (or precomputed limit) here.
+                if skip_contiguous_flags:
+                    if max_contiguous_flag is None:
+                        max_contiguous_flag = get_max_contiguous_flag_from_filter_periods(x, filter_centers, filter_half_widths)
+                    win = flag_rows_with_contiguous_flags(win, max_contiguous_flag, ax=ax)
+                # skip integrations with flags within some minimum distance of the edges here.
+                if np.any(np.asarray(skip_if_flag_within_edge_distance) > 0):
+                    win = flag_rows_with_flags_within_edge_distance(win, skip_if_flag_within_edge_distance, ax=ax)
 
                    _process_filter_kwargs(filter_kwargs, defaults)
                    if 'dft' in mode:
@@ -1968,8 +2266,7 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
     #filter -1 dimension
     model = np.zeros_like(data)
     for i, _y, _w, in zip(range(data.shape[0]), data, wgts):
-        if np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
-                                                        and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
+        if np.count_nonzero(_w)/len(_w) >= skip_wgt:
             model[i], _, info_t = _fit_basis_1d(x=x[1], y=_y, w=_w, filter_centers=filter_centers[1],
                                             filter_half_widths=filter_half_widths[1],
                                             suppression_factors=suppression_factors[1],
@@ -1995,8 +2292,7 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
             if info['status']['axis_1'][i] == 'skipped':
                 wgts_time[i] = 0.
         for i, _y, _w, in zip(range(model.shape[1]), model.T, wgts_time.T):
-            if np.count_nonzero(_w)/len(_w) >= skip_wgt and np.count_nonzero(_w[:max_contiguous_edge_flags]) > 0 \
-               and np.count_nonzero(_w[-max_contiguous_edge_flags:]) >0:
+            if np.count_nonzero(_w)/len(_w) >= skip_wgt:
                 model.T[i], _, info_t = _fit_basis_1d(x=x[0], y=_y, w=_w, filter_centers=filter_centers[0],
                                                                  filter_half_widths=filter_half_widths[0],
                                                                  suppression_factors=suppression_factors[0],
