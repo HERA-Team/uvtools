@@ -1656,11 +1656,17 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     info['suppression_factors'] = suppression_factors
     info['basis_options'] = basis_options
     info['amat'] = amat
+    info['skipped'] = False
     wmat = np.diag(w)
     if method == 'leastsq':
         a = np.atleast_2d(w).T * amat
-        res = lsq_linear(a, w * y)
-        cn_out = res.x
+        try:
+            res = lsq_linear(a, w * y)
+            cn_out = res.x
+        except (np.linalg.LinAlgError, ValueError) as err:
+            warn(f"{err} -- recording skipped integration in info and setting to zero.")
+            cn_out = 0.0
+            info['skipped'] = True
     elif method == 'matrix':
         fm_key = _fourier_filter_hash(filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                                       filter_factors=suppression_vector, x=x, w=w, hash_decimal=hash_decimal,
@@ -1975,7 +1981,10 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                                             suppression_factors=suppression_factors[1],
                                             basis_options=basis_options[1], method=method,
                                             basis=basis, cache=cache)
-            info['status']['axis_1'][i] = 'success'
+            if info_t['skipped']:
+                info['status']['axis_1'][i] = 'skipped'
+            else:
+                info['status']['axis_1'][i] = 'success'
         else:
             info['status']['axis_1'][i] = 'skipped'
     #and if filter2d, filter the 0 dimension. Note that we feed in the 'model'
@@ -2002,7 +2011,10 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                                                                  suppression_factors=suppression_factors[0],
                                                                  basis_options=basis_options[0], method=method,
                                                                  basis=basis, cache=cache)
-                info['status']['axis_0'][i] = 'success'
+                if info_t['skipped']:
+                    info['status']['axis_0'][i] = 'skipped'
+                else:
+                    info['status']['axis_0'][i] = 'success'
             else:
                 info['status']['axis_0'][i] = 'skipped'
         if np.any([info['status']['axis_0'][i] == 'success' for i in info['status']['axis_0']]):

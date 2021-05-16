@@ -1166,3 +1166,26 @@ def test_fit_basis_1d_with_missing_channels():
 
     assert np.allclose(mod5, mod6[to_keep])
     assert np.allclose(resid5, resid6[to_keep])
+
+def test_fit_basis_2d_nanwarning():
+    # test that info propagates skips when there is an SVD convergence error.
+    fs = np.arange(-50,50)
+    ts = np.arange(93)
+    #here is some data
+    data = np.exp(2j * np.pi * 3.5/50. * fs) + 5*np.exp(2j * np.pi * 2.1/50. * fs)
+    data += np.exp(-2j * np.pi * 0.7/50. * fs) + 5*np.exp(2j * np.pi * -1.36/50. * fs)
+    data = np.asarray([data for i in range(93)])
+    #here are some weights with flags
+    wgts = np.ones_like(data)
+    data[68, 12] = np.inf
+    # dft fitting options
+    dpss_opts={'eigenval_cutoff':[1e-12, 1e-12]}
+    with pytest.warns(RuntimeWarning):
+        model, resid, info = dspec._fit_basis_2d(fs, data, wgts, [0., 10/50.], [5./50., 1./50.], basis_options=dpss_opts,
+                                                 method='leastsq', basis='dpss', filter_dims=1)
+        assert list(np.where([info['status']['axis_1'][i] == 'skipped' for i in range(93)])[0]) == [68]
+
+    with pytest.warns(RuntimeWarning):
+        model, resid, info = dspec._fit_basis_2d(ts, data, wgts, [0., 10/50.], [5./50., 1./50.], basis_options=dpss_opts,
+                                                 method='leastsq', basis='dpss', filter_dims=0)
+        assert list(np.where([info['status']['axis_0'][i] == 'skipped' for i in range(100)])[0]) == [12]
