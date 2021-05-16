@@ -1663,7 +1663,7 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
         try:
             res = lsq_linear(a, w * y)
             cn_out = res.x
-        except (np.linalg.LinAlgError, ValueError) as err:
+        except (np.linalg.LinAlgError, ValueError, TypeError) as err:
             warn(f"{err} -- recording skipped integration in info and setting to zero.")
             cn_out = 0.0
             info['skipped'] = True
