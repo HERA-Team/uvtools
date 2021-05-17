@@ -1663,6 +1663,9 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
         try:
             res = lsq_linear(a, w * y)
             cn_out = res.x
+        # np.linalg.LinAlgError catches "SVD did not converge."
+        # which can happen if the solution is under-constrained.
+        # also handle nans and infs in the data here too.
         except (np.linalg.LinAlgError, ValueError, TypeError) as err:
             warn(f"{err} -- recording skipped integration in info and setting to zero.")
             cn_out = 0.0
