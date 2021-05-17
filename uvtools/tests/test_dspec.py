@@ -231,9 +231,9 @@ def test_dpss_operator():
     NF = 100
     DF = 100e3
     freqs = np.arange(-NF/2, NF/2)*DF + 150e6
-    freqs_bad = freqs[[0, 12, 14, 18, 22]]
+    freqs_bad = np.array([1.100912386458, 1.22317, 2.12341260, 3.234632462, 5.32348356887])
     pytest.raises(ValueError, dspec.dpss_operator, x=freqs_bad, filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5])
-    pytest.raises(ValueError, dspec.dpss_operator, x = freqs , filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5], avg_suppression=[1e-12])
+    pytest.raises(ValueError, dspec.dpss_operator, x=freqs , filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5], avg_suppression=[1e-12])
     #now calculate DPSS operator matrices using different cutoff criteria. The columns
     #should be the same up to the minimum number of columns of the three techniques.
     amat1, ncol1 = dspec.dpss_operator(freqs, [0.], [100e-9], eigenval_cutoff=[1e-9])
@@ -1147,13 +1147,13 @@ def test_fit_basis_1d_with_missing_channels():
     wgts[17] = 0
     dw = data*wgts
     # dft fitting options
-    dft_opts={'fundamental_period':200.}
+    dpss_opts={'eigenval_cutoff':[1e-12, 1e-12]}
     # now remove ten random channels.
     to_remove = [2, 10, 11, 23, 54, 71, 87, 88, 89, 97]
     to_keep = np.array([i for i in range(len(fs)) if i not in to_remove])
 
-    mod5, resid5, info5 = dspec._fit_basis_1d(fs[to_keep], dw[to_keep], wgts[to_keep], [0.], [5./50.], basis_options=dft_opts,
-                                    method='leastsq', basis='dft')
+    mod5, resid5, info5 = dspec._fit_basis_1d(fs[to_keep], dw[to_keep], wgts[to_keep], [0., 10/50.], [5./50., 1./50.], basis_options=dpss_opts,
+                                    method='leastsq', basis='dpss')
 
     dwt = copy.deepcopy(dw)
     wgtst = copy.deepcopy(wgts)
@@ -1161,8 +1161,31 @@ def test_fit_basis_1d_with_missing_channels():
     dwt[to_remove] = 0.0
     wgtst[to_remove] = 0.0
 
-    mod6, resid6, info6 = dspec._fit_basis_1d(fs, dwt, wgtst, [0.], [5./50.], basis_options=dft_opts,
-                                    method='leastsq', basis='dft')
+    mod6, resid6, info6 = dspec._fit_basis_1d(fs, dwt, wgtst, [0., 10/50.], [5./50., 1./50.], basis_options=dpss_opts,
+                                    method='leastsq', basis='dpss')
 
     assert np.allclose(mod5, mod6[to_keep])
     assert np.allclose(resid5, resid6[to_keep])
+
+def test_fit_basis_2d_nanwarning():
+    # test that info propagates skips when there is an SVD convergence error.
+    fs = np.arange(-50,50)
+    ts = np.arange(93)
+    #here is some data
+    data = np.exp(2j * np.pi * 3.5/50. * fs) + 5*np.exp(2j * np.pi * 2.1/50. * fs)
+    data += np.exp(-2j * np.pi * 0.7/50. * fs) + 5*np.exp(2j * np.pi * -1.36/50. * fs)
+    data = np.asarray([data for i in range(93)])
+    #here are some weights with flags
+    wgts = np.ones_like(data)
+    data[68, 12] = np.inf
+    # dft fitting options
+    dpss_opts={'eigenval_cutoff':[1e-12, 1e-12]}
+    with pytest.warns(RuntimeWarning):
+        model, resid, info = dspec._fit_basis_2d(fs, data, wgts, [0., 10/50.], [5./50., 1./50.], basis_options=dpss_opts,
+                                                 method='leastsq', basis='dpss', filter_dims=1)
+        assert list(np.where([info['status']['axis_1'][i] == 'skipped' for i in range(93)])[0]) == [68]
+
+    with pytest.warns(RuntimeWarning):
+        model, resid, info = dspec._fit_basis_2d(ts, data, wgts, [0., 10/50.], [5./50., 1./50.], basis_options=dpss_opts,
+                                                 method='leastsq', basis='dpss', filter_dims=0)
+        assert list(np.where([info['status']['axis_0'][i] == 'skipped' for i in range(100)])[0]) == [12]

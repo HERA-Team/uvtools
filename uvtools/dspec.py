@@ -1656,11 +1656,20 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     info['suppression_factors'] = suppression_factors
     info['basis_options'] = basis_options
     info['amat'] = amat
+    info['skipped'] = False
     wmat = np.diag(w)
     if method == 'leastsq':
         a = np.atleast_2d(w).T * amat
-        res = lsq_linear(a, w * y)
-        cn_out = res.x
+        try:
+            res = lsq_linear(a, w * y)
+            cn_out = res.x
+        # np.linalg.LinAlgError catches "SVD did not converge."
+        # which can happen if the solution is under-constrained.
+        # also handle nans and infs in the data here too.
+        except (np.linalg.LinAlgError, ValueError, TypeError) as err:
+            warn(f"{err} -- recording skipped integration in info and setting to zero.")
+            cn_out = 0.0
+            info['skipped'] = True
     elif method == 'matrix':
         fm_key = _fourier_filter_hash(filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                                       filter_factors=suppression_vector, x=x, w=w, hash_decimal=hash_decimal,
@@ -1975,7 +1984,10 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                                             suppression_factors=suppression_factors[1],
                                             basis_options=basis_options[1], method=method,
                                             basis=basis, cache=cache)
-            info['status']['axis_1'][i] = 'success'
+            if info_t['skipped']:
+                info['status']['axis_1'][i] = 'skipped'
+            else:
+                info['status']['axis_1'][i] = 'success'
         else:
             info['status']['axis_1'][i] = 'skipped'
     #and if filter2d, filter the 0 dimension. Note that we feed in the 'model'
@@ -2002,7 +2014,10 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                                                                  suppression_factors=suppression_factors[0],
                                                                  basis_options=basis_options[0], method=method,
                                                                  basis=basis, cache=cache)
-                info['status']['axis_0'][i] = 'success'
+                if info_t['skipped']:
+                    info['status']['axis_0'][i] = 'skipped'
+                else:
+                    info['status']['axis_0'][i] = 'success'
             else:
                 info['status']['axis_0'][i] = 'skipped'
         if np.any([info['status']['axis_0'][i] == 'success' for i in info['status']['axis_0']]):
@@ -2151,8 +2166,12 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
                                  w=None, hash_decimal=hash_decimal,
                                  label='dpss_operator', crit_val=tuple(crit_provided_value[0]))
     if not opkey in cache:
-        #check that xs are equally spaced.
-        if not np.all(np.isclose(np.diff(x), np.mean(np.diff(x)), rtol=0., atol=np.abs(xtol * np.mean(np.diff(x))))):
+        # try placing x on a uniform grid.
+        # x is a version of x with the in-between grid values filled in and inserted is a boolean vector
+        # set to True wherever a value for x was inserted and False otherwise.
+        x, _, _, inserted = place_data_on_uniform_grid(x, np.zeros(len(x)), np.ones(len(x)))
+        # if this is not successful, then throw a value error..
+        if not np.allclose(np.diff(x), np.median(np.diff(x)), rtol=0., atol=np.abs(xtol * np.median(np.diff(x)))):
             #for now, don't support DPSS iterpolation unless x is equally spaced.
             #In principal, I should be able to compute off-grid DPSS points using
             #the fourier integral of the DPSWF
@@ -2189,7 +2208,15 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         amat = []
         for fc, fw, nt in zip(filter_centers,filter_half_widths, nterms):
             amat.append(np.exp(2j * np.pi * (yg[:,:nt]-xc) * fc ) * windows.dpss(nf, nf * df * fw, nt).T )
-        cache[opkey] = ( np.hstack(amat), nterms )
+        if len(amat) > 1:
+            amat = np.hstack(amat)
+        else:
+            amat = amat[0]
+        # we used the regularly spaced inserted grid to generate our fitting basis vectors
+        # but we dont need them for the actual fit.
+        # so here we keep only the non-inserted rows of the design matrix.
+        amat = amat[~inserted, :]
+        cache[opkey] = (amat, nterms)
     return cache[opkey]
 
 
