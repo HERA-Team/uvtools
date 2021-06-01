@@ -4,7 +4,6 @@
 
 from __future__ import print_function, division, absolute_import
 
-import aipy
 import numpy as np
 from six.moves import range
 from scipy.signal import windows
@@ -1735,6 +1734,7 @@ def _clean_filter(x, data, wgts, filter_centers, filter_half_widths,
         d_res: CLEAN residual -- difference of data and d_mdl, nulled at flagged channels
         info: dictionary (1D case) or list of dictionaries (2D case) with CLEAN metadata
     '''
+    import aipy
     if not clean2d:
         #pad = [0, pad]
         _x = [np.zeros(data.shape[0]), np.fft.fftfreq(len(x), x[1]-x[0])]
