@@ -38,10 +38,10 @@ setup_args = {
     'scripts': glob.glob('scripts/*'),
     'install_requires':[
         'numpy',
-        'aipy>=3.0rc2',
         'six',
         'scipy',
-    ]
+    ],
+    'extras_require': {'aipy':['aipy>=3.0rc2']}
 }
 
 

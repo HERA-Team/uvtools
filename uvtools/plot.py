@@ -1,4 +1,3 @@
-import aipy
 import numpy as np
 import warnings
 from astropy import units
@@ -109,6 +108,7 @@ def waterfall(d, mode='log', vmin=None, vmax=None, drng=None, mx=None,
     if np.ma.isMaskedArray(d):
         d = d.filled(0)
     if recenter:
+        import aipy
         d = aipy.img.recenter(d, np.array(d.shape)/2)
 
     # Apply requested transform to data
