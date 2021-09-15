@@ -2183,10 +2183,11 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
             xc = x[nf//2]
         #determine cutoffs
         dpss_vectors = []
+        for fn in range(len(filter_half_widths)):
+            dpss_vectors.append(windows.dpss(nf, nf * df * fw, nf))
         if nterms is None:
             nterms = []
             for fn,fw in enumerate(filter_half_widths):
-                dpss_vectors.append(windows.dpss(nf, nf * df * fw, nf))
                 if not eigenval_cutoff is None:
                     smat = np.sinc(2 * fw * (xg-yg)) * 2 * df * fw
                     eigvals = np.sum((smat @ dpss_vectors[-1].T) * dpss_vectors[-1].T, axis=0)
