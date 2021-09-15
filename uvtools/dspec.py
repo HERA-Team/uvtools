@@ -2194,14 +2194,14 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
                 if not edge_suppression is None:
                     z0=fw * df
                     edge_tone=np.exp(-2j*np.pi*np.arange(nf)*z0)
-                    fit_components = dpss_vectors * (dpss_vectors @ edge_tone)
+                    fit_components = dpss_vectors[-1] * (dpss_vectors[-1] @ edge_tone)
                     #this is a vector of RMS residuals of a tone at the edge of the delay window being fitted between 0 to nf DPSS components.
                     rms_residuals = np.asarray([ np.sqrt(np.mean(np.abs(edge_tone - np.sum(fit_components[:k],axis=0))**2.)) for k in range(nf)])
                     nterms.append(np.max(np.where(rms_residuals>=edge_suppression[fn])))
                 if not avg_suppression is None:
                     sinc_vector=np.sinc(2 * fw * df * (np.arange(nf)-nf/2.))
                     sinc_vector = sinc_vector / np.sqrt(np.mean(sinc_vector**2.))
-                    fit_components = dpss_vectors * (dpss_vectors @ sinc_vector)
+                    fit_components = dpss_vectors[-1] * (dpss_vectors[-1] @ sinc_vector)
                     #this is a vector of RMS residuals of vector with equal contributions from all tones within -fw and fw.
                     rms_residuals = np.asarray([ np.sqrt(np.mean(np.abs(sinc_vector - np.sum(fit_components[:k],axis=0))**2.)) for k in range(nf)])
                     nterms.append(np.max(np.where(rms_residuals>=avg_suppression[fn])))
