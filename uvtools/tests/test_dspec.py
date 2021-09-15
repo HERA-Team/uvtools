@@ -253,7 +253,11 @@ def test_dpss_operator():
 
     dpss_mat = windows.dpss(NF, NF * DF * 100e-9, ncolmax).T
     for m in range(ncolmax):
-        np.testing.assert_allclose(amat4[:,m], dpss_mat[:,m])
+        # deal with -1 degeneracy which can come up since vectors are obtained from spectral decomposition.
+        # and there is degeneracy between +/-1 eigenval and eigenvector.
+        # This simply effects the sign of the vector to be fitted
+        # and since fitting will cancel by obtaining a -1 on the coefficient, this sign is meaningless
+        assert np.allclose(amat4[:, m], dpss_mat[:, m]) or np.allclose(amat4[:, m], -dpss_mat[:, m])
 
 
 def test_fit_solution_matrix():
