@@ -2182,13 +2182,14 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         if xc is None:
             xc = x[nf//2]
         #determine cutoffs
+        dpss_vectors = []
         if nterms is None:
             nterms = []
             for fn,fw in enumerate(filter_half_widths):
-                dpss_vectors = windows.dpss(nf, nf * df * fw, nf)
+                dpss_vectors.append(windows.dpss(nf, nf * df * fw, nf))
                 if not eigenval_cutoff is None:
                     smat = np.sinc(2 * fw * (xg-yg)) * 2 * df * fw
-                    eigvals = np.sum((smat @ dpss_vectors.T) * dpss_vectors.T, axis=0)
+                    eigvals = np.sum((smat @ dpss_vectors[-1].T) * dpss_vectors[-1].T, axis=0)
                     nterms.append(np.max(np.where(eigvals>=eigenval_cutoff[fn])))
                 if not edge_suppression is None:
                     z0=fw * df
@@ -2206,8 +2207,8 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
                     nterms.append(np.max(np.where(rms_residuals>=avg_suppression[fn])))
         #next, construct A matrix.
         amat = []
-        for fc, fw, nt in zip(filter_centers,filter_half_widths, nterms):
-            amat.append(np.exp(2j * np.pi * (yg[:,:nt]-xc) * fc ) * windows.dpss(nf, nf * df * fw, nt).T )
+        for fn, (fc, fw, nt) in enumerate(zip(filter_centers,filter_half_widths, nterms)):
+            amat.append(np.exp(2j * np.pi * (yg[:,:nt]-xc) * fc ) * dpss_vectors[fn][:nt].T )
         if len(amat) > 1:
             amat = np.hstack(amat)
         else:
