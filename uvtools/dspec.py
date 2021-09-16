@@ -2255,9 +2255,9 @@ def dft_operator(x, filter_centers, filter_half_widths,
     if cache is None:
         cache = {}
     #if no fundamental fourier period is provided, set fundamental period equal to measurement
-    #bandwidth.
+    #bandwidth * 2.
     if fundamental_period is None:
-        fundamental_period = np.median(np.diff(x)) * len(x)
+        fundamental_period = np.median(np.diff(x)) * len(x) * 2
     if xc is None:
         xc = x[int(np.round(len(x)/2))]
     if isinstance(filter_centers, float):
