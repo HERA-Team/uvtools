@@ -8,6 +8,7 @@ from itertools import combinations
 from astropy import units
 from pyuvdata import UVData
 from ..data import DATA_PATH
+import os
 
 def axes_contains(ax, obj_list):
     """Check that a matplotlib.Axes instance contains certain elements.
