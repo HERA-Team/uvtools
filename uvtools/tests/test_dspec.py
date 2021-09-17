@@ -213,7 +213,7 @@ def test_dft_operator():
     freqs = np.arange(-NF/2, NF/2)*DF + 150e6
     #test dft_operator by checking whether
     #it gives us expected values.
-    fop = dspec.dft_operator(freqs, 0., 1e-6)
+    fop = dspec.dft_operator(freqs, 0., 1e-6, fundamental_period=len(freqs) * np.mean(np.diff(freqs)))
     fg, dg = np.meshgrid(freqs-150e6, np.arange(-10, 10) * (1./DF/NF) , indexing='ij')
     y = np.exp(2j * np.pi * fg * dg )
     np.testing.assert_allclose(fop, y)
