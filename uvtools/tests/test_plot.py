@@ -6,7 +6,7 @@ from .. import plot, utils
 import numpy as np
 from itertools import combinations
 from astropy import units
-
+from pyuvdata import UVData
 
 def axes_contains(ax, obj_list):
     """Check that a matplotlib.Axes instance contains certain elements.
