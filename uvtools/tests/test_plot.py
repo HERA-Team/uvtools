@@ -70,14 +70,8 @@ def axes_contains(ax, obj_list):
 
 class TestFancyPlotters():
     def setUp(self):
-        import hera_sim
-        sim = hera_sim.Simulator(
-            n_freq=100,
-            n_times=50,
-            antennas={0: [0,0,0], 1: [14.6,0,0]}
-        )
-        sim.add_eor("noiselike_eor")
-        self.uvd = sim.data
+        self.uvd = UVData()
+        self.uvd.read_uvh5(os.path.join(DATA_PATH, 'simulated_eor.uvh5'))
 
     def tearDown(self):
         pass
@@ -269,101 +263,47 @@ class TestDiffPlotters():
 
     def setUp(self):
         # make some mock data
-        import hera_sim
         import copy
         # first, make an array
-        antennas = hera_sim.antpos.hex_array(3)
         # now make a slightly offset array
-        dx = lambda : np.random.random(3) * 0.1
-        offset_ants = {ant : pos + dx() for ant, pos in antennas.items()}
-        # now make an array with mismatched number of antennas
-        bad_ants = hera_sim.antpos.hex_array(3, split_core=False)
-        # choose two different integration times
-        dt1 = 10.7
-        dt2 = 15.3
-        # choose two different channel widths
-        df1 = 1e8 / 1024
-        df2 = 2e8 / 1024
-        # actually mock up the data
-        sim = hera_sim.Simulator(n_freq=10, n_times=10,
-                                 antennas=antennas,
-                                 integration_time=dt1,
-                                 channel_width=df1)
-        self.uvd1 = copy.deepcopy(sim.data)
+        self.uvd1 = UVData()
+        self.uvd1.read_uvh5(os.path.join(DATA_PATH, 'uvd1.uvh5'))
         sim.add_eor("noiselike_eor")
-        self.uvd2 = copy.deepcopy(sim.data)
-        # now just make some things with metadata that will raise exceptions
-
-        # make the visibility units disagree
-        sim.data.vis_units = 'mK'
-        self.uvd_bad_vis_units = copy.deepcopy(sim.data)
-        # mismatched baselines
-        sim = hera_sim.Simulator(n_freq=10, n_times=10,
-                                 antennas=offset_ants,
-                                 integration_time=dt1,
-                                 channel_width=df1)
-        self.uvd_bad_bls = copy.deepcopy(sim.data)
-        # wrong number of antennas
-        sim = hera_sim.Simulator(n_freq=10, n_times=10,
-                                 antennas=bad_ants,
-                                 integration_time=dt1,
-                                 channel_width=df1)
-        self.uvd_bad_ants = copy.deepcopy(sim.data)
-        # bad Nfreq
-        sim = hera_sim.Simulator(n_freq=50, n_times=10,
-                                 antennas=antennas,
-                                 integration_time=dt1,
-                                 channel_width=df1)
-        self.uvd_bad_Nfreq = copy.deepcopy(sim.data)
-        # bad Ntimes
-        sim = hera_sim.Simulator(n_freq=10, n_times=50,
-                                 antennas=antennas,
-                                 integration_time=dt1,
-                                 channel_width=df1)
-        self.uvd_bad_Ntimes = copy.deepcopy(sim.data)
-        # bad integration time
-        sim = hera_sim.Simulator(n_freq=10, n_times=10,
-                                 antennas=antennas,
-                                 integration_time=dt2,
-                                 channel_width=df1)
-        self.uvd_bad_int_time = copy.deepcopy(sim.data)
-        # bad channel width
-        sim = hera_sim.Simulator(n_freq=10, n_times=10,
-                                 antennas=antennas,
-                                 integration_time=dt1,
-                                 channel_width=df2)
-        self.uvd_bad_chan_width = copy.deepcopy(sim.data)
-
+        self.uvd2 = UVData()
+        self.uvd2.read_uvh5(os.path.join(DATA_PATH, 'uvd2.uvh5'))
         # choose an antenna pair and polarization for later
         self.antpairpol = (0, 1, "xx")
 
         # make a simulation for the plot_diff_1d test
-        sim = hera_sim.Simulator(
-            n_freq=100, n_times=2, antennas=antennas
-        )
-        sim.add_eor("noiselike_eor")
-        self.sim = copy.deepcopy(sim)
+        self.uvd_1d_times = UVData()
+        self.uvd_1d_times.read_uvh5(os.path.join(DATA_PATH,'uvd_1d_times.uvh5'))
 
-        # make some UVData objects collapsed along a single axis
-        sim = hera_sim.Simulator(n_freq=10, n_times=1,
-                                 antennas=antennas,
-                                 integration_time=dt1,
-                                 channel_width=df1)
-        self.uvd_1d_times = copy.deepcopy(sim.data)
+        self.uvd_1d_freqs = UVData()
+        self.uvd_1d_freqs.read_uvh5(os.path.join(DATA_PATH, 'uvd_1d_freqs.uvh5'))
 
-        sim = hera_sim.Simulator(n_freq=1, n_times=10,
-                                 antennas=antennas,
-                                 integration_time=dt1,
-                                 channel_width=df1)
-        self.uvd_1d_freqs = copy.deepcopy(sim.data)
+        self.uvd_1d_uvws = UVData()
+        self.uvd_1d_uvws.read_uvh5(os.path.join(DATA_PATH, 'uvd_1d_uvws.uvh5'))
 
-        antennas_ = {0 : [0, 0, 0], 1 : [10, 0, 0]}
-        sim = hera_sim.Simulator(n_freq=10, n_times=1,
-                                 antennas=antennas_,
-                                 integration_time=dt1,
-                                 channel_width=df1,
-                                 no_autos=True)
-        self.uvd_1d_uvws = copy.deepcopy(sim.data)
+        self.uvd_bad_bls = UVData()
+        self.uvd_bad_bls.read_uvh5(os.path.join(DATA_PATH, 'uvd_bad_bls.uvh5'))
+
+        self.uvd_bad_vis_units = copy.deepcopy(self.uvd1)
+        self.uvd_bad_vis_units.vis_units = 'mK'
+
+        self.uvd_bad_ants = UVData()
+        self.uvd_bad_ants.read_uvh5(os.path.join(DATA_PATH, 'uvd_bad_ants.uvh5'))
+
+        self.uvd_bad_Nfreq = UVData()
+        self.uvd_bad_Nfreq.read_uvh5(os.path.join(DATA_PATH, 'uvd_bad_Nfreq.uvh5'))
+
+        self.uvd_bad_Ntimes = UVData()
+        self.uvd_bad_Ntimes.read_uvh5(os.path.join(DATA_PATH, 'uvd_bad_Ntimes.uvh5'))
+
+        self.uvd_bad_int_time = UVData()
+        self.uvd_bad_int_time.read_uvh5(os.path.join(DATA_PATH, 'uvd_bad_int_time.uvh5'))
+
+        self.uvd_bad_chan_width = UVData()
+        self.uvd_bad_chan_width.read_uvh5(os.path.join(DATA_PATH, 'uvd_bad_chan_width.uvh5'))
 
     def tearDown(self):
         pass
