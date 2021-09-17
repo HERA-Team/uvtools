@@ -354,7 +354,7 @@ class TestDiffPlotters():
 
         # make just one row of plots
         fig = plot.plot_diff_1d(
-            self.sim.data, self.sim.data, self.antpairpol, plot_type="normal"
+            sellf.uvd1, self.uvd1, self.antpairpol, plot_type="normal"
         )
 
         # make sure that it's plotting in frequency space
