@@ -270,7 +270,6 @@ class TestDiffPlotters():
         # now make a slightly offset array
         self.uvd1 = UVData()
         self.uvd1.read_uvh5(os.path.join(DATA_PATH, 'uvd1.uvh5'))
-        sim.add_eor("noiselike_eor")
         self.uvd2 = UVData()
         self.uvd2.read_uvh5(os.path.join(DATA_PATH, 'uvd2.uvh5'))
         # choose an antenna pair and polarization for later
