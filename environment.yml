@@ -5,6 +5,6 @@ channels:
 dependencies:
   - aipy>=3.0rc2
   - nose
-  - numpy
+  - numpy~=1.19.3
   - pyuvdata
   - scipy
