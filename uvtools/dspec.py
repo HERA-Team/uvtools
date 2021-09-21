@@ -909,7 +909,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
         for sample_num, sample, wght in zip(range(data.shape[fs-1]), _d, _w):
             filter_key = _fourier_filter_hash(filter_centers=filter_centers[fs], filter_half_widths=filter_half_widths[fs],
                                               filter_factors=filter_factors[fs], x=x[fs], w=wght,
-                                              label='dayenu_filter_matrix')
+                                              label='dayenu_filter_matrix', use_tensorflow=use_tensorflow)
             if not filter_key in cache:
                 #only calculate filter matrix and psuedo-inverse explicitly if they are not already cached
                 #(saves calculation time).
@@ -1702,7 +1702,7 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     elif method == 'matrix':
         fm_key = _fourier_filter_hash(filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                                       filter_factors=suppression_vector, x=x, w=w, hash_decimal=hash_decimal,
-                                      label='fitting matrix', basis=basis)
+                                      label='fitting matrix', basis=basis, use_tensorflow=use_tensorflow)
         if basis.lower() == 'dft':
             fm_key = fm_key + (basis_options['fundamental_period'], )
         elif basis.lower() == 'dpss':
@@ -2113,7 +2113,7 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
         raise ValueError("weights matrix incompatible with design_matrix!")
     if fit_mat_key is None:
             opkey = ('fitting_matrix',) + tuple(np.round(weights.flatten(), hash_decimal))\
-                    +tuple(np.round(design_matrix.flatten(), hash_decimal))
+                    +tuple(np.round(design_matrix.flatten(), hash_decimal)) + (use_tensorflow, )
     else:
         opkey = fit_mat_key
 
@@ -2149,7 +2149,7 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
 
 
 def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cutoff=1e-10, xc=None, hash_decimal=10,
-        xtol=1e-3, use_tensorflow=False):
+        xtol=1e-3, use_tensorflow=False, tensorflow_lobe_ordering_like_scipy=False):
     """
     Calculates DPSS operator with multiple delay windows to fit data. Frequencies
     must be equally spaced (unlike Fourier operator). Users can specify how the
@@ -2180,7 +2180,10 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
           equally spaced. Default is 1e-3
     use_tensorflow: bool, optional
         if True, use tensorflow matrix inversion to derive dpss operator.
-
+    tensorflow_lobe_ordering_like_scipy: bool, optional
+        if True, set the sign of the first lobes of each dpss vector to be
+        consistent with the ordering in scipy. This is for testing purposes only.
+        default is False.
     Returns
     ----------
     2-tuple
@@ -2197,7 +2200,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         cache = {}
     opkey = _fourier_filter_hash(filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                                  filter_factors=[0.], crit_name="eigenval_cutoff", x=x,
-                                 w=None, hash_decimal=hash_decimal,
+                                 w=None, hash_decimal=hash_decimal, use_tensorflow=use_tensorflow,
                                  label='dpss_operator', crit_val=tuple(eigenval_cutoff))
     if not opkey in cache:
         # try placing x on a uniform grid.
@@ -2223,26 +2226,49 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         evals_precomp = []
         for fw in filter_half_widths:
             if not use_tensorflow:
-                dpss_vectors.append(windows.dpss(nf, nf * df * fw, nf))
+                dpss_vecs, evals = windows.dpss(nf, nf * df * fw, nf, return_ratios=True)
+                dpss_vectors.append(dpss_vecs)
+                evals_precomp.append(evals)
             else:
-                smat = tf.experimental.numpy.sinc(2 * fw * (xg - yg)) * 2. * df * fw
-                evals, dpss_vecs = tf.linalg.eigh(smat)
-                dpss_vectors.append(dpss_vecs[:, ::-1]) # eigenvals and eigenvectors are in non-decreasing order. Switch to non-increasing order.
-                evals_precomp.append(evals[::-1])
+                # adopt dpss recipe from dpss method in
+                # https://github.com/scipy/scipy/blob/v1.7.1/scipy/signal/windows/windows.py
+                # with a tensorflow twist.
+                nidx = np.arange(nf)
+                d = ((nf - 1 - 2 * nidx) / 2.) ** 2 * np.cos(2 * np.pi * nf * df * fw)
+                e = nidx[1:] * (nf - nidx[1:]) / 2.
+                evals, dpss_vecs = tf.linalg.eigh_tridiagonal(tf.convert_to_tensor(d), tf.convert_to_tensor(e),
+                                                              eigvals_only=False)
+                evals = evals[::-1]
+                dpss_vecs = tf.transpose(dpss_vecs[:, ::-1])
+                # the following code is to make the ordering of the lobes agree with the scipy method convention
+                # for testing purposes only
+
+                if tensorflow_lobe_ordering_like_scipy:
+                    dpss_vecs = dpss_vecs.numpy()
+                    fix_even = (tf.reduce_sum(dpss_vecs[::2], axis=1) < 0)
+                    for i, f in enumerate(fix_even):
+                        if f:
+                            dpss_vecs[2 * i] *= -1
+
+                    thresh = max(1e-7, 1. / nf)
+                    for i, w in enumerate(dpss_vecs[1::2]):
+                        if w[w * w > thresh][0] < 0:
+                            dpss_vecs[2 * i + 1] *= -1
+                    dpss_vecs = tf.convert_to_tensor(dpss_vecs)
+
+                dpss_vectors.append(dpss_vecs) # eigenvals and eigenvectors are in non-decreasing order. Switch to non-increasing order.
+                evals_precomp.append(evals)
         nterms = []
         for fn,fw in enumerate(filter_half_widths):
-            if not eigenval_cutoff is None:
-                if not use_tensorflow:
-                    smat = np.sinc(2 * fw * (xg-yg)) * 2 * df * fw
-                    eigvals = np.sum((smat @ dpss_vectors[fn].T) * dpss_vectors[fn].T, axis=0)
-                    nterms.append(np.max(np.where(eigvals>=eigenval_cutoff[fn])))
-                else:
-                    nterms.append(np.max(np.where(evals_precomp[fn].numpy()>=eigenval_cutoff[fn])))
+            if not use_tensorflow:
+                nterms.append(np.max(np.where(evals_precomp[fn]>=eigenval_cutoff[fn])))
+            else:
+                nterms.append(np.max(np.where(evals_precomp[fn].numpy()>=eigenval_cutoff[fn])))
         #next, construct A matrix.
         amat = []
         for fn, (fc, fw, nt) in enumerate(zip(filter_centers,filter_half_widths, nterms)):
             if use_tensorflow:
-                dpss_vecs = dpss_vectors[fn].numpy()[:, :nt]
+                dpss_vecs = dpss_vectors[fn].numpy()[:nt].T
                 ygn = yg.numpy()
             else:
                 dpss_vecs = dpss_vectors[fn][:nt].T

@@ -241,7 +241,19 @@ def test_dpss_operator(use_tensorflow):
         # and there is degeneracy between +/-1 eigenval and eigenvector.
         # This simply effects the sign of the vector to be fitted
         # and since fitting will cancel by obtaining a -1 on the coefficient, this sign is meaningless
-        assert np.allclose(amat1[:, m], dpss_mat[:, m]) or np.allclose(amat4[:, m], -dpss_mat[:, m])
+        assert np.allclose(amat1[:, m], dpss_mat[:, m]) or np.allclose(amat1[:, m], -dpss_mat[:, m])
+
+    nf = 100
+    times = np.linspace(-1800, 1800., nf, endpoint = False)
+    dt = times[1]-times[0]
+    tarr = np.arange(-nf/2, nf/2) * dt
+    filter_centers = [0.]
+    filter_half_widths = [0.004]
+    amat1, ncol1 = dspec.dpss_operator(tarr, [0.], filter_half_widths, eigenval_cutoff=[1e-9], use_tensorflow=use_tensorflow, tensorflow_lobe_ordering_like_scipy=True)
+    dpss_mat = windows.dpss(nf, nf * dt * filter_half_widths[0], ncol1[0]).T
+    for m in range(ncol1[0]):
+        assert np.allclose(amat1[:, m], dpss_mat[:, m]) or np.allclose(amat1[:, m], -dpss_mat[:, m])
+
 
 
 def test_fit_solution_matrix():
@@ -277,7 +289,7 @@ def test_fit_solution_matrix():
     pytest.raises(ValueError, dspec.fit_solution_matrix, wmat[:50], amat_dft_pc)
     pytest.raises(ValueError, dspec.fit_solution_matrix, wmat, amat_dft[:-1])
 
-@pytest.mark.parametrize("use_tensorflow", [True, False])
+@pytest.mark.parametrize("use_tensorflow", [False, True])
 def test_dayenu_filter(use_tensorflow):
     nf = 100
     df = 100e3
@@ -407,7 +419,9 @@ def test_dayenu_filter(use_tensorflow):
                         filter_dimensions = [0], cache=TEST_CACHE, use_tensorflow=use_tensorflow)
 
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_fr.flatten())**2.)),
-                                    1., decimal = 1)
+                                    1., decimal=1)
+
+
 
     #only filter in the delay-domain.
 
