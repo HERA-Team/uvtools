@@ -10,6 +10,7 @@ from scipy.signal import windows
 from warnings import warn
 from scipy.optimize import leastsq, lsq_linear
 import copy
+import tensorflow as tf
 
 #DEFAULT PARAMETERS FOR CLEANs
 CLEAN_DEFAULTS_1D={'tol':1e-9, 'window':'none',
@@ -702,7 +703,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
 
 def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_widths, filter_factors,
                   cache = {}, return_matrices=True, hash_decimal=10, skip_wgt=0.1, max_contiguous_edge_flags=10,
-                  zero_residual_flags=True):
+                  zero_residual_flags=True, use_tensorflow=False):
     '''
     Apply a linear delay filter to waterfall data.
     Due to performance reasons, linear filtering only supports separable delay/fringe-rate filters.
@@ -738,6 +739,8 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
     zero_residual_flags : bool, optional.
         If true, set flagged channels in the residual equal to zero.
         Default is True.
+    use_tensorflow: bool, optional
+        if True, use tensorflow (and GPU acceleration on appropriate hardware)
     Returns
     -------
     data: array, 2d clean residual with data filtered along the frequency direction.
@@ -917,7 +920,10 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                         #when a lot of channels are flagged. Interestingly enough, I haven't
                         #I'm not sure what the precise conditions for the error are but
                         #I'm catching it here.
-                        cache[filter_key] = np.linalg.pinv(filter_mat)
+                        if not use_tensorflow:
+                            cache[filter_key] = np.linalg.pinv(filter_mat)
+                        else:
+                            cache[filter_key] = tf.linalg.pinv(tf.convert_to_tensor(filter_mat)).numpy()
                     except np.linalg.LinAlgError:
                         # skip if we can't invert or psuedo-invert the matrix.
                         cache[filter_key] = None
@@ -1539,7 +1545,7 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False,
 
 def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
                 basis_options, suppression_factors=None, hash_decimal=10,
-                method='leastsq', basis='dft', cache=None):
+                method='leastsq', basis='dft', use_tensorflow=False, cache=None):
     """
     A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
     y_model = A @ c
@@ -1604,7 +1610,8 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
                 using scipy.optimize.leastsq
             *'matrix' derive model by directly calculate the fitting matrix
                 [A^T W A]^{-1} A^T W and applying it to the y vector.
-
+    use_tensorflow: bool, optional
+        if True, use tensorflow to compute DPSS operators and linear leastsq.
 
     Returns:
         model: array-like
@@ -1658,10 +1665,16 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     info['skipped'] = False
     wmat = np.diag(w)
     if method == 'leastsq':
-        a = np.atleast_2d(w).T * amat
         try:
-            res = lsq_linear(a, w * y)
-            cn_out = res.x
+            if use_tensorflow:
+                nonzero = np.count_nonzero(w)
+                a = tf.convert_to_tensor(amat * w[:, None][~np.isclose(w, 0.)])
+                d = tf.reshape(tf.convert_to_tensor((w * y)[~np.isclose(w, 0.)]), (nonzero, 1))
+                cn_out = tf.linalg.lstsq(a, d).numpy().squeeze()
+            else:
+                a = np.atleast_2d(w).T * amat
+                res = lsq_linear(a, w * y)
+                cn_out = res.x
         # np.linalg.LinAlgError catches "SVD did not converge."
         # which can happen if the solution is under-constrained.
         # also handle nans and infs in the data here too.
