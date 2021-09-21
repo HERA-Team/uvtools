@@ -914,40 +914,35 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
                 #only calculate filter matrix and psuedo-inverse explicitly if they are not already cached
                 #(saves calculation time).
                 if np.count_nonzero(wght) / len(wght) >= skip_wgt and np.count_nonzero(wght[:max_contiguous_edge_flags]) > 0 and np.count_nonzero(wght[-max_contiguous_edge_flags:]) >0:
-                    filter_mat = dayenu_mat_inv(x=x[fs], filter_centers=filter_centers[fs],
-                                                         filter_half_widths=filter_half_widths[fs],
-                                                         filter_factors=filter_factors[fs], cache=cache)
+                    filter_mat_inv = dayenu_mat_inv(x=x[fs], filter_centers=filter_centers[fs],
+                                                    filter_half_widths=filter_half_widths[fs],
+                                                    filter_factors=filter_factors[fs], cache=cache)
                     wght_mat = np.outer(wght.T, wght)
-                    filter_mat *= wght_mat
+                    filter_mat_inv *= wght_mat
+                    zero_rows = np.all(np.isclose(filter_mat_inv, 0.), axis=0)
+                    # take out zeroed rows and columns.
+                    filter_mat_inv = filter_mat_inv[~zero_rows][:, ~zero_rows]
                     if not use_tensorflow:
                         try:
                             #Try taking psuedo-inverse. Occasionally I've encountered SVD errors
                             #when a lot of channels are flagged. Interestingly enough, I haven't
                             #I'm not sure what the precise conditions for the error are but
                             #I'm catching it here.
-                            cache[filter_key] = np.linalg.pinv(filter_mat)
+                            filter_mat = np.linalg.pinv(filter_mat_inv)
                         except np.linalg.LinAlgError:
                             # skip if we can't invert or psuedo-invert the matrix.
-                            cache[filter_key] = None
+                            filter_mat = None
                     else:
                         try:
-                            # pinv only works for real arrays in tensorflow
-                            # so we'll use full inversion on the nonzero rows and columns.
-                            rows_keep = ~np.all(np.isclose(filter_mat, 0.0), axis=1)
-                            flagged_rows = np.where(~rows_keep)[0]
-                            fm = filter_mat[rows_keep][:, rows_keep]
-                            op_mat = tf.linalg.inv(tf.convert_to_tensor(fm)).numpy()
-                            # insert back flagged rows and columns.
-                            op_mat = np.insert(op_mat, flagged_rows, 0., axis=1)
-                            op_mat = np.insert(op_mat, flagged_rows, 0., axis=0)
-                            cache[filter_key] = op_mat
+                            filter_mat = tensorflow_pinv(tf.convert_to_tensor(filter_mat_inv)).numpy()
 
                         except tf.errors.InvalidArgumentError as error:
-                            cache[filter_key] = None
+                            filter_mat = None
+                    # put back zero rows and columns.
+                    filter_mat = np.insert(filter_mat, np.where(zero_rows)[0], 0., axis=0)
+                    filter_mat = np.insert(filter_mat, np.where(zero_rows)[0], 0., axis=1)
+                    cache[filter_key] = filter_mat
                 else:
-                    # skip if we don't meet skip_weight criterion or continuous edge flags
-                    # are to many. This last item isn't really a problem for dayenu
-                    # but it's here for consistancy.
                     cache[filter_key] = None
 
             filter_mat = cache[filter_key]
@@ -2532,3 +2527,78 @@ def dayenu_mat_inv(x, filter_centers, filter_half_widths,
     else:
         sdwi_mat = cache[filter_key]
     return sdwi_mat
+
+
+
+
+def tensorflow_pinv(a, rcond=None):
+    """
+    Version of tensorflow.linalg .inv with type-checking taken out to allow complex matrices
+    (which are not officially supported but seem to still work).
+
+    adopted from https://github.com/tensorflow/tensorflow/blob/v2.6.0/tensorflow/python/ops/linalg/linalg_impl.py
+    Also see this github issue
+    https://github.com/tensorflow/tensorflow/issues/44658
+
+    Parameters
+    ----------
+    a: (Batch of) `float`-like matrix-shaped `Tensor`(s) which are to be
+      pseudo-inverted.
+    rcond: `Tensor` of small singular value cutoffs.  Singular values smaller
+      (in modulus) than `rcond` * largest_singular_value (again, in modulus) are
+      set to zero. Must broadcast against `tf.shape(a)[:-2]`.
+      Default value: `10. * max(num_rows, num_cols) * np.finfo(a.dtype).eps`.
+
+    Returns
+    -------
+    a_pinv: (Batch of) pseudo-inverse of input `a`. Has same shape as `a` except
+      rightmost two dimensions are transposed.
+
+    """
+    dtype = a.dtype.as_numpy_dtype
+
+    if rcond is None:
+        def get_dim_size(dim):
+            dim_val = a.shape[dim]
+            if dim_val is not None:
+                return dim_val
+            return tf.shape(a)[dim]
+
+        num_rows = get_dim_size(-2)
+        num_cols = get_dim_size(-1)
+        if isinstance(num_rows, int) and isinstance(num_cols, int):
+            max_rows_cols = float(max(num_rows, num_cols))
+        else:
+            max_rows_cols = tf.cast(tf.maximum(num_rows, num_cols), dtype)
+        rcond = 10. * max_rows_cols * np.finfo(dtype).eps
+
+    rcond = tf.convert_to_tensor(rcond, dtype=dtype, name='rcond')
+
+    # Calculate pseudo inverse via SVD.
+    # Note: if a is Hermitian then u == v. (We might observe additional
+    # performance by explicitly setting `v = u` in such cases.)
+    [
+        singular_values,  # Sigma
+        left_singular_vectors,  # U
+        right_singular_vectors,  # V
+    ] = tf.linalg.svd(
+        a, full_matrices=False, compute_uv=True)
+
+    # Saturate small singular values to inf. This has the effect of make
+    # `1. / s = 0.` while not resulting in `NaN` gradients.
+    cutoff = tf.cast(rcond, dtype=singular_values.dtype) * tf.reduce_max(singular_values, axis=-1)
+    singular_values = tf.where(
+        singular_values > cutoff[..., None], singular_values,
+        np.array(np.inf, dtype))
+
+    # By the definition of the SVD, `a == u @ s @ v^H`, and the pseudo-inverse
+    # is defined as `pinv(a) == v @ inv(s) @ u^H`.
+    a_pinv = tf.matmul(
+        right_singular_vectors / tf.cast(singular_values[..., None, :], dtype=dtype),
+        left_singular_vectors,
+        adjoint_b=True)
+
+    if a.shape is not None and a.shape.rank is not None:
+      a_pinv.set_shape(a.shape[:-2].concatenate([a.shape[-1], a.shape[-2]]))
+
+    return a_pinv
