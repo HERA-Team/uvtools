@@ -258,7 +258,8 @@ def calc_width(filter_size, real_delta, nsamples):
     return (uthresh, lthresh)
 
 def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
-                   filter_dims=1, skip_wgt=0.1, zero_residual_flags=True, **filter_kwargs):
+                   filter_dims=1, skip_wgt=0.1, zero_residual_flags=True, use_tensorflow=False,
+                   **filter_kwargs):
                    '''
                    A filtering function that wraps up all functionality of high_pass_fourier_filter
                    and add support for additional linear fitting options.
@@ -334,6 +335,9 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                     zero_residual_flags : bool, optional.
                         If true, set flagged channels in the residual equal to zero.
                         Default is True.
+                    use_tensorflow: bool, optional
+                        If True, use tensorflow backend to perform matrix inversion etc...
+                        default is False
                     filter_kwargs: additional arguments that are parsed as a dictionary
                         dictionary with options for fitting techniques.
                         if filter2d is true, this should be a 2-tuple or 2-list
@@ -546,14 +550,14 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                                                      filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                                                      filter_factors=suppression_factors, cache=cache, skip_wgt=skip_wgt,
                                                      max_contiguous_edge_flags=max_contiguous_edge_flags,
-                                                     zero_residual_flags=zero_residual_flags)
+                                                     zero_residual_flags=zero_residual_flags, use_tensorflow=use_tensorflow)
                        model = data - residual
                        if len(mode) > 1:
                            model, _, info_deconv = _fit_basis_2d(x=x, data=model, filter_centers=filter_centers, filter_dims=filter_dims_d,
                                                                  skip_wgt=skip_wgt, basis=mode[1], method=mode[2], wgts=wgts, basis_options=filter_kwargs,
                                                                  filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
                                                                  cache=cache, max_contiguous_edge_flags=max_contiguous_edge_flags,
-                                                                 zero_residual_flags=zero_residual_flags)
+                                                                 zero_residual_flags=zero_residual_flags, use_tensorflow=use_tensorflow)
                            info['info_deconv']=info_deconv
 
                    elif mode[0] in ['dft', 'dpss']:
@@ -573,7 +577,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                                                            skip_wgt=skip_wgt, basis=mode[0], method=mode[1], wgts=wgts, basis_options=filter_kwargs,
                                                            filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
                                                            cache=cache, max_contiguous_edge_flags=max_contiguous_edge_flags,
-                                                           zero_residual_flags=zero_residual_flags)
+                                                           zero_residual_flags=zero_residual_flags, use_tensorflow=use_tensorflow)
                    elif mode[0] == 'clean':
                        if zero_residual_flags is None:
                            zero_residual_flags = False
@@ -909,26 +913,39 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
             if not filter_key in cache:
                 #only calculate filter matrix and psuedo-inverse explicitly if they are not already cached
                 #(saves calculation time).
-                if np.count_nonzero(wght) / len(wght) >= skip_wgt and np.count_nonzero(wght[:max_contiguous_edge_flags]) > 0 \
-                   and np.count_nonzero(wght[-max_contiguous_edge_flags:]) >0:
-                    wght_mat = np.outer(wght.T, wght)
+                if np.count_nonzero(wght) / len(wght) >= skip_wgt and np.count_nonzero(wght[:max_contiguous_edge_flags]) > 0 and np.count_nonzero(wght[-max_contiguous_edge_flags:]) >0:
                     filter_mat = dayenu_mat_inv(x=x[fs], filter_centers=filter_centers[fs],
                                                          filter_half_widths=filter_half_widths[fs],
-                                                         filter_factors=filter_factors[fs], cache=cache) * wght_mat
-                    try:
-                        #Try taking psuedo-inverse. Occasionally I've encountered SVD errors
-                        #when a lot of channels are flagged. Interestingly enough, I haven't
-                        #I'm not sure what the precise conditions for the error are but
-                        #I'm catching it here.
-                        if not use_tensorflow:
+                                                         filter_factors=filter_factors[fs], cache=cache)
+                    wght_mat = np.outer(wght.T, wght)
+                    filter_mat *= wght_mat
+                    if not use_tensorflow:
+                        try:
+                            #Try taking psuedo-inverse. Occasionally I've encountered SVD errors
+                            #when a lot of channels are flagged. Interestingly enough, I haven't
+                            #I'm not sure what the precise conditions for the error are but
+                            #I'm catching it here.
                             cache[filter_key] = np.linalg.pinv(filter_mat)
-                        else:
-                            cache[filter_key] = tf.linalg.pinv(tf.convert_to_tensor(filter_mat)).numpy()
-                    except np.linalg.LinAlgError:
-                        # skip if we can't invert or psuedo-invert the matrix.
-                        cache[filter_key] = None
+                        except np.linalg.LinAlgError:
+                            # skip if we can't invert or psuedo-invert the matrix.
+                            cache[filter_key] = None
+                    else:
+                        try:
+                            # pinv only works for real arrays in tensorflow
+                            # so we'll use full inversion on the nonzero rows and columns.
+                            rows_keep = ~np.all(np.isclose(filter_mat, 0.0), axis=1)
+                            flagged_rows = np.where(~rows_keep)[0]
+                            fm = filter_mat[rows_keep][:, rows_keep]
+                            op_mat = tf.linalg.inv(tf.convert_to_tensor(fm)).numpy()
+                            # insert back flagged rows and columns.
+                            op_mat = np.insert(op_mat, flagged_rows, 0., axis=1)
+                            op_mat = np.insert(op_mat, flagged_rows, 0., axis=0)
+                            cache[filter_key] = op_mat
+
+                        except tf.errors.InvalidArgumentError as error:
+                            cache[filter_key] = None
                 else:
-                    # skip if we don't meet skip_wegith criterion or continuous edge flags
+                    # skip if we don't meet skip_weight criterion or continuous edge flags
                     # are to many. This last item isn't really a problem for dayenu
                     # but it's here for consistancy.
                     cache[filter_key] = None
@@ -1643,7 +1660,7 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     elif basis.lower() == 'dpss':
         amat, nterms = dpss_operator(x, filter_centers=filter_centers,
                                      filter_half_widths=filter_half_widths,
-                                     cache=cache, **basis_options)
+                                     cache=cache, use_tensorflow=use_tensorflow, **basis_options)
         info['nterms'] = nterms
     else:
         raise ValueError("Specify a fitting basis in supported bases: ['dft', 'dpss']")
@@ -1668,7 +1685,7 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
         try:
             if use_tensorflow:
                 nonzero = np.count_nonzero(w)
-                a = tf.convert_to_tensor(amat * w[:, None][~np.isclose(w, 0.)])
+                a = tf.convert_to_tensor((amat * w[:, None])[~np.isclose(w, 0.)])
                 d = tf.reshape(tf.convert_to_tensor((w * y)[~np.isclose(w, 0.)]), (nonzero, 1))
                 cn_out = tf.linalg.lstsq(a, d).numpy().squeeze()
             else:
@@ -1678,10 +1695,10 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
         # np.linalg.LinAlgError catches "SVD did not converge."
         # which can happen if the solution is under-constrained.
         # also handle nans and infs in the data here too.
-        except (np.linalg.LinAlgError, ValueError, TypeError) as err:
-            warn(f"{err} -- recording skipped integration in info and setting to zero.")
-            cn_out = 0.0
-            info['skipped'] = True
+        except (np.linalg.LinAlgError, ValueError, TypeError, tf.errors.InvalidArgumentError) as err:
+                warn(f"{err} -- recording skipped integration in info and setting to zero.")
+                cn_out = 0.0
+                info['skipped'] = True
     elif method == 'matrix':
         fm_key = _fourier_filter_hash(filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                                       filter_factors=suppression_vector, x=x, w=w, hash_decimal=hash_decimal,
@@ -1863,7 +1880,7 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                 basis_options, suppression_factors=None,
                 method='leastsq', basis='dft', cache=None,
                 filter_dims = 1, skip_wgt=0.1, max_contiguous_edge_flags=5,
-                zero_residual_flags=True):
+                zero_residual_flags=True, use_tensorflow=False):
     """
     A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
     y_model = A @ c
@@ -1943,6 +1960,9 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
     zero_residual_flags : bool, optional.
         If true, set flagged channels in the residual equal to zero.
         Default is True.
+    use_tensorflow: bool, optional.
+        if True, use tensorflow libraries to perform matrix inversion (on GPU)
+        default is False.
     Returns
     -------
         model: array-like
@@ -1996,7 +2016,7 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                                             filter_half_widths=filter_half_widths[1],
                                             suppression_factors=suppression_factors[1],
                                             basis_options=basis_options[1], method=method,
-                                            basis=basis, cache=cache)
+                                            basis=basis, cache=cache, use_tensorflow=use_tensorflow)
             if info_t['skipped']:
                 info['status']['axis_1'][i] = 'skipped'
             else:
@@ -2026,7 +2046,7 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                                                                  filter_half_widths=filter_half_widths[0],
                                                                  suppression_factors=suppression_factors[0],
                                                                  basis_options=basis_options[0], method=method,
-                                                                 basis=basis, cache=cache)
+                                                                 basis=basis, cache=cache, use_tensorflow=use_tensorflow)
                 if info_t['skipped']:
                     info['status']['axis_0'][i] = 'skipped'
                 else:
@@ -2056,7 +2076,7 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
     return model, residual, info
 
 
-def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit_mat_key=None):
+def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit_mat_key=None, use_tensorflow=False):
     """
     Calculate the linear least squares solution matrix
     from a design matrix, A and a weights matrix W
@@ -2066,7 +2086,7 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
     ----------
     weights: array-like
         ndata x ndata matrix of data weights
-    design_matrx: array-like
+    design_matrix: array-like
         ndata x n_fit_params matrix transforming fit_parameters to data
     cache: optional dictionary
         optional dictionary storing pre-computed fitting matrix.
@@ -2075,7 +2095,9 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
     fit_mat_key: optional hashable variable
         optional key. If none is used, hash fit matrix against design and
         weighting matrix.
-
+    use_tensorflow: bool, optional.
+        if True, use tensorflow libraries to perform matrix inversion (on GPU)
+        default is False.
     Returns
     -----------
         array-like
@@ -2097,23 +2119,37 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
 
     if not opkey in cache:
         #check condition number
-        cmat = np.conj(design_matrix.T) @ weights @ design_matrix
-        #should there be a conjugation!?!
-        if np.linalg.cond(cmat)>=1e9:
-            warn('Warning!!!!: Poorly conditioned matrix! Your linear inpainting IS WRONG!')
-            cache[opkey] = np.linalg.pinv(cmat) @ np.conj(design_matrix.T) @ weights
+        if not use_tensorflow:
+            cmat = np.conj(design_matrix.T) @ weights @ design_matrix
+            #should there be a conjugation!?!
+            if np.linalg.cond(cmat)>=1e9:
+                warn('Warning!!!!: Poorly conditioned matrix! Your linear inpainting IS WRONG!')
+                cache[opkey] = np.linalg.pinv(cmat) @ np.conj(design_matrix.T) @ weights
+            else:
+                try:
+                    cache[opkey] = np.linalg.inv(cmat) @ np.conj(design_matrix.T) @ weights
+                except np.linalg.LinAlgError as error:
+                    print(error)
+                    cache[opkey] = None
         else:
-            try:
-                cache[opkey] = np.linalg.inv(cmat) @ np.conj(design_matrix.T) @ weights
-            except np.linalg.LinAlgError as error:
-                print(error)
-                cache[opkey] = None
+            design_matrix = tf.convert_to_tensor(design_matrix)
+            weights = tf.convert_to_tensor(weights)
+            cmat = tf.math.conj(tf.transpose(design_matrix)) @ weights @ design_matrix
+            if tf.linalg.cond(cmat) >= 1e9:
+                warn('Warning!!!!: Poorly conditioned matrix! Your linear inpainting IS WRONG!')
+                cache[opkey] = (tf.linalg.pinv(cmat) @ tf.math.conj(tf.transpose(design_matrix)) @ weights).numpy()
+            else:
+                try:
+                    cache[opkey] = tf.linalg.inv(cmat) @ tf.math.conj(tf.transpose(design_matrix)) @ weights
+                except tf.errors.InvalidArgumentError as error:
+                    print(error)
+                    cache[opkey] = None
+
     return cache[opkey]
 
 
-def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cutoff=None,
-        edge_suppression=None, nterms=None, avg_suppression=None, xc=None, hash_decimal=10,
-        xtol=1e-3):
+def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cutoff=1e-10, xc=None, hash_decimal=10,
+        xtol=1e-3, use_tensorflow=False):
     """
     Calculates DPSS operator with multiple delay windows to fit data. Frequencies
     must be equally spaced (unlike Fourier operator). Users can specify how the
@@ -2136,21 +2172,14 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
          + (series_cutoff_name,) = tuple(series_cutoff_values)
     eigenval_cutoff: list of floats, optional
         list of sinc matrix eigenvalue cutoffs to use for included dpss modes.
-    nterms: list of integers, optional
-        integer specifying number of dpss terms to include in each delay fitting block.
-    edge_suppression: list of floats, optional
-        specifies the degree of supression that must occur to tones at the filter edges to
-        calculate the number of DPSS terms to fit in each sub-window.
-    avg_suppression: list of floats, optional
-        specifies the average degree of suppression of tones inside of the filter edges
-        to calculate the number of DPSS terms. Similar to edge_suppression but instead
-        checks the suppression of a sinc vector with equal contributions from
-        all tones inside of the filter width instead of a single tone.
+        default is 1e-10
     xc: float optional
     hash_decimal: number of decimals to round for floating point dict keys.
     xtol: fraction of average diff that the diff between all x-values must be within
           the average diff to be considered
           equally spaced. Default is 1e-3
+    use_tensorflow: bool, optional
+        if True, use tensorflow matrix inversion to derive dpss operator.
 
     Returns
     ----------
@@ -2162,22 +2191,14 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         list of integers with number of terms for each fourier window specified by filter_centers
         and filter_half_widths
     """
+    if isinstance(eigenval_cutoff, float):
+        eigenval_cutoff = [eigenval_cutoff for fw in range(len(filter_centers))]
     if cache is None:
         cache = {}
-    #conditions for halting.
-    crit_labels = ['eigenval_cutoff', 'nterms', 'edge_suppression', 'avg_suppression']
-    crit_list = [eigenval_cutoff, nterms, edge_suppression, avg_suppression]
-    crit_provided = np.asarray([not crit is None for crit in crit_list]).astype(bool)
-    #only allow the user to specify a single condition for cutting off DPSS modes to fit.
-    crit_provided_name = [ label for m,label in enumerate(crit_labels) if crit_provided[m] ]
-    crit_provided_value = [ crit for m,crit in enumerate(crit_list) if crit_provided[m] ]
-    if np.count_nonzero(crit_provided) != 1:
-        raise ValueError('Must only provide a single series cutoff condition. %d were provided: %s '%(np.count_nonzero(crit_provided),
-                                                                                                 str(crit_provided_name)))
     opkey = _fourier_filter_hash(filter_centers=filter_centers, filter_half_widths=filter_half_widths,
-                                 filter_factors=[0.], crit_name=crit_provided_name[0], x=x,
+                                 filter_factors=[0.], crit_name="eigenval_cutoff", x=x,
                                  w=None, hash_decimal=hash_decimal,
-                                 label='dpss_operator', crit_val=tuple(crit_provided_value[0]))
+                                 label='dpss_operator', crit_val=tuple(eigenval_cutoff))
     if not opkey in cache:
         # try placing x on a uniform grid.
         # x is a version of x with the in-between grid values filled in and inserted is a boolean vector
@@ -2192,37 +2213,41 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         nf = len(x)
         df = np.abs(x[1]-x[0])
         xg, yg = np.meshgrid(x,x)
+        if use_tensorflow:
+            xg = tf.convert_to_tensor(xg, dtype=np.float64)
+            yg = tf.convert_to_tensor(yg, dtype=np.float64)
         if xc is None:
             xc = x[nf//2]
         #determine cutoffs
         dpss_vectors = []
+        evals_precomp = []
         for fw in filter_half_widths:
-            dpss_vectors.append(windows.dpss(nf, nf * df * fw, nf))
-        if nterms is None:
-            nterms = []
-            for fn,fw in enumerate(filter_half_widths):
-                if not eigenval_cutoff is None:
+            if not use_tensorflow:
+                dpss_vectors.append(windows.dpss(nf, nf * df * fw, nf))
+            else:
+                smat = tf.experimental.numpy.sinc(2 * fw * (xg - yg)) * 2. * df * fw
+                evals, dpss_vecs = tf.linalg.eigh(smat)
+                dpss_vectors.append(dpss_vecs[:, ::-1]) # eigenvals and eigenvectors are in non-decreasing order. Switch to non-increasing order.
+                evals_precomp.append(evals[::-1])
+        nterms = []
+        for fn,fw in enumerate(filter_half_widths):
+            if not eigenval_cutoff is None:
+                if not use_tensorflow:
                     smat = np.sinc(2 * fw * (xg-yg)) * 2 * df * fw
                     eigvals = np.sum((smat @ dpss_vectors[fn].T) * dpss_vectors[fn].T, axis=0)
                     nterms.append(np.max(np.where(eigvals>=eigenval_cutoff[fn])))
-                if not edge_suppression is None:
-                    z0=fw * df
-                    edge_tone=np.exp(-2j*np.pi*np.arange(nf)*z0)
-                    fit_components = dpss_vectors[fn] * (dpss_vectors[fn] @ edge_tone)
-                    #this is a vector of RMS residuals of a tone at the edge of the delay window being fitted between 0 to nf DPSS components.
-                    rms_residuals = np.asarray([ np.sqrt(np.mean(np.abs(edge_tone - np.sum(fit_components[:k],axis=0))**2.)) for k in range(nf)])
-                    nterms.append(np.max(np.where(rms_residuals>=edge_suppression[fn])))
-                if not avg_suppression is None:
-                    sinc_vector=np.sinc(2 * fw * df * (np.arange(nf)-nf/2.))
-                    sinc_vector = sinc_vector / np.sqrt(np.mean(sinc_vector**2.))
-                    fit_components = dpss_vectors[fn] * (dpss_vectors[fn] @ sinc_vector)
-                    #this is a vector of RMS residuals of vector with equal contributions from all tones within -fw and fw.
-                    rms_residuals = np.asarray([ np.sqrt(np.mean(np.abs(sinc_vector - np.sum(fit_components[:k],axis=0))**2.)) for k in range(nf)])
-                    nterms.append(np.max(np.where(rms_residuals>=avg_suppression[fn])))
+                else:
+                    nterms.append(np.max(np.where(evals_precomp[fn].numpy()>=eigenval_cutoff[fn])))
         #next, construct A matrix.
         amat = []
         for fn, (fc, fw, nt) in enumerate(zip(filter_centers,filter_half_widths, nterms)):
-            amat.append(np.exp(2j * np.pi * (yg[:,:nt]-xc) * fc ) * dpss_vectors[fn][:nt].T )
+            if use_tensorflow:
+                dpss_vecs = dpss_vectors[fn].numpy()[:, :nt]
+                ygn = yg.numpy()
+            else:
+                dpss_vecs = dpss_vectors[fn][:nt].T
+                ygn = yg
+            amat.append(np.exp(2j * np.pi * (ygn[:,:nt]-xc) * fc ) * dpss_vecs )
         if len(amat) > 1:
             amat = np.hstack(amat)
         else:

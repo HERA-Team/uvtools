@@ -224,40 +224,24 @@ def test_dft_operator():
     fop1 = dspec.dft_operator(freqs, 0., 1e-6, fundamental_period=200*1e5)
     np.testing.assert_allclose(fop1, y1)
 
-
-def test_dpss_operator():
+@pytest.mark.parametrize("use_tensorflow", [True, False])
+def test_dpss_operator(use_tensorflow):
     #test that an error is thrown when we specify more then one
     #termination method.
     NF = 100
     DF = 100e3
     freqs = np.arange(-NF/2, NF/2)*DF + 150e6
     freqs_bad = np.array([1.100912386458, 1.22317, 2.12341260, 3.234632462, 5.32348356887])
-    pytest.raises(ValueError, dspec.dpss_operator, x=freqs_bad, filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5])
-    pytest.raises(ValueError, dspec.dpss_operator, x=freqs , filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5], avg_suppression=[1e-12])
     #now calculate DPSS operator matrices using different cutoff criteria. The columns
     #should be the same up to the minimum number of columns of the three techniques.
-    amat1, ncol1 = dspec.dpss_operator(freqs, [0.], [100e-9], eigenval_cutoff=[1e-9])
-    amat2, ncol2 = dspec.dpss_operator(freqs, [0.], [100e-9], edge_suppression=[1e-9])
-    amat3, ncol3 = dspec.dpss_operator(freqs, [0.], [100e-9], avg_suppression=[1e-9])
-    ncols = [ncol1, ncol2, ncol3]
-    ncolmin = np.min(ncols)
-    ncolmax = np.max(ncols)
-    amat4, ncol4 = dspec.dpss_operator(freqs, [0.], [100e-9], nterms=[ncolmax])
-    assert ncol4[0]==ncolmax
-    #check that all columns of matrices obtained with different methods
-    #of cutoff are identical.
-    for m in range(ncolmin):
-        np.testing.assert_allclose(amat1[:,m], amat2[:,m])
-        np.testing.assert_allclose(amat2[:,m], amat3[:,m])
-        np.testing.assert_allclose(amat3[:,m], amat4[:,m])
-
-    dpss_mat = windows.dpss(NF, NF * DF * 100e-9, ncolmax).T
-    for m in range(ncolmax):
+    amat1, ncol1 = dspec.dpss_operator(freqs, [0.], [100e-9], eigenval_cutoff=[1e-9], use_tensorflow=use_tensorflow)
+    dpss_mat = windows.dpss(NF, NF * DF * 100e-9, ncol1[0]).T
+    for m in range(ncol1[0]):
         # deal with -1 degeneracy which can come up since vectors are obtained from spectral decomposition.
         # and there is degeneracy between +/-1 eigenval and eigenvector.
         # This simply effects the sign of the vector to be fitted
         # and since fitting will cancel by obtaining a -1 on the coefficient, this sign is meaningless
-        assert np.allclose(amat4[:, m], dpss_mat[:, m]) or np.allclose(amat4[:, m], -dpss_mat[:, m])
+        assert np.allclose(amat1[:, m], dpss_mat[:, m]) or np.allclose(amat4[:, m], -dpss_mat[:, m])
 
 
 def test_fit_solution_matrix():
@@ -293,8 +277,8 @@ def test_fit_solution_matrix():
     pytest.raises(ValueError, dspec.fit_solution_matrix, wmat[:50], amat_dft_pc)
     pytest.raises(ValueError, dspec.fit_solution_matrix, wmat, amat_dft[:-1])
 
-
-def test_dayenu_filter():
+@pytest.mark.parametrize("use_tensorflow", [True, False])
+def test_dayenu_filter(use_tensorflow):
     nf = 100
     df = 100e3
     freqs = np.arange(-nf//2, nf//2) * df
@@ -314,14 +298,14 @@ def test_dayenu_filter():
     wghts_2d = np.array([wghts_1d, wghts_1d])
     #test functionality for numpy arrays
     dspec.dayenu_filter(np.arange(-nf/2,nf/2)*df, data_1d, wghts_1d, [1], np.array(filter_centers), np.array(filter_half_widths),
-                        np.array(filter_factors))
+                        np.array(filter_factors), use_tensorflow=use_tensorflow)
     #provide filter_dimensions as an integer.
     dspec.dayenu_filter(np.arange(-nf/2,nf/2)*df, data_1d, wghts_1d, 1, np.array(filter_centers), np.array(filter_half_widths),
-                        np.array(filter_factors))
+                        np.array(filter_factors), use_tensorflow=use_tensorflow)
 
     #test functionality on floats
     dspec.dayenu_filter(np.arange(-nf/2,nf/2)*df, data_1d, wghts_1d,  1, filter_centers[0], filter_half_widths[0],
-                        filter_factors[0])
+                        filter_factors[0], use_tensorflow=use_tensorflow)
     filter_half_widths2 = [200e-9, 200e-9]
     filter_centers2 = [0., -1400e-9]
     filter_factors2 = [1e-9, 1e-9]
@@ -406,21 +390,21 @@ def test_dayenu_filter():
     # check that if we are performing 2d filtering, then x is a length 2 list.
     pytest.raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_2d, wgts=np.ones_like(data_2d), filter_dimensions=[1, 0],
                      filter_centers=[[0.],[0.]], filter_half_widths=[[1e-3], [100e-9]],
-                     filter_factors=[[1e-9], [1e-9]])
+                     filter_factors=[[1e-9], [1e-9]], use_tensorflow=use_tensorflow)
     # check that if we are performing 2d filtering, then x is a length 2 list and each x is a numpy array, list, or tuple.
     pytest.raises(ValueError, dspec.dayenu_filter, x=['time is a construct', np.arange(-nf/2, nf/2)*df], data=data_2d, wgts=np.ones_like(data_2d), filter_dimensions=[1, 0],
                      filter_centers=[[0.],[0.]], filter_half_widths=[[1e-3], [100e-9]],
-                     filter_factors=[[1e-9], [1e-9]])
+                     filter_factors=[[1e-9], [1e-9]], use_tensorflow=use_tensorflow)
     # check value error if length of one of the filter_centers is greater then 2
     pytest.raises(ValueError, dspec.dayenu_filter, x=[times, np.arange(-nf/2, nf/2)*df], data=data_2d, wgts=np.ones_like(data_2d), filter_dimensions=[1, 0],
                      filter_centers=[[0.], [0.]], filter_half_widths=[[1e-3], [100e-9]],
-                     filter_factors=[[1e-9], [1e-9], [1e-9]])
+                     filter_factors=[[1e-9], [1e-9], [1e-9]], use_tensorflow=use_tensorflow)
 
     #now, only filter fringe-rate domain. The fringe rate for a source
     #overhead should be roughly 0.0036 for this baseline.
     filtered_data_fr, _ = dspec.dayenu_filter(np.arange(-nf/2,nf/2)*dt, data_2d, np.ones_like(data_2d),
                         filter_centers = [0.], filter_half_widths = [0.004], filter_factors = [1e-10],
-                        filter_dimensions = [0], cache = TEST_CACHE)
+                        filter_dimensions = [0], cache=TEST_CACHE, use_tensorflow=use_tensorflow)
 
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_fr.flatten())**2.)),
                                     1., decimal = 1)
@@ -428,15 +412,15 @@ def test_dayenu_filter():
     #only filter in the delay-domain.
 
     filtered_data_df, _ = dspec.dayenu_filter(np.arange(-nf/2, nf/2)*df, data_2d, np.ones_like(data_2d),
-                        filter_centers = [0.], filter_half_widths=[100e-9], filter_factors=[1e-10],
-                        filter_dimensions = [1], cache = TEST_CACHE)
+                        filter_centers=[0.], filter_half_widths=[100e-9], filter_factors=[1e-10],
+                        filter_dimensions=[1], cache=TEST_CACHE, use_tensorflow=use_tensorflow)
 
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df.flatten())**2.)),
-                                                            1., decimal = 1)
+                                                            1., decimal=1)
     #supply an int for filter dimensions
     filtered_data_df, _ = dspec.dayenu_filter(np.arange(-nf/2, nf/2)*df, data_2d, np.ones_like(data_2d),
                         filter_centers = [0.], filter_half_widths=[100e-9], filter_factors=[1e-10],
-                        filter_dimensions = 1, cache = TEST_CACHE)
+                        filter_dimensions=1, cache=TEST_CACHE, use_tensorflow=use_tensorflow)
 
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df.flatten())**2.)),
                                     1., decimal = 1)
@@ -446,16 +430,16 @@ def test_dayenu_filter():
 
     filtered_data_df_fr, _ = dspec.dayenu_filter([np.arange(-nf/2,nf/2)*dt, np.arange(-nf/2,nf/2)*df],
                                                     data_2d, np.ones_like(data_2d),
-                                                    filter_centers = [[0.002],[0.]],
-                                                    filter_half_widths = [[0.001],[100e-9]], filter_factors = [[1e-5],[1e-5]],
-                                                    filter_dimensions = [0,1],cache = TEST_CACHE)
+                                                    filter_centers = [[0.002],[0.]], use_tensorflow=use_tensorflow,
+                                                    filter_half_widths=[[0.001],[100e-9]], filter_factors=[[1e-5],[1e-5]],
+                                                    filter_dimensions=[0,1],cache=TEST_CACHE)
 
     # check for zero residual in flagged regions
     wgts_2d = np.ones_like(data_2d)
     wgts_2d[nf // 2+5]  = 0.
     wgts_2d[:, nf // 4 + 3] = 0.
     filtered_data_df_fr, _ = dspec.dayenu_filter([np.arange(-nf/2,nf/2)*dt, np.arange(-nf/2,nf/2)*df],
-                                                    data_2d, wgts_2d,
+                                                    data_2d, wgts_2d, use_tensorflow=use_tensorflow,
                                                     filter_centers = [[0.002],[0.]],
                                                     filter_half_widths = [[0.001],[100e-9]], filter_factors = [[1e-5],[1e-5]],
                                                     filter_dimensions = [0,1],cache = TEST_CACHE)
@@ -678,7 +662,8 @@ def test_delay_interpolation_matrix():
         print(len(w))
         assert len(w) > 0
 
-def test_fourier_filter():
+@pytest.mark.parametrize("use_tensorflow", [True, False])
+def test_fourier_filter(use_tensorflow):
     # load file
     dt = 10.7374267578125
     sdf = 100e3
@@ -725,19 +710,19 @@ def test_fourier_filter():
                     'window':'none', 'gain':0.1, 'alpha':0.5}
     mdl1, res1, info1 = dspec.fourier_filter(x=freqs, data=d, wgts=w, filter_centers=[0.], cache={},
                                              filter_half_widths=[bl_len], suppression_factors=[0.],
-                                             mode='dpss_leastsq', **dpss_options1)
+                                             mode='dpss_leastsq', use_tensorflow=use_tensorflow, **dpss_options1)
 
     # check filter dims error is raised
     pytest.raises(ValueError, dspec.fourier_filter,x=freqs, data=d, wgts=w, filter_centers=[0.], filter_dims=2,
                                              filter_half_widths=[bl_len], suppression_factors=[0.],
-                                             mode='dpss_leastsq', **dpss_options1)
+                                             mode='dpss_leastsq', use_tensorflow=use_tensorflow, **dpss_options1)
     #check that length >2 filter dims will fail.
     pytest.raises(ValueError, dspec.fourier_filter,x=freqs, data=d, wgts=w, filter_centers=[0.], filter_dims=[0, 1, 1],
                                              filter_half_widths=[bl_len], suppression_factors=[0.],
-                                             mode='dpss_leastsq', **dpss_options1)
+                                             mode='dpss_leastsq', use_tensorflow=use_tensorflow, **dpss_options1)
 
     mdl2, res2, info2 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], suppression_factors=[0.],
-                                             mode='dpss_matrix', **dpss_options1)
+                                             mode='dpss_matrix', use_tensorflow=use_tensorflow, **dpss_options1)
     #check clean with and without default options gives equivalent answers.
     mdl3, res3, info3 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len],
                                              mode='clean')
@@ -781,12 +766,12 @@ def test_fourier_filter():
     #check error when wgt dim does not equal data dim.
     pytest.raises(ValueError, dspec.fourier_filter, x=freqs, data=d, wgts=w[0].squeeze(), filter_centers=[0.],
                     filter_half_widths=[bl_len], suppression_factors=[0.],
-                    mode='dpss_leastsq', **dpss_options1)
+                    mode='dpss_leastsq', use_tensorflow=use_tensorflow, **dpss_options1)
 
     #check 1d vector support
     mdl11d, res11d, info11d = dspec.fourier_filter(x=freqs, data=d[0], wgts=w[0], filter_centers=[0.],
                                              filter_half_widths=[bl_len], suppression_factors=[0.],
-                                             mode='dpss_leastsq', **dpss_options1)
+                                             mode='dpss_leastsq', use_tensorflow=use_tensorflow, **dpss_options1)
 
     #test that the info is properly switched. fourier_filter processes all data in frequency_mode and takes transposes for time
     #filtering mode.
@@ -799,7 +784,7 @@ def test_fourier_filter():
     #perform a fringe-rate filter
     mdl5, res5, info5 = dspec.fourier_filter(x=times, data=d, wgts=w, filter_centers=[0.],
                                              filter_half_widths=[fr_len], suppression_factors=[0.], filter_dims=0,
-                                             mode='dpss_leastsq', **dpss_options1)
+                                             mode='dpss_leastsq', use_tensorflow=use_tensorflow, **dpss_options1)
 
     #test that the info is properly switched. fourier_filter processes all data in frequency_mode and takes transposes for time
     #filtering mode.
@@ -843,11 +828,11 @@ def test_fourier_filter():
     #Check Dayenu filter.
     mdl7, res7, info7 = dspec.fourier_filter(x=times, data=d, wgts=w, filter_centers=[0.],
                                              filter_half_widths=[fr_len], suppression_factors=[1e-8], filter_dims=0,
-                                             mode='dayenu_dft_leastsq', **dft_options1)
+                                             mode='dayenu_dft_leastsq', use_tensorflow=use_tensorflow, **dft_options1)
 
     mdl8, res8, info8 = dspec.fourier_filter(x=times, data=d, wgts=w, filter_centers=[0.],
                                              filter_half_widths=[fr_len], suppression_factors=[1e-8], filter_dims=0,
-                                             mode='dayenu_dpss_leastsq', **dpss_options1)
+                                             mode='dayenu_dpss_leastsq', use_tensorflow=use_tensorflow, **dpss_options1)
     assert np.all(np.isclose(mdl7, mdl8, rtol=1e-2))
     assert np.all(np.isclose(mdl5, mdl8, rtol=1e-2))
 
@@ -868,30 +853,36 @@ def test_fourier_filter():
 
     mdl9, res9, info9 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[1e-8],[1e-8]],
-                                             mode='dayenu_dpss_leastsq', filter_dims=[1, 0], **dpss_options1_2d)
+                                             mode='dayenu_dpss_leastsq', filter_dims=[1, 0], use_tensorflow=use_tensorflow,
+                                             **dpss_options1_2d)
 
     pytest.raises(ValueError, dspec.fourier_filter, x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[1e-8],[1e-8]],
-                                             mode='dayenu_dpss_leastsq', filter_dims=[1, 0], **dpss_options1)
+                                             mode='dayenu_dpss_leastsq', use_tensorflow=use_tensorflow, filter_dims=[1, 0],
+                                             **dpss_options1)
 
     pytest.raises(ValueError, dspec.fourier_filter, x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[1e-8],[1e-8]],
-                                             mode='dayenu_dpss_leastsq', filter_dims=[1, 0], **dft_options1)
+                                             mode='dayenu_dpss_leastsq', filter_dims=[1, 0], use_tensorflow=use_tensorflow,
+                                             **dft_options1)
 
     mdl10, res10, info10 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[1e-8],[1e-8]],
-                                             mode='dayenu_dft_leastsq', filter_dims=[1, 0], **dft_options1_2d)
+                                             mode='dayenu_dft_leastsq', filter_dims=[1, 0], use_tensorflow=use_tensorflow,
+                                              **dft_options1_2d)
    #check 2d filter dft fundamental period error.
     pytest.raises(ValueError, dspec.fourier_filter,x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
-                                             mode='dft_leastsq', filter_dims=[1, 0], **dpss_options1)
+                                             mode='dft_leastsq', filter_dims=[1, 0], use_tensorflow=use_tensorflow,
+                                              **dpss_options1)
     mdl_dft, res_dft, info_dft = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
+                                             use_tensorflow=use_tensorflow,
                                              mode='dft_leastsq', filter_dims=[1, 0], **dft_options1_2d)
 
     mdl_dft1, res_dft1, info_dft1 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
-                                             mode='dft_leastsq', filter_dims=[1, 0])
+                                             mode='dft_leastsq', filter_dims=[1, 0], use_tensorflow=use_tensorflow)
     assert np.all(np.isclose(mdl_dft1, mdl_dft, rtol=1e-2))
 
     #try 2d iterative clean.
@@ -926,7 +917,8 @@ def test_fourier_filter():
     # check that fundamental period in 2d dft fit is correctly assigned.
     mdl_dft, res_dft, info_dft = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
-                                             mode='dft_leastsq', filter_dims=[1, 0], **dft_options2_2d)
+                                             mode='dft_leastsq', filter_dims=[1, 0], use_tensorflow=False,
+                                              **dft_options2_2d)
 
     assert np.isclose(info_dft['filter_params']['axis_1']['basis_options']['fundamental_period'],
                       dft_options2_2d['fundamental_period'][1])
@@ -1140,7 +1132,8 @@ def test__fit_basis_1d():
 
     assert np.all(np.isclose((mod2+resid2)*wgts, dw, atol=1e-6))
 
-def test_fit_basis_1d_with_missing_channels():
+@pytest.mark.parametrize("use_tensorflow", [True, False])
+def test_fit_basis_1d_with_missing_channels(use_tensorflow):
     fs = np.arange(-50,50)
     #here is some data
     data = np.exp(2j * np.pi * 3.5/50. * fs) + 5*np.exp(2j * np.pi * 2.1/50. * fs)
@@ -1157,7 +1150,7 @@ def test_fit_basis_1d_with_missing_channels():
     to_keep = np.array([i for i in range(len(fs)) if i not in to_remove])
 
     mod5, resid5, info5 = dspec._fit_basis_1d(fs[to_keep], dw[to_keep], wgts[to_keep], [0., 10/50.], [5./50., 1./50.], basis_options=dpss_opts,
-                                    method='leastsq', basis='dpss')
+                                    method='leastsq', basis='dpss', use_tensorflow=use_tensorflow)
 
     dwt = copy.deepcopy(dw)
     wgtst = copy.deepcopy(wgts)
@@ -1166,7 +1159,7 @@ def test_fit_basis_1d_with_missing_channels():
     wgtst[to_remove] = 0.0
 
     mod6, resid6, info6 = dspec._fit_basis_1d(fs, dwt, wgtst, [0., 10/50.], [5./50., 1./50.], basis_options=dpss_opts,
-                                    method='leastsq', basis='dpss')
+                                    method='leastsq', basis='dpss', use_tensorflow=use_tensorflow)
 
     assert np.allclose(mod5, mod6[to_keep])
     assert np.allclose(resid5, resid6[to_keep])
