@@ -40,6 +40,7 @@ setup_args = {
         'numpy',
         'six',
         'scipy',
+        "tensorflow",
     ],
     'extras_require': {'aipy':['aipy>=3.0rc2']}
 }
