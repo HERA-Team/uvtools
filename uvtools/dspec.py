@@ -2142,9 +2142,9 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
 
     return cache[opkey]
 
-def tensorflow_dpss(nf, nfw, nwindows=None, lobe_ordering_like_scipy=False):
+def tensorflow_dpss(nf, nfw, nwindows=None, lobe_ordering_like_scipy=False, method='sinc_inversion'):
     """
-    Tensorflow version of the scipy.windows.dpss.
+    Tensorflow version of the scipy.signals.windows.dpss
 
     This recipe is based on the scipy.windows.dpss method whose code is as at
     https://github.com/scipy/scipy/blob/v1.7.1/scipy/signal/windows/windows.py
@@ -2164,6 +2164,11 @@ def tensorflow_dpss(nf, nfw, nwindows=None, lobe_ordering_like_scipy=False):
         if True, ensure that the parity of the lobes in each dpss vector matches
         the output from scipy.windows.dpss. Not strictly necessary for many applications
         except for direct comparisons to scipy method.
+    method: str, optional
+        the method to use for determining dpss windows. Supported are "eigh_tridiagonal"
+        which is the method used by scipy.signal.windows.dpss but seems to fail
+        with large nf. "eigh_sinc" uses eigen-decomposition of a sinc matrix.
+
 
     Returns
     -------
@@ -2172,17 +2177,29 @@ def tensorflow_dpss(nf, nfw, nwindows=None, lobe_ordering_like_scipy=False):
         eigenvalues with the sinc matrix.
 
     """
-    # adopt dpss recipe from dpss method in
-    # https://github.com/scipy/scipy/blob/v1.7.1/scipy/signal/windows/windows.py
-    # with a tensorflow twist.
     # extend by 1
     if nwindows is None:
         nwindows = nf + 1
-    nidx = np.arange(nf)
-    d = ((nf - 1 - 2 * nidx) / 2.) ** 2 * np.cos(2 * np.pi * nfw / nf)
-    e = nidx[1:] * (nf - nidx[1:]) / 2.
+    # use sinc method.
+    # since many eigenvalues will be close to 1, the specific eigenvectors
+    # dont necessarily agree with the tridiagonal method but they are spanning
+    # the same space and they are orthonormal.
+    if method == 'eigh_sinc':
+        xg, yg = np.meshgrid(np.arange(nf), np.arange(nf))
+        dxy = tf.convert_to_tensor(xg - yg)
+        smat = tf.experimental.numpy.sinc(2 * nfw * dxy / nf) * 2 * nfw / nf
+        _, dpss_vecs = tf.linalg.eigh(smat)
     # perform symmetric tri-diagonal eigen-decomposition on the GPU (if available)
-    _, dpss_vecs = tf.linalg.eigh_tridiagonal(tf.convert_to_tensor(d), tf.convert_to_tensor(e),
+    # this is the method used by scipy.windows.dpss but now with tensorflow.
+    # https://github.com/scipy/scipy/blob/v1.7.1/scipy/signal/windows/windows.py
+    # for some reason it gives errors for large numbers of rows / columns
+    # which often come up with fringe-rate filtering.
+    # so made eigh_sinc the default (although it seems like in principal its slower)
+    elif method =='eigh_tridiagonal':
+        nidx = np.arange(nf)
+        d = ((nf - 1 - 2 * nidx) / 2.) ** 2 * np.cos(2 * np.pi * nfw / nf)
+        e = nidx[1:] * (nf - nidx[1:]) / 2.
+        _, dpss_vecs = tf.linalg.eigh_tridiagonal(tf.convert_to_tensor(d), tf.convert_to_tensor(e),
                                                   eigvals_only=False)
     dpss_vecs = tf.transpose(dpss_vecs[:, ::-1])
     # the following code is to make the ordering of the lobes agree with the scipy method convention
@@ -2206,7 +2223,7 @@ def tensorflow_dpss(nf, nfw, nwindows=None, lobe_ordering_like_scipy=False):
 
 
 def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cutoff=1e-10, xc=None, hash_decimal=10,
-        xtol=1e-3, use_tensorflow=False, lobe_ordering_like_scipy=False):
+        xtol=1e-3, use_tensorflow=False, lobe_ordering_like_scipy=False, tf_method='eigh_sinc'):
     """
     Calculates DPSS operator with multiple delay windows to fit data. Frequencies
     must be equally spaced (unlike Fourier operator). Users can specify how the
@@ -2290,7 +2307,7 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
                 evals = np.sum((smat @ np.transpose(dpss_vecs)) * np.transpose(dpss_vecs), axis=0)
                 evals_precomp.append(evals)
             else:
-                dpss_vecs = tensorflow_dpss(nf, nf * df * fw, nf, lobe_ordering_like_scipy=lobe_ordering_like_scipy)
+                dpss_vecs = tensorflow_dpss(nf, nf * df * fw, nf, lobe_ordering_like_scipy=lobe_ordering_like_scipy, method=tf_method)
                 smat = tf.experimental.numpy.sinc(2 * fw * (xg-yg)) * 2 * df * fw
                 evals = tf.reduce_sum((smat @ tf.transpose(dpss_vecs)) * tf.transpose(dpss_vecs), axis=0)
                 evals_precomp.append(evals)
