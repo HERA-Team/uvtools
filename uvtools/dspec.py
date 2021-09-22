@@ -2135,7 +2135,7 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
                 cache[opkey] = (tf.linalg.pinv(cmat) @ tf.math.conj(tf.transpose(design_matrix)) @ weights).numpy()
             else:
                 try:
-                    cache[opkey] = tf.linalg.inv(cmat) @ tf.math.conj(tf.transpose(design_matrix)) @ weights
+                    cache[opkey] = (tf.linalg.inv(cmat) @ tf.math.conj(tf.transpose(design_matrix)) @ weights).numpy()
                 except tf.errors.InvalidArgumentError as error:
                     print(error)
                     cache[opkey] = None
