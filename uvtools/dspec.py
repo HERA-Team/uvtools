@@ -2127,11 +2127,14 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
                     print(error)
                     cache[opkey] = None
         else:
-            design_matrix = tf.convert_to_tensor(design_matrix)
-            weights = tf.convert_to_tensor(weights)
+            if not np.allclose(design_matrix.imag, 0.0) and np.allclose(weights.imag, 0.0):
+                raise NotImplementedError("tensorflow mode only supported for real design matrices and weights.")
+            design_matrix = tf.convert_to_tensor(design_matrix.real)
+            weights = tf.convert_to_tensor(weights.real)
             cmat = tf.math.conj(tf.transpose(design_matrix)) @ weights @ design_matrix
             if tf.linalg.cond(cmat) >= 1e9:
                 warn('Warning!!!!: Poorly conditioned matrix! Your linear inpainting IS WRONG!')
+
                 cache[opkey] = (tf.linalg.pinv(cmat) @ tf.math.conj(tf.transpose(design_matrix)) @ weights).numpy()
             else:
                 try:
