@@ -1702,7 +1702,7 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
             fm_key = fm_key + (basis_options['fundamental_period'], )
         elif basis.lower() == 'dpss':
             fm_key = fm_key + tuple(nterms)
-        fmat = fit_solution_matrix(wmat, amat, cache=cache, fit_mat_key=fm_key)
+        fmat = fit_solution_matrix(wmat, amat, cache=cache, fit_mat_key=fm_key, use_tensorflow=use_tensorflow)
         info['fitting_matrix'] = fmat
         cn_out = fmat @ y
     else:
