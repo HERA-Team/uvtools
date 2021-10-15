@@ -55,9 +55,8 @@ uvd = UVData()
 # read in the metadata only
 uvd.read(
     args.file,
-    antenna_nums=[args.ant_1, args.ant_2],
-    freq_chans=[args.freq_chan],
-    polarizations=[args.pol]
+    bls=(args.ant_1, args.ant_2, args.pol)
 )
+
 
 print(np.squeeze(uvd.data_array))
