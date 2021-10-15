@@ -55,7 +55,8 @@ uvd = UVData()
 # read in just the desired data
 uvd.read(
     args.file,
-    bls=(args.ant_1, args.ant_2, args.pol)
+    bls=(args.ant_1, args.ant_2, args.pol),
+    freq_chans=[args.freq_chan],
 )
 
 print(np.squeeze(uvd.data_array))
