@@ -52,11 +52,10 @@ args = a.parse_args()
 
 uvd = UVData()
 
-# read in the metadata only
+# read in just the desired data
 uvd.read(
     args.file,
     bls=(args.ant_1, args.ant_2, args.pol)
 )
-
 
 print(np.squeeze(uvd.data_array))
