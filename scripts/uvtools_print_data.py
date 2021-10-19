@@ -59,4 +59,5 @@ uvd.read(
     freq_chans=[args.freq_chan],
 )
 
-print(np.squeeze(uvd.data_array))
+data = np.squeeze(uvd.data_array)
+print(' '.join([str(vis) for vis in data]))
