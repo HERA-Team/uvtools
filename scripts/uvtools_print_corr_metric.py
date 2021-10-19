@@ -105,6 +105,17 @@ if node_info:
         ant_1_node_strs[np.nonzero(uvd_sum.ant_1_array == ant)] = int(ant_node_str)
         ant_2_node_strs[np.nonzero(uvd_sum.ant_2_array == ant)] = int(ant_node_str)
 
+    # first conjugate to ensure we have the baselines we want for the upper triangle
+    conj_index_array = np.where(ant_1_node_strs > ant_2_node_strs)[0]
+    if conj_index_array.size > 0:
+        uvd_sum.conjugate_bls(convention=conj_index_array)
+        uvd_diff.conjugate_bls(convention=conj_index_array)
+
+        # redo the ant string mapping after the conjugation
+        for ant_ind, ant in enumerate(ants_data_unique):
+            ant_node_str = ant_node_strs[ant_ind]
+            ant_1_node_strs[np.nonzero(uvd_sum.ant_1_array == ant)] = int(ant_node_str)
+            ant_2_node_strs[np.nonzero(uvd_sum.ant_2_array == ant)] = int(ant_node_str)
 
     ant_argsort = np.argsort(ant_node_strs)
 
@@ -114,13 +125,9 @@ if node_info:
     # lexsort uses the listed arrays from last to first
     # (so the primary sort is on the last one)
     bl_index_array = np.lexsort((ant_2_node_strs, ant_1_node_strs, uvd_sum.time_array))
-    conj_index_array = np.where(ant_1_node_strs > ant_2_node_strs)[0]
-
-    if conj_index_array.size == 0:
-        conj_index_array = None
-
-    uvd_sum.reorder_blts(bl_index_array, conj_convention=conj_index_array)
-    uvd_diff.reorder_blts(bl_index_array, conj_convention=conj_index_array)
+        
+    uvd_sum.reorder_blts(bl_index_array)
+    uvd_diff.reorder_blts(bl_index_array)
 else:
     uvd_sum.reorder_blts(conj_convention="ant1<ant2")
     uvd_diff.reorder_blts(conj_convention="ant1<ant2")
@@ -133,16 +140,15 @@ evens = evens / np.abs(evens)
 odds = odds / np.abs(odds)
 
 # reshape to be Nbls, Ntimes, Nfreqs
-# this is raw correlator data, so the baseline number changes faster than the time
+# We sorted this so that time changes slowest, then baseline
 evens = np.reshape(evens, (uvd_sum.Ntimes, uvd_sum.Nbls, uvd_sum.Nfreqs))
 odds = np.reshape(odds, (uvd_sum.Ntimes, uvd_sum.Nbls, uvd_sum.Nfreqs))
 
 corr_metric = evens * np.conj(odds)
-
 corr_metric = np.abs(np.nanmean(np.nanmean(corr_metric, axis=2), axis=0))
 
 ant1_vals = np.reshape(uvd_sum.ant_1_array, (uvd_sum.Ntimes, uvd_sum.Nbls))[0, :]
-ant1_unique = np.unique(ant1_vals)
+ant2_vals = np.reshape(uvd_sum.ant_2_array, (uvd_sum.Ntimes, uvd_sum.Nbls))[0, :]
 
 if node_info:
     print("node       " + "   ".join([a_str[:2] for a_str in ant_node_strs_sorted]))
@@ -151,7 +157,10 @@ else:
     print("ant  " + " ".join([f"{an:4n}" for an in ants_data_sorted]))
 if args.threshold is None:
     for ant_ind, ant in enumerate(ants_data_sorted):
-        corrs = corr_metric[np.nonzero(ant1_vals == ant)[0]]
+        this_row = np.nonzero(ant1_vals == ant)[0]
+        assert np.allclose(ant2_vals[this_row], ants_data_sorted[ant_ind:]), "something went wrong with sorting!"
+
+        corrs = corr_metric[this_row]
         if node_info:
             node = ant_node_strs_sorted[ant_ind][:2]
             print(f"{node}  " + f"{ant:4n}" + "     "*ant_ind, " ".join([f"{corr:.2f}" for corr in corrs]))
@@ -159,7 +168,10 @@ if args.threshold is None:
             print(f"{ant:4n}" + "     "*ant_ind, " ".join([f"{corr:.2f}" for corr in corrs]))
 else:
     for ant_ind, ant in enumerate(ants_data_sorted):
-        corrs = corr_metric[np.nonzero(ant1_vals == ant)[0]]
+        this_row = np.nonzero(ant1_vals == ant)[0]
+        assert np.allclose(ant2_vals[this_row], ants_data_sorted[ant_ind:]), "something went wrong with sorting!"
+
+        corrs = corr_metric[this_row]
         corrs = ["  x  " if corr > args.threshold else "  .  " for corr in corrs ]
         
         if node_info:
