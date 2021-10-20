@@ -1,3 +1,4 @@
+import aipy
 import numpy as np
 import warnings
 from astropy import units
@@ -108,7 +109,6 @@ def waterfall(d, mode='log', vmin=None, vmax=None, drng=None, mx=None,
     if np.ma.isMaskedArray(d):
         d = d.filled(0)
     if recenter:
-        import aipy
         d = aipy.img.recenter(d, np.array(d.shape)/2)
 
     # Apply requested transform to data
@@ -386,11 +386,16 @@ def labeled_waterfall(
     dpi=100,
     aspect="auto",
     fontsize=None,
+    tickfontsize=None,
     draw_colorbar=True,
+    remove_colorbar=False,
+    cbar_labelpad =None,
+    cbar_pad=None,
     cmap="best",
     vmin=None,
     vmax=None,
     dynamic_range=None,
+    Nticks=6,
     fft_axis=None,
     freq_taper=None,
     freq_taper_kwargs=None,
@@ -482,6 +487,11 @@ def labeled_waterfall(
         five orders of magnitude below the maximum. If ``mode=="phs"``, then this
         parameter is ignored. If both ``vmin`` and ``vmax`` are provided, then this
         parameter is ignored.
+    Nticks: int or iterable of int, optional
+        Number of tick marks to use on the plot axes. If a single number is passed,
+        then the same number of ticks are used on both axes. If an iterable is
+        passed, then it must be length 2 and specify the number of ticks to use on
+        the x- and y-axes, respectively. Default is to use 6 ticks per axis.
     fft_axis: int or str, optional
         Axis over which to perform a Fourier transform. May be specified with one
         of three strings ("time", "freq", "both") or one of three integers (0, 1,
@@ -504,8 +514,22 @@ def labeled_waterfall(
         Figure containing the plot.
     ax: :class:`plt.Axes` instance
         Axes object the waterfall is drawn into.
+
+    Notes
+    -----
+    If you are plotting data with LSTs listed on the time axis and passing a
+    ndarray to the ``data`` parameter, then care should be taken when providing
+    the LST array. If you are pulling the LSTs from a ``pyuvdata.UVData`` object,
+    then you should *not* use ``np.unique`` to extract the unique LSTs from the
+    ``UVData.lst_array`` attribute--this will sort the LSTs, which *will* cause
+    problems if there is a phase wrap in the LSTs. If you find yourself faced
+    with this situation, a relatively simple solution can be found in the source
+    code for this function: see the end of the block of code following the
+    "# Validate parameters." comment.
     """
     import matplotlib.pyplot as plt
+    #print('In labeled_waterfall, fontsize: '+str(fontsize))
+    #print('In labeled_waterfall, tickfontsize: '+str(tickfontsize))
 
     # Validate parameters.
     if time_or_lst not in ("time", "lst"):
@@ -516,6 +540,15 @@ def labeled_waterfall(
             raise TypeError("array-like data must consist of complex numbers.")
         if data.ndim != 2 or (data.ndim == 2 and 1 in data.shape):
             raise ValueError("array-like data must be 2-dimensional.")
+    if type(Nticks) is not int:
+        try:
+            _ = iter(Nticks)
+            if len(Nticks) != 2 or not all(type(Ntick) is int for Ntick in Nticks):
+                raise TypeError
+        except TypeError:
+            raise TypeError(
+                "Nticks must be an integer or length-2 iterable of integers."
+            )
     if isinstance(data, np.ndarray):
         if freqs is None or (times is None and lsts is None):
             raise ValueError(
@@ -540,7 +573,8 @@ def labeled_waterfall(
             )
         freqs = np.unique(data.freq_array)
         times = np.unique(data.time_array)
-        lsts = np.unique(data.lst_array)
+        lst_inds = sorted(np.unique(data.time_array, return_index=True)[1])
+        lsts = data.lst_array[lst_inds]
         data_units = data.vis_units or data_units
         data = data.get_data(antpairpol)
 
@@ -675,16 +709,33 @@ def labeled_waterfall(
     else:
         fig = ax.get_figure()
 
+    # Choose bounds for setting plot extent.
+    xmin, xmax = xvals.min(), xvals.max()
+    # Special handling for LSTs since they can wrap.
+    if time_or_lst == "lst" and fft_axis not in ("time", "both"):
+        adjust_yaxis = True
+        ymin, ymax = 0, len(lsts) - 1
+    else:
+        adjust_yaxis = False
+        ymin, ymax = yvals.min(), yvals.max()
+
     # Finish setup, then plot.
-    ax.set_xlabel(xlabel, fontsize=fontsize)
+    ax.set_xlabel(xlabel, fontsize=fontsize,labelpad=0.25)
     ax.set_ylabel(ylabel, fontsize=fontsize)
     ax.imshow(
         data,
         aspect=aspect,
         cmap=cmap,
         norm=norm,
-        extent=(xvals.min(), xvals.max(), yvals.max(), yvals.min()),
+        extent=(xmin, xmax, ymax, ymin),
     )
+    if adjust_yaxis:
+        # This is a bit of a hack, but it gets the job done.
+        ax.set_yticks(ax.get_yticks()[:-1])
+        ax.set_yticklabels(
+            f"{yval:.2f}" for yval in yvals[ax.get_yticks().astype(int)]
+        )
+    ax.tick_params(axis='both',labelsize=tickfontsize)
 
     # Optionally draw a colorbar.
     if draw_colorbar:
@@ -698,7 +749,11 @@ def labeled_waterfall(
         else:
             extend = "neither"
         cbar = fig.colorbar(mappable=scalar_map, ax=ax, extend=extend)
-        cbar.set_label(cbar_label, fontsize=fontsize)
+        cbar.set_label(cbar_label, fontsize=fontsize,labelpad=cbar_labelpad)
+        cbar.ax.tick_params(labelsize=tickfontsize)
+
+        if remove_colorbar: # do this once cbar is made so that all plots have same size
+            cbar.remove()
 
     # Optionally set a subplot title.
     if set_title:
@@ -726,8 +781,10 @@ def fourier_transform_waterfalls(
     dpi=100,
     aspect="auto",
     fontsize=None,
+    tickfontsize=None,
     cmap="best",
     dynamic_range=None,
+    plot_range=None,
     plot_limits=None,
     freq_taper=None,
     freq_taper_kwargs=None,
@@ -818,6 +875,9 @@ def fourier_transform_waterfalls(
             with axes specified by the pair specified. For example, passing
             {("fringe-rate", "delay"): 5} will only limit the dynamic range for
             the bottom-right plot.
+    plot_range: dict, optional
+        Dictionary mapping same string options as dynamic_range to vmin/vmax.
+        Only use plot_range for length-2 combinations and only when dynamic_range is None.
     plot_limits: dict, optional
         Dictionary mapping strings to length-2 tuples. The keys designate the
         dimension ("time", "freq", "fringe-rate", "delay") to crop, and the values
@@ -871,17 +931,24 @@ def fourier_transform_waterfalls(
             key in dynamic_range.keys()
             for key in possible_drng_keys
         )
+        limit_range = list( key in plot_range.keys() for key in possible_drng_keys) #ATJ for vmin/vmax control
         if any(limit_dynamic_range):
             drng = dynamic_range[possible_drng_keys[limit_dynamic_range.index(True)]]
         else:
             drng = None
-
+        if any(limit_range): #ATJ for vmin/vmax control
+            rng = plot_range[possible_drng_keys[limit_range.index(True)]]
+            vmin=rng[0]
+            vmax=rng[1]
+            #print('for ax = '+str(ax)+', (vmin, vmax) = ('+str(vmin)+', '+str(vmax)+')')
+        else:
+            vmin=None
+            vmax=None
         # Adjust the plot boundaries if requested.
         if x_dim in plot_limits:
             ax.set_xlim(*plot_limits[x_dim])
         if y_dim in plot_limits:
             ax.set_ylim(*plot_limits[y_dim])
-
         # Actually make the plot.
         ax = labeled_waterfall(
             data=data,
@@ -897,6 +964,7 @@ def fourier_transform_waterfalls(
             ax=ax,
             aspect=aspect,
             fontsize=fontsize,
+            tickfontsize= tickfontsize,
             draw_colorbar=True,
             cmap=cmap,
             dynamic_range=drng,
@@ -905,6 +973,8 @@ def fourier_transform_waterfalls(
             freq_taper_kwargs=freq_taper_kwargs,
             time_taper=time_taper,
             time_taper_kwargs=time_taper_kwargs,
+            vmin=vmin,
+            vmax=vmax
         )[1]
 
     # Set a figure title if desired.
@@ -933,7 +1003,7 @@ def fourier_transform_waterfalls(
             # Find the visual horizontal center of the figure.
             x1 = min(cbar.get_position().x1 for cbar in colorbars)
             x2 = max(plot.get_position().x0 for plot in plots)
-            title_position = (0.5 * (x1 + x2), uppermost_y)
+            title_position = (0.5 * (x1 + x2), 1.05*uppermost_y)
 
             # Position the title at the apparent "top center" of the figure.
             fig.text(
