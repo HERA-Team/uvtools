@@ -2185,10 +2185,8 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         if nterms is None:
             nterms = []
             for fn,fw in enumerate(filter_half_widths):
-                dpss_vectors = windows.dpss(nf, nf * df * fw, nf)
+                dpss_vectors, eigvals = windows.dpss(nf, nf * df * fw, nf, return_ratios=True)
                 if not eigenval_cutoff is None:
-                    smat = np.sinc(2 * fw * (xg-yg)) * 2 * df * fw
-                    eigvals = np.sum((smat @ dpss_vectors.T) * dpss_vectors.T, axis=0)
                     nterms.append(np.max(np.where(eigvals>=eigenval_cutoff[fn])))
                 if not edge_suppression is None:
                     z0=fw * df
