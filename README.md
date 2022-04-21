@@ -12,15 +12,15 @@ If you use `conda` (preferred), then you may wish to install the following packa
 manually before installing `uvtools` (if you don't have them already)::
 
     $ conda install -c conda-forge numpy scipy "aipy>=3.0rc2"
-    
-If you are developing `uvtools`, you will also require `nose` and `pyuvdata` to run 
+
+If you are developing `uvtools`, you will also require `pytest` and `pyuvdata` to run 
 tests. All of these packages can be installed with the following commands::
 
     $ conda create -n uvtools python=3
     $ conda activate uvtools
     $ conda env update -n uvtools -f environment.yml
-    $ pip install -e . 
-    
+    $ pip install -e .
+
 To test the package, execute the following command::
 
-    $ nosetests uvtools/tests/test_dspec.py uvtools/tests/test_utils.py 
+    $ nosetests uvtools/tests/test_dspec.py uvtools/tests/test_utils.py
