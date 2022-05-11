@@ -2182,32 +2182,34 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         if xc is None:
             xc = x[nf//2]
         #determine cutoffs
+        dpss_vectors = []
+        for fw in filter_half_widths:
+            dpss_vectors.append(windows.dpss(nf, nf * df * fw, nf))
         if nterms is None:
             nterms = []
             for fn,fw in enumerate(filter_half_widths):
-                dpss_vectors = windows.dpss(nf, nf * df * fw, nf)
                 if not eigenval_cutoff is None:
                     smat = np.sinc(2 * fw * (xg-yg)) * 2 * df * fw
-                    eigvals = np.sum((smat @ dpss_vectors.T) * dpss_vectors.T, axis=0)
+                    eigvals = np.sum((smat @ dpss_vectors[fn].T) * dpss_vectors[fn].T, axis=0)
                     nterms.append(np.max(np.where(eigvals>=eigenval_cutoff[fn])))
                 if not edge_suppression is None:
                     z0=fw * df
                     edge_tone=np.exp(-2j*np.pi*np.arange(nf)*z0)
-                    fit_components = dpss_vectors * (dpss_vectors @ edge_tone)
+                    fit_components = dpss_vectors[fn] * (dpss_vectors[fn] @ edge_tone)
                     #this is a vector of RMS residuals of a tone at the edge of the delay window being fitted between 0 to nf DPSS components.
                     rms_residuals = np.asarray([ np.sqrt(np.mean(np.abs(edge_tone - np.sum(fit_components[:k],axis=0))**2.)) for k in range(nf)])
                     nterms.append(np.max(np.where(rms_residuals>=edge_suppression[fn])))
                 if not avg_suppression is None:
                     sinc_vector=np.sinc(2 * fw * df * (np.arange(nf)-nf/2.))
                     sinc_vector = sinc_vector / np.sqrt(np.mean(sinc_vector**2.))
-                    fit_components = dpss_vectors * (dpss_vectors @ sinc_vector)
+                    fit_components = dpss_vectors[fn] * (dpss_vectors[fn] @ sinc_vector)
                     #this is a vector of RMS residuals of vector with equal contributions from all tones within -fw and fw.
                     rms_residuals = np.asarray([ np.sqrt(np.mean(np.abs(sinc_vector - np.sum(fit_components[:k],axis=0))**2.)) for k in range(nf)])
                     nterms.append(np.max(np.where(rms_residuals>=avg_suppression[fn])))
         #next, construct A matrix.
         amat = []
-        for fc, fw, nt in zip(filter_centers,filter_half_widths, nterms):
-            amat.append(np.exp(2j * np.pi * (yg[:,:nt]-xc) * fc ) * windows.dpss(nf, nf * df * fw, nt).T )
+        for fn, (fc, fw, nt) in enumerate(zip(filter_centers,filter_half_widths, nterms)):
+            amat.append(np.exp(2j * np.pi * (yg[:,:nt]-xc) * fc ) * dpss_vectors[fn][:nt].T )
         if len(amat) > 1:
             amat = np.hstack(amat)
         else:
@@ -2253,9 +2255,9 @@ def dft_operator(x, filter_centers, filter_half_widths,
     if cache is None:
         cache = {}
     #if no fundamental fourier period is provided, set fundamental period equal to measurement
-    #bandwidth.
+    #bandwidth * 2.
     if fundamental_period is None:
-        fundamental_period = np.median(np.diff(x)) * len(x)
+        fundamental_period = np.median(np.diff(x)) * len(x) * 2
     if xc is None:
         xc = x[int(np.round(len(x)/2))]
     if isinstance(filter_centers, float):

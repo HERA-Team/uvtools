@@ -213,7 +213,7 @@ def test_dft_operator():
     freqs = np.arange(-NF/2, NF/2)*DF + 150e6
     #test dft_operator by checking whether
     #it gives us expected values.
-    fop = dspec.dft_operator(freqs, 0., 1e-6)
+    fop = dspec.dft_operator(freqs, 0., 1e-6, fundamental_period=len(freqs) * np.mean(np.diff(freqs)))
     fg, dg = np.meshgrid(freqs-150e6, np.arange(-10, 10) * (1./DF/NF) , indexing='ij')
     y = np.exp(2j * np.pi * fg * dg )
     np.testing.assert_allclose(fop, y)
@@ -253,7 +253,11 @@ def test_dpss_operator():
 
     dpss_mat = windows.dpss(NF, NF * DF * 100e-9, ncolmax).T
     for m in range(ncolmax):
-        np.testing.assert_allclose(amat4[:,m], dpss_mat[:,m])
+        # deal with -1 degeneracy which can come up since vectors are obtained from spectral decomposition.
+        # and there is degeneracy between +/-1 eigenval and eigenvector.
+        # This simply effects the sign of the vector to be fitted
+        # and since fitting will cancel by obtaining a -1 on the coefficient, this sign is meaningless
+        assert np.allclose(amat4[:, m], dpss_mat[:, m]) or np.allclose(amat4[:, m], -dpss_mat[:, m])
 
 
 def test_fit_solution_matrix():
