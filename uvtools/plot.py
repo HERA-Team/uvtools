@@ -2,6 +2,8 @@ import numpy as np
 import warnings
 from astropy import units
 from scipy.stats import binned_statistic_2d
+import matplotlib
+import matplotlib.pyplot as plt
 
 from . import utils
 
