@@ -165,7 +165,7 @@ def plot_antpos(antpos, ants=None, ex_ants=[], hl_ants=[],
     scat = plt.scatter(xpos, ypos, c='w', s=0)
     for ant in ants:
         pos = antpos[ant]
-        bad = ant in [ant[0] for ant in ex_ants]
+        bad = ant in ex_ants
         plt.gca().add_artist(plt.Circle(tuple(pos[0:2]), radius=7, 
                                         fill=(~bad), color=['grey','r'][bad]))
         if ant in hl_ants:
