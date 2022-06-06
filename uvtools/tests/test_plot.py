@@ -1,6 +1,5 @@
 import pytest
 import matplotlib
-import matplotlib.pyplot as plt
 import unittest
 from .. import plot, utils
 import numpy as np
@@ -11,6 +10,7 @@ from ..data import DATA_PATH
 import os
 if os.environ.get('DISPLAY', '') == '':
     matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 def axes_contains(ax, obj_list):
     """Check that a matplotlib.Axes instance contains certain elements.
