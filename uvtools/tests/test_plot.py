@@ -1,5 +1,8 @@
-import pytest
+import os
 import matplotlib
+if os.environ.get('DISPLAY', '') == '':
+    matplotlib.use('Agg')
+import pytest
 import unittest
 from .. import plot, utils
 import numpy as np
@@ -7,9 +10,6 @@ from itertools import combinations
 from astropy import units
 from pyuvdata import UVData
 from ..data import DATA_PATH
-import os
-if os.environ.get('DISPLAY', '') == '':
-    matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 def axes_contains(ax, obj_list):
