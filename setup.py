@@ -4,12 +4,11 @@ import os
 import sys
 import json
 
-sys.path.append("uvtools")
-import version
 
-data = [version.git_origin, version.git_hash, version.git_description, version.git_branch]
-with open(os.path.join('uvtools', 'GIT_INFO'), 'w') as outfile:
-    json.dump(data, outfile)
+sys.path.append("uvtools")
+from branch_scheme import branch_scheme
+
+
 
 def package_files(package_dir, subdirectory):
     # walk the input package_dir/subdirectory
@@ -33,13 +32,14 @@ setup_args = {
     'package_dir': {'uvtools': 'uvtools'},
     'packages': ['uvtools'],
     'package_data': {'uvtools': data_files},
-    'version': version.version,
     'include_package_data': True,
     'scripts': glob.glob('scripts/*'),
+    'use_scm_version': {"local_scheme":branch_scheme},
     'install_requires':[
         'numpy',
         'six',
         'scipy',
+        'setuptools_scm',
     ],
     'extras_require': {'aipy':['aipy>=3.0rc2']}
 }
