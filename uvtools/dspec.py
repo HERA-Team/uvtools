@@ -12,29 +12,34 @@ from scipy.optimize import leastsq, lsq_linear
 import copy
 
 #DEFAULT PARAMETERS FOR CLEANs
-CLEAN_DEFAULTS_1D={'tol':1e-9, 'window':'none',
+CLEAN_DEFAULTS_1D={'window':'none',
  'alpha':.5, 'maxiter':100, 'gain':0.1,
  'edgecut_low': 0, 'edgecut_hi': 0,
  'add_clean_residual':False, 'filt2d_mode':'rect'}
-DAYENU_DEFAULTS_1D = {'suppression_factors' : [1e-9],
+DAYENU_DEFAULTS_1D = {'suppression_factors': None,
                  'max_contiguous_edge_flags' : 10}
-DPSS_DEFAULTS_1D = {'suppression_factors' :  [1e-9],
-               'eigenval_cutoff' : [1e-12],
+DPSS_DEFAULTS_1D = {
+               'eigenval_cutoff': None,
+               'suppression_factors': None,
                'max_contiguous_edge_flags' : 10}
-DFT_DEFAULTS_1D = {'suppression_factors' : [1e-9],
+DFT_DEFAULTS_1D = {
+                'suppression_factors': None,
                 'fundamental_period' : np.nan,
                 'max_contiguous_edge_flags' : 10}
 
-CLEAN_DEFAULTS_2D = {'tol':1e-9, 'window': ['none', 'none'],
+CLEAN_DEFAULTS_2D = {'window': ['none', 'none'],
  'alpha':.5, 'maxiter':100, 'gain':0.1,
  'edgecut_low': [0, 0], 'edgecut_hi': [0, 0],
  'add_clean_residual':False, 'filt2d_mode':'rect'}
-DAYENU_DEFAULTS_2D = {'suppression_factors' : [[1e-9], [1e-9]],
+DAYENU_DEFAULTS_2D = {
+                 'suppression_factors': None,
                  'max_contiguous_edge_flags' : 10}
-DPSS_DEFAULTS_2D = {'suppression_factors' : [[1e-9], [1e-9]],
-               'eigenval_cutoff' : [[1e-12], [1e-12]],
-               'max_contiguous_edge_flags' : 10}
-DFT_DEFAULTS_2D = {'suppression_factors' : [[1e-9], [1e-9]],
+DPSS_DEFAULTS_2D = {
+                'eigenval_cutoff': None,
+                'suppression_factors': None,
+                'max_contiguous_edge_flags' : 10}
+DFT_DEFAULTS_2D = {
+                'suppression_factors': None,
                 'fundamental_period' : [np.nan, np.nan],
                 'max_contiguous_edge_flags' : 10}
 
@@ -257,7 +262,7 @@ def calc_width(filter_size, real_delta, nsamples):
     return (uthresh, lthresh)
 
 def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
-                   filter_dims=1, skip_wgt=0.1, zero_residual_flags=True, **filter_kwargs):
+                   filter_dims=1, skip_wgt=0.1, zero_residual_flags=True, tol=1e-9, **filter_kwargs):
                    '''
                    A filtering function that wraps up all functionality of high_pass_fourier_filter
                    and add support for additional linear fitting options.
@@ -380,6 +385,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                                 be a list or tuple or np.ndarray of floats that include centers
                                 of rectangular bins.
                                 If mode == 'clean', this option can be left unspecified.'
+                                This option overrides the tol argument. If it is not provided then all
+                                filter windows will have suppression factors of tol.
                             max_contiguous_edge_flags : int, optional
                                 if the number of contiguous samples at the edge is greater then this
                                 at either side, skip.
@@ -529,6 +536,8 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                         else:
                             filter_kwargs['fundamental_period'] = list(fp)
 
+
+
                    if mode[0] == 'dayenu':
                        if zero_residual_flags is None:
                            zero_residual_flags = True
@@ -540,11 +549,16 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                           # the transposes are undone below (after filtering)
                           filter_dims_d = [1]
                        suppression_factors = filter_kwargs.pop('suppression_factors')
+                       if suppression_factors is None:
+                           if not filter2d:
+                               suppression_factors = [tol for m in range(len(filter_centers))]
+                           else:
+                               suppression_factors = [[tol for n in range(len(filter_centers[m]))] for m in range(2)]
                        max_contiguous_edge_flags = filter_kwargs.pop('max_contiguous_edge_flags')
                        residual, info = dayenu_filter(x=x, data=data, wgts=wgts, filter_dimensions=filter_dims_d,
                                                      filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                                                      filter_factors=suppression_factors, cache=cache, skip_wgt=skip_wgt,
-                                                     max_contiguous_edge_flags=max_contiguous_edge_flags,
+                                                     max_contiguous_edge_flags=max_contiguous_edge_flags, tol=tol,
                                                      zero_residual_flags=zero_residual_flags)
                        model = data - residual
                        if len(mode) > 1:
@@ -552,7 +566,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                                                                  skip_wgt=skip_wgt, basis=mode[1], method=mode[2], wgts=wgts, basis_options=filter_kwargs,
                                                                  filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
                                                                  cache=cache, max_contiguous_edge_flags=max_contiguous_edge_flags,
-                                                                 zero_residual_flags=zero_residual_flags)
+                                                                 zero_residual_flags=zero_residual_flags, tol=tol)
                            info['info_deconv']=info_deconv
 
                    elif mode[0] in ['dft', 'dpss']:
@@ -566,9 +580,14 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                            # the transposes are undone below (after filtering)
                            filter_dims_d = [1]
                        suppression_factors = filter_kwargs.pop('suppression_factors')
+                       if suppression_factors is None:
+                           if not filter2d:
+                               suppression_factors = [tol for m in range(len(filter_centers))]
+                           else:
+                               suppression_factors = [[tol for n in range(len(filter_centers[m]))] for m in range(2)]
                        max_contiguous_edge_flags = filter_kwargs.pop('max_contiguous_edge_flags')
                        #if filter2d is True, create fitting_options that is a 2-list for 0 and 1 dimension
-                       model, residual, info = _fit_basis_2d(x=x, data=data, filter_centers=filter_centers, filter_dims=filter_dims_d,
+                       model, residual, info = _fit_basis_2d(x=x, data=data, filter_centers=filter_centers, filter_dims=filter_dims_d, tol=tol,
                                                            skip_wgt=skip_wgt, basis=mode[0], method=mode[1], wgts=wgts, basis_options=filter_kwargs,
                                                            filter_half_widths=filter_half_widths, suppression_factors=suppression_factors,
                                                            cache=cache, max_contiguous_edge_flags=max_contiguous_edge_flags,
@@ -576,7 +595,7 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                    elif mode[0] == 'clean':
                        if zero_residual_flags is None:
                            zero_residual_flags = False
-                       model, residual, info = _clean_filter(x=x, data=data, wgts=wgts, filter_centers=filter_centers, skip_wgt=skip_wgt,
+                       model, residual, info = _clean_filter(x=x, data=data, wgts=wgts, filter_centers=filter_centers, skip_wgt=skip_wgt, tol=tol,
                                                             filter_half_widths=filter_half_widths, clean2d=filter2d, zero_residual_flags=zero_residual_flags,
                                                              **filter_kwargs)
                        if filter2d:
@@ -700,7 +719,7 @@ def high_pass_fourier_filter(data, wgts, filter_size, real_delta, clean2d=False,
                      tol=tol, window=window, skip_wgt=skip_wgt, maxiter=maxiter, gain=gain, filt2d_mode=filt2d_mode,
                      alpha=alpha, edgecut_low=edgecut_low, edgecut_hi=edgecut_hi, add_clean_residual=add_clean_residual)
 
-def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_widths, filter_factors,
+def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_widths, filter_factors=None, tol=1e-9,
                   cache = {}, return_matrices=True, hash_decimal=10, skip_wgt=0.1, max_contiguous_edge_flags=10,
                   zero_residual_flags=True):
     '''
@@ -721,10 +740,14 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
     filter_half_widths: float, list, or 1d numpy array of half-widths of each delay filtere window
         with centers specified by filter_centers.
         Typically in units of (seconds)
-    filter_factors: float, list, or 1d numpy array of factors by which filtering should be
+    tol: float, optional
+        degree to which fourier regions in windows specified by filter_centers
+        and filter_half_widths should be suppressed.
+    filter_factors: float, list, or 1d numpy array, optional.
+        overrides tol.
+        array of factors by which filtering should be
         applied within each filter window specified in filter_centers and
-        filter_half_widths. If a float or length-1 list/ndarray is provided,
-        the same filter factor will be used in every filter window.
+        filter_half_widths. Default is None -> tol will be used for all windows.
     cache: optional dictionary for storing pre-computed delay filter matrices.
     return_matrices: bool,
         if True, return a dict referencing every every filtering matrix used.
@@ -804,9 +827,14 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
         data_1d = False
     nchan = data.shape[1]
     ntimes = data.shape[0]
+    if filter_factors is None:
+        if len(filter_dimensions) == 2:
+            filter_factors = [[tol for n in range(len(filter_dimensions[m]))] for m in range(2)]
+        else:
+            filter_factors = [tol for n in range(len(filter_dimensions))]
     check_vars = [filter_centers, filter_half_widths, filter_factors]
     check_names = ['filter_centers', 'filter_half_widths', 'filter_factors']
-    for anum, aname, avar in zip(range(len(check_vars)),check_names,check_vars):
+    for anum, aname, avar in zip(range(len(check_vars)), check_names, check_vars):
         # If any of these inputs is a float or numpy array, convert to a list.
         if isinstance(avar, np.ndarray):
             check_vars[anum] = list(avar)
@@ -1538,7 +1566,7 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False,
 
 
 def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
-                basis_options, suppression_factors=None, hash_decimal=10,
+                basis_options, tol=1e-9, suppression_factors=None, hash_decimal=10,
                 method='leastsq', basis='dft', cache=None):
     """
     A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
@@ -1560,10 +1588,13 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
         list of floats specifying the centers of fourier windows with which to fit signals
     filter_half_widths': array-like
         list of floats specifying the half-widths of fourier windows to model.
+    tol: float, optional
+        a single factor to suppress all filter windows too.
     suprression_factors: array-like, optional
+        overrides tol.
         list of floats for each basis function denoting the fraction of
         of each basis element that should be present in the fitted model
-        If none provided, model will include 100% of each mode.
+        If none provided, model subtract to tol for each filter window.
         It is sometimes useful, for renormalization reversability
         to only include 1-\epsilon where \epsilon is a small number of
         each mode in the model.
@@ -1641,7 +1672,7 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     else:
         raise ValueError("Specify a fitting basis in supported bases: ['dft', 'dpss']")
     if suppression_factors is None:
-        suppression_vector = np.ones(amat.shape[1])
+        suppression_vector = np.ones(amat.shape[1]) * (1-tol)
     else:
         if basis.lower() == 'dft':
             suppression_vector =  np.hstack([1-sf * np.ones(2*int(np.ceil(fw * basis_options['fundamental_period'])))\
@@ -1847,7 +1878,7 @@ def _clean_filter(x, data, wgts, filter_centers, filter_half_widths,
 
 
 def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
-                basis_options, suppression_factors=None,
+                basis_options, tol=1e-9, suppression_factors=None,
                 method='leastsq', basis='dft', cache=None,
                 filter_dims = 1, skip_wgt=0.1, max_contiguous_edge_flags=5,
                 zero_residual_flags=True):
@@ -1983,7 +2014,7 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                                             filter_half_widths=filter_half_widths[1],
                                             suppression_factors=suppression_factors[1],
                                             basis_options=basis_options[1], method=method,
-                                            basis=basis, cache=cache)
+                                            basis=basis, tol=tol, cache=cache)
             if info_t['skipped']:
                 info['status']['axis_1'][i] = 'skipped'
             else:
@@ -2158,9 +2189,14 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
     #only allow the user to specify a single condition for cutting off DPSS modes to fit.
     crit_provided_name = [ label for m,label in enumerate(crit_labels) if crit_provided[m] ]
     crit_provided_value = [ crit for m,crit in enumerate(crit_list) if crit_provided[m] ]
-    if np.count_nonzero(crit_provided) != 1:
-        raise ValueError('Must only provide a single series cutoff condition. %d were provided: %s '%(np.count_nonzero(crit_provided),
+    if np.count_nonzero(crit_provided) > 1:
+        raise ValueError('Provided more then one cutoff condition. %d were provided: %s '%(np.count_nonzero(crit_provided),
                                                                                                  str(crit_provided_name)))
+    elif np.count_nonzero(crit_provided) == 0:
+        crit_provided_name = 'eigenval_cutoff'
+        eigenval_cutoff = [1e-12 for m in range(len(filter_half_widths))]
+        crit_provided_value = [eigenval_cutoff]
+
     opkey = _fourier_filter_hash(filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                                  filter_factors=[0.], crit_name=crit_provided_name[0], x=x,
                                  w=None, hash_decimal=hash_decimal,

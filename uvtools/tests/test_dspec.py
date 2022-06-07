@@ -674,6 +674,35 @@ def test_delay_interpolation_matrix():
         print(len(w))
         assert len(w) > 0
 
+def test_fourier_filter_dpss_leastsq_multiple_windows():
+    # test fourier filter in dpss_leastsq mode without providing supression_factors or cutoff conditions.
+    df = 100e3
+    nf = 200
+    f0 = 150e6
+    freqs = np.arange(-nf // 2, nf // 2) * df + f0
+    bldly = 300e-9 # baseline delay
+    ref_tau1 = 1200e-9 # reflection delay
+    ref_tau2 = 876e-9 # conj reflection delay
+    ref_amp1 = 3.7e-2 # three percent reflection
+    ref_amp2 = 7.3e-2
+    ref_phs1 = np.pi / 2 * .87
+    ref_phs2 = np.pi / 5.89
+    nsrc = 1000
+    data = np.zeros(nf, dtype=np.complex128)
+    wedge_dlys = np.random.rand(nsrc) * 2 * bldly - bldly
+    wedge_amps = np.abs(np.random.randn(nsrc) * 1e3) # amplitudes of sources
+    wedge_phs = np.random.rand(nsrc) * 2 * np.pi
+    for amp, dly, phs in zip(wedge_dlys, wedge_amps, wedge_phs):
+        data += amp * np.exp(1j * (freqs * 2 * np.pi * dly - phs))
+    # add reflections
+    data += ref_amp1 * np.exp(1j * (2 * np.pi * freqs * ref_tau1 - ref_phs1))
+    data += ref_amp2 * np.exp(-1j * (2 * np.pi * freqs * ref_tau2 - ref_phs2))
+    data = data.reshape((1, len(data)))
+    # perform fourier filter without providing any
+    mdl, resid, info = dspec.fourier_filter(x=freqs, wgts=np.ones_like(data), data=data, filter_centers=[0., -876e-9, 1200e-9],
+                                            filter_half_widths=[300e-9, 75e-9, 75e-9], mode='dpss_leastsq')
+    assert np.sqrt(np.mean(np.abs(resid) ** 2.)) <= 1e4 * np.sqrt(np.mean(np.abs(data) ** 2.))
+
 def test_fourier_filter():
     # load file
     dt = 10.7374267578125
