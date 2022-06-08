@@ -1,7 +1,7 @@
 import os
 import matplotlib
 if os.environ.get('DISPLAY', '') == '':
-    matplotlib.use('Agg')
+    matplotlib.use('Agg', force=True)
 import pytest
 import unittest
 from .. import plot, utils
