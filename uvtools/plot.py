@@ -2,6 +2,8 @@ import numpy as np
 import warnings
 from astropy import units
 from scipy.stats import binned_statistic_2d
+import matplotlib
+import matplotlib.pyplot as plt
 
 from . import utils
 
@@ -127,8 +129,8 @@ def waterfall(d, mode='log', vmin=None, vmax=None, drng=None, mx=None,
     return plt.imshow(d, vmax=mx, vmin=mn, interpolation='nearest', **kwargs)
 
 
-def plot_antpos(antpos, ants=None, xants=None, aspect_equal=True,
-                ant_numbers=True):
+def plot_antpos(antpos, ants=None, ex_ants=[], hl_ants=[],
+                hl_text='Highlighted Antennas'):
     """
     Plot antenna x,y positions from a dictionary of antenna positions.
 
@@ -141,49 +143,53 @@ def plot_antpos(antpos, ants=None, xants=None, aspect_equal=True,
         A list of which antennas to plot. If not specified, all of the antennas
         in `antpos` will be plotted. Default: None.
 
-    xants : list, optional
+    ex_ants : list, optional
         List of antennas to exclude from the plot. Default: None.
 
-    aspect_equal : bool, optional
-        Whether to make the width and height of the plot equal.
-        Default: True.
+    hl_ants : list, optional
+        List of antennas to highlight. Default: None.
 
-    ant_numbers : bool, optional
-        Whether to add the antenna numbers to the plot.
-        Default: True
+    hl_text: str, optional
+        Legend text which antennas are highlighted.
+        Default: Highlighted Antennas.
 
     Returns
     -------
     plot : matplotlib.Axes
         Plot of antenna x,y positions.
     """
-    import pylab as plt
-
     if ants is None:
         ants = antpos.keys()
-    if xants is not None:
-        ants = [ant for ant in ants if ant not in xants]
-    xs = [antpos[ant][0] for ant in ants]
-    ys = [antpos[ant][1] for ant in ants]
+    xpos = np.array([antpos[ant][0] for ant in ants])
+    ypos = np.array([antpos[ant][1] for ant in ants])
+    scat = plt.scatter(xpos, ypos, c='w', s=0)
+    for ant in ants:
+        pos = antpos[ant]
+        bad = ant in ex_ants
+        plt.gca().add_artist(plt.Circle(tuple(pos[0:2]), radius=7, 
+                                        fill=(~bad), color=['grey','r'][bad]))
+        if ant in hl_ants:
+            plt.gca().add_artist(plt.Circle(tuple(antpos[ant][0:2]), radius=7, fill=True, lw=0, color='b'))
+            plt.gca().add_artist(plt.Circle(tuple(antpos[ant][0:2]), radius=6, fill=True, color='grey'))
+        plt.text(pos[0],pos[1],str(ant), va='center', ha='center', color='w', size=14)
 
-    # Plot the antenna positions with black circles
-    plt.figure()
-    plt.scatter(xs, ys, marker='.', color='k', s=3000)
+    legend_objs = []
+    legend_labels = []
+    legend_objs.append(matplotlib.lines.Line2D([0], [0], marker='o', color='w', markeredgecolor='grey', markerfacecolor='grey', markersize=13))
+    legend_labels.append(f'{len(ants) - len(ex_ants)} Unflagged Antennas')
+    legend_objs.append(matplotlib.lines.Line2D([0], [0], marker='o', color='w', markeredgecolor='r', markerfacecolor='r', markersize=13))
+    legend_labels.append(f'{len(ex_ants)} Flagged Antennas')
+    legend_objs.append(matplotlib.lines.Line2D([0], [0], marker='o', color='w', markeredgewidth=2, markeredgecolor='b', markersize=15))
+    legend_labels.append(hl_text)
+    plt.legend(legend_objs, legend_labels, ncol=1, fontsize='large', framealpha=1)
 
-    # Add antenna numbers
-    if ant_numbers:
-        for i, ant in enumerate(ants):
-            plt.text(xs[i], ys[i], ant, color='w', va='center', ha='center')
 
-    # Axis labels
-    plt.xlabel('X-position (m)')
-    plt.ylabel('Y-position (m)')
-
-    # Aspect ratio
-    if aspect_equal:
-        plt.axis('equal')
-    ax = plt.gca()
-    return ax
+    plt.xlabel("Antenna East-West Position (meters)", size=14)
+    plt.ylabel("Antenna North-South Position (meters)", size=14)
+    plt.axis('equal')
+    plt.ylim([np.min(ypos)-10, np.max(ypos)+10])
+    plt.tight_layout()
+    return scat
 
 
 def plot_phase_ratios(data, cmap='twilight'):
