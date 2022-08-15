@@ -40,6 +40,7 @@ setup_args = {
         'numpy',
         'six',
         'scipy',
+        'hera_filters @ git+http://github.com/HERA-Team/hera_filters',
     ],
     'extras_require': {'aipy':['aipy>=3.0rc2']}
 }
