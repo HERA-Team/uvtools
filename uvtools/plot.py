@@ -224,7 +224,7 @@ def plot_antclass(antpos, antclass, ax=None, ants=None, radius=7.0,
         If not default None, show axis title.
     """
     if ax is None:
-        ax = plot.gca()
+        ax = plt.gca()
     
     # produce scatter plot of wedges
     pols = set(ant[1] for ant in antclass.ants)
