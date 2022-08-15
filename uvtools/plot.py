@@ -227,7 +227,7 @@ def plot_antclass(antpos, antclass, ax=None, ants=None, radius=7.0,
         ax = plt.gca()
     
     # produce scatter plot of wedges
-    pols = set(ant[1] for ant in antclass.ants)
+    pols = sorted(list(set(ant[1] for ant in antclass.ants)))[::-1]
     ants = set([ant for ant in antclass.ants if ants is None or (ant[0] in set(ants)) or (ant in set(ants))])
     xpos = np.array([antpos[ant[0]][0] for ant in ants])
     ypos = np.array([antpos[ant[0]][1] for ant in ants])
@@ -244,8 +244,8 @@ def plot_antclass(antpos, antclass, ax=None, ants=None, radius=7.0,
         for cls, color in zip(antclass.quality_classes, colors):
             legend_objs.append(matplotlib.lines.Line2D([0], [0], marker='o', color='w', markeredgecolor=color, 
                                                        markerfacecolor=color, markersize=15))
-            pol_status = [f'{len([ant for ant in antclass.get_all(cls) if ant[1] == pol])} {pol}' for pol in pols]
-            legend_labels.append(f'{cls.capitalize()} antpols:\n{" & ".join(pol_status)}')
+            pol_status = [f'{len([ant for ant in antclass.get_all(cls) if ant[1] == pol])} {cls} {pol} antpols' for pol in pols]
+            legend_labels.append((u' \u2571\n').join(pol_status))
         ax.legend(legend_objs, legend_labels, ncol=1, fontsize=12)
 
     # label axes and set axlims
