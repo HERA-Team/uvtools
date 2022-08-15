@@ -223,16 +223,15 @@ def plot_antclass(antpos, antclass, ax=None, ants=None, radius=7.0,
     title : str
         If not default None, show axis title.
     """
-    import matplotlib
     if ax is None:
         ax = plot.gca()
     
     # produce scatter plot of wedges
-    pols = set(ant[1] for ant in auto_class.ants)
-    ants = set([ant for ant in auto_class.ants if ants is None or (ant[0] in set(ants)) or (ant in set(ants))])
+    pols = set(ant[1] for ant in antclass.ants)
+    ants = set([ant for ant in antclass.ants if ants is None or (ant[0] in set(ants)) or (ant in set(ants))])
     xpos = np.array([antpos[ant[0]][0] for ant in ants])
     ypos = np.array([antpos[ant[0]][1] for ant in ants])
-    scatter = ax.scatter(xpos, ypos, c='w', s=0)    
+    scatter = ax.scatter(xpos, ypos, c='w', s=0)
     for ant in ants:
         pos = antpos[ant[0]]
         color = colors[antclass.quality_classes.index(antclass[ant])]
@@ -242,9 +241,9 @@ def plot_antclass(antpos, antclass, ax=None, ants=None, radius=7.0,
     if legend:
         legend_objs = []
         legend_labels = []
-        for cls, color in zip(antclass.quality_classes, colors):   
+        for cls, color in zip(antclass.quality_classes, colors):
             legend_objs.append(matplotlib.lines.Line2D([0], [0], marker='o', color='w', markeredgecolor=color, 
-                                                       markerfacecolor=color, markersize=15))        
+                                                       markerfacecolor=color, markersize=15))
             pol_status = [f'{len([ant for ant in antclass.get_all(cls) if ant[1] == pol])} {pol}' for pol in pols]
             legend_labels.append(f'{cls.capitalize()} antpols:\n{" & ".join(pol_status)}')
         ax.legend(legend_objs, legend_labels, ncol=1, fontsize=12)
@@ -255,11 +254,11 @@ def plot_antclass(antpos, antclass, ax=None, ants=None, radius=7.0,
     ax.set_title(title, fontsize=18)
     ax.axis('equal')
     ax.set_xlim([np.min(xpos) - radius * 2, np.max(xpos) + radius * 2])
-    ax.set_ylim([np.min(ypos) - radius * 2, np.max(ypos) + radius * 2])    
+    ax.set_ylim([np.min(ypos) - radius * 2, np.max(ypos) + radius * 2])
     plt.tight_layout()
-    
+
     # label antennas
-    for ant in set([ant[0] for ant in ants]):    
+    for ant in set([ant[0] for ant in ants]):
         ax.text(antpos[ant][0], antpos[ant][1], str(ant), va='center', ha='center', color=labelcolor, size=labelsize)
 
 
