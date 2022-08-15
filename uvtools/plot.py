@@ -192,6 +192,77 @@ def plot_antpos(antpos, ants=None, ex_ants=[], hl_ants=[],
     return scat
 
 
+def plot_antclass(antpos, antclass, ax=None, ants=None, radius=7.0, 
+                  ang_dict={'Jee': (225, 405), 'Jnn': (45, 225)},
+                  colors=['darkgreen', 'goldenrod', 'maroon'],
+                  labelsize=12, labelcolor='w', legend=True, title=None):
+    """
+    Plot antenna x,y positions from a dictionary of antenna positions.
+    Parameters
+    ----------
+    antpos : dict
+        Dictionary mapping antenna numbers to antenna positions
+    antclass : AntennaClasification
+        hera_qm.ant_class.AntennaClasification object with good, suspect, and bad antpols
+    ants : list, optional
+        A list of which antennas to plot. Can be integers or antpols.
+        If default None, all of the antennas in `antclass` will be plotted.
+    radius : float
+        Plotted radius of antennas in meters, default 7.0 m.
+    ang_dict : dict
+        Dictionary mapping polarizations to ranges of angles for matplotlib.patches.Wedge.
+        By default, 'Jee' is southeast and 'Jnn' is northwest.
+    colors : list of str
+        List of matplotlib colors for good, suspect, and bad antpols, respectively.
+    labelsize : int
+        Fontsize of antenna number labels. Default 12.
+    labelcolor : str
+        Matplotlib color of antenna number labels. Default white.
+    legend : bool
+        If True, show legend.
+    title : str
+        If not default None, show axis title.
+    """
+    import matplotlib
+    if ax is None:
+        ax = plot.gca()
+    
+    # produce scatter plot of wedges
+    pols = set(ant[1] for ant in auto_class.ants)
+    ants = set([ant for ant in auto_class.ants if ants is None or (ant[0] in set(ants)) or (ant in set(ants))])
+    xpos = np.array([antpos[ant[0]][0] for ant in ants])
+    ypos = np.array([antpos[ant[0]][1] for ant in ants])
+    scatter = ax.scatter(xpos, ypos, c='w', s=0)    
+    for ant in ants:
+        pos = antpos[ant[0]]
+        color = colors[antclass.quality_classes.index(antclass[ant])]
+        ax.add_artist(matplotlib.patches.Wedge(tuple(pos[0:2]), radius, *ang_dict[ant[1]], color=color))
+
+    # add legend, if desired
+    if legend:
+        legend_objs = []
+        legend_labels = []
+        for cls, color in zip(antclass.quality_classes, colors):   
+            legend_objs.append(matplotlib.lines.Line2D([0], [0], marker='o', color='w', markeredgecolor=color, 
+                                                       markerfacecolor=color, markersize=15))        
+            pol_status = [f'{len([ant for ant in antclass.get_all(cls) if ant[1] == pol])} {pol}' for pol in pols]
+            legend_labels.append(f'{cls.capitalize()} antpols:\n{" & ".join(pol_status)}')
+        ax.legend(legend_objs, legend_labels, ncol=1, fontsize=12)
+
+    # label axes and set axlims
+    ax.set_xlabel("East-West Position (meters)", size=12)
+    ax.set_ylabel("North-South Position (meters)", size=12)
+    ax.set_title(title, fontsize=18)
+    ax.axis('equal')
+    ax.set_xlim([np.min(xpos) - radius * 2, np.max(xpos) + radius * 2])
+    ax.set_ylim([np.min(ypos) - radius * 2, np.max(ypos) + radius * 2])    
+    plt.tight_layout()
+    
+    # label antennas
+    for ant in set([ant[0] for ant in ants]):    
+        ax.text(antpos[ant][0], antpos[ant][1], str(ant), va='center', ha='center', color=labelcolor, size=labelsize)
+
+
 def plot_phase_ratios(data, cmap='twilight'):
     """
     Plot grid of waterfalls, each showing the phase of the product (V_1 V_2^*)
