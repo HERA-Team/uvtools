@@ -91,7 +91,7 @@ if node_info:
         hookup = cm_hookup.Hookup(session)
         ant_dict = hookup.get_hookup('HH')
         for ant in ants_data_unique:
-            ant_name = uvd_sum.antenna_names[np.nonzero(uvd_sum.antenna_number == ant)[0][0]]
+            ant_name = uvd_sum.antenna_names[np.nonzero(uvd_sum.antenna_numbers == ant)[0][0]]
             key = ant_name + ':A'
             pol = 'E'
             # node is a string
