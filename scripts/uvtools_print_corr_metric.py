@@ -7,12 +7,14 @@
 
 import argparse
 
+import h5py
+import hdf5plugin
 import numpy as np
 from pyuvdata import UVData
 import pyuvdata.utils as uvutils
 
 try:
-    from hera_mc import cm_hookup
+    from hera_mc import cm_hookup, mc
     node_info = True
 except ImportError:
     node_info = False
@@ -85,25 +87,27 @@ if node_info:
     ant_node_strs = []
     ant_1_node_strs = np.zeros(uvd_sum.ant_1_array.shape, dtype=int)
     ant_2_node_strs = np.zeros(uvd_sum.ant_2_array.shape, dtype=int)
-    for ant in ants_data_unique:
-        h = cm_hookup.Hookup()
-        x = h.get_hookup('HH')
-        key = 'HH%i:A' % (ant)
-        pol = 'E'
-        # node is a string
-        node = x[key].get_part_from_type('node')['E<ground'][1:]
-        # snapLoc is a 2-tuple, the first element is a string for snap location (0-3),
-        # the second is the node as an integer
-        snapLoc = (x[key].hookup[f'{pol}<ground'][-1].downstream_input_port[-1], ant)
-        # snapInput is a 2-tuple, the first element is a string for snap input (0-10+),
-        # the second is the node as an integer
-        snapInput = (x[key].hookup[f'{pol}<ground'][-2].downstream_input_port[1:], ant)
+    with mc.MCSessionWrapper(session=None) as session: 
+        hookup = cm_hookup.Hookup(session)
+        ant_dict = hookup.get_hookup('H')
+        for ant in ants_data_unique:
+            ant_name = uvd_sum.antenna_names[np.nonzero(uvd_sum.antenna_numbers == ant)[0][0]]
+            key = ant_name + ':A'
+            pol = 'E'
+            # node is a string
+            node = ant_dict[key].get_part_from_type('node')['E<ground'][1:]
+            # snapLoc is a 2-tuple, the first element is a string for snap location (0-3),
+            # the second is the node as an integer
+            snapLoc = (ant_dict[key].hookup[f'{pol}<ground'][-1].downstream_input_port[-1], ant)
+            # snapInput is a 2-tuple, the first element is a string for snap input (0-10+),
+            # the second is the node as an integer
+            snapInput = (ant_dict[key].hookup[f'{pol}<ground'][-2].downstream_input_port[1:], ant)
 
-        ant_node_str = node + snapLoc[0] + snapInput[0].zfill(2)
-        ant_node_strs.append(ant_node_str)
+            ant_node_str = node + snapLoc[0] + snapInput[0].zfill(2)
+            ant_node_strs.append(ant_node_str)
 
-        ant_1_node_strs[np.nonzero(uvd_sum.ant_1_array == ant)] = int(ant_node_str)
-        ant_2_node_strs[np.nonzero(uvd_sum.ant_2_array == ant)] = int(ant_node_str)
+            ant_1_node_strs[np.nonzero(uvd_sum.ant_1_array == ant)] = int(ant_node_str)
+            ant_2_node_strs[np.nonzero(uvd_sum.ant_2_array == ant)] = int(ant_node_str)
 
     # first conjugate to ensure we have the baselines we want for the upper triangle
     conj_index_array = np.where(ant_1_node_strs > ant_2_node_strs)[0]
