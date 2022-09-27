@@ -89,7 +89,7 @@ if node_info:
     ant_2_node_strs = np.zeros(uvd_sum.ant_2_array.shape, dtype=int)
     with mc.MCSessionWrapper(session=None) as session: 
         hookup = cm_hookup.Hookup(session)
-        ant_dict = hookup.get_hookup('HH')
+        ant_dict = hookup.get_hookup('H')
         for ant in ants_data_unique:
             ant_name = uvd_sum.antenna_names[np.nonzero(uvd_sum.antenna_numbers == ant)[0][0]]
             key = ant_name + ':A'
