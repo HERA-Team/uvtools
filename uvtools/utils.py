@@ -43,9 +43,9 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
         List of polarizations for each file in datafile
     """
     # type check
-    if isinstance(templates, (str, np.str)):
+    if isinstance(templates, str):
         templates = [templates]
-    if isinstance(pols, (str, np.str, np.integer, int)):
+    if isinstance(pols, (str, int)):
         pols = [pols]
     # search for datafiles
     datafiles = []
