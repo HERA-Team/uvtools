@@ -51,7 +51,7 @@ def test_search_data():
     # flatten
     dfs, dps = utils.search_data(templates, pols, flatten=True)
     assert len(dfs) == 4
-    assert isinstance(dfs[0], (str, np.str))
+    assert isinstance(dfs[0], str)
 
     for f in allfiles:
         if os.path.exists(f):
