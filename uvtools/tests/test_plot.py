@@ -248,7 +248,7 @@ from ..data import DATA_PATH
 #            )
 #
 #        with pytest.raises(ValueError):
-#            plot.fourier_transform_waterfalls(data=np.ones((3,5,2), dtype=np.complex))
+#            plot.fourier_transform_waterfalls(data=np.ones((3,5,2), dtype=complex))
 #
 #        with pytest.raises(ValueError):
 #            plot.fourier_transform_waterfalls(data=data, freqs=freqs)
@@ -260,7 +260,7 @@ from ..data import DATA_PATH
 #            plot.fourier_transform_waterfalls(data=uvd)
 #
 #        with pytest.raises(TypeError):
-#            plot.fourier_transform_waterfalls(data=np.ones((15,20), dtype=np.float))
+#            plot.fourier_transform_waterfalls(data=np.ones((15,20), dtype=float))
 #        self.tearDown()
 
 #class TestDiffPlotters():
