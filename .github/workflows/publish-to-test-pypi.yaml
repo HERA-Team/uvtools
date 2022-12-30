@@ -1,46 +1,26 @@
-name: Publish Python distributions to PyPI and TestPyPI
+name: Publish Python distributions to PyPI
 
 on: [push, pull_request]
 
 jobs:
   build-n-publish:
-    name: Build and publish to PyPI and TestPyPI
+    name: Build and publish to PyPI
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        # Adding -l {0} helps ensure conda can be found properly.
-        shell: bash -l {0}
-    env:
-      ENV_NAME: publish
-      PYTHON: 3.8
     steps:
       - uses: actions/checkout@master
         with:
           fetch-depth: 0
 
-      - name: Setup Miniconda
-        uses: conda-incubator/setup-miniconda@v2.0.0
+      - uses: actions/setup-python@v4
         with:
-          auto-update-conda: true
-          miniconda-version: "latest"
-          python-version: ${{ env.PYTHON }}
-          environment-file: ci/${{ env.ENV_NAME }}.yaml
-          activate-environment: ${{ env.ENV_NAME }}
+          python-version: "3.10"
 
-      - name: Conda Info
-        run: |
-          conda info -a
-          conda list
-          PYVER=`python -c "import sys; print('{:d}.{:d}'.format(sys.version_info.major, sys.version_info.minor))"`
-          if [[ $PYVER != ${{ env.PYTHON }} ]]; then
-            exit 1;
-          fi
-
+      - name: Install Build Tools
+        run: pip install build
 
       - name: Build a binary wheel and a source tarball
         run: |
-          python -m pep517.build --source --out-dir dist/ .
-
+          python -m build .
 
       - name: Publish to PyPI
         if: startsWith(github.event.ref, 'refs/tags')
