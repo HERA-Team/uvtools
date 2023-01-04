@@ -1,15 +1,13 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) 2018 The HERA Collaboration
 # Licensed under the MIT License
 
-from __future__ import print_function, division, absolute_import
+
+import copy
+from warnings import warn
 
 import numpy as np
-from six.moves import range
-from scipy.signal import windows
-from warnings import warn
 from scipy.optimize import leastsq, lsq_linear
-import copy
+from scipy.signal import windows
 
 #DEFAULT PARAMETERS FOR CLEANs
 CLEAN_DEFAULTS_1D={'tol':1e-9, 'window':'none',
@@ -1174,7 +1172,7 @@ def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, normalization=
     w = np.zeros(N, dtype=float)
     Ncut = edgecut_low + edgecut_hi
     if Ncut >= N:
-        raise ValueError("Ncut >= N for edgecut_low {} and edgecut_hi {}".format(edgecut_low, edgecut_hi))
+        raise ValueError(f"Ncut >= N for edgecut_low {edgecut_low} and edgecut_hi {edgecut_hi}")
     if edgecut_hi > 0:
         edgecut_hi = -edgecut_hi
     else:
@@ -1209,7 +1207,7 @@ def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, normalization=
             # return any single-arg window from windows
             w[edgecut_low:edgecut_hi] = getattr(windows, window)(N - Ncut)
         except AttributeError:
-            raise ValueError("Didn't recognize window {}".format(window))
+            raise ValueError(f"Didn't recognize window {window}")
     if normalization == 'rms':
         w /= np.sqrt(np.mean(np.abs(w)**2.))
     if normalization == 'mean':
@@ -1540,7 +1538,7 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False,
 def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
                 basis_options, suppression_factors=None, hash_decimal=10,
                 method='leastsq', basis='dft', cache=None):
-    """
+    r"""
     A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
     y_model = A @ c
     where A is a design matrix encoding our choice for a basis functions
@@ -1851,7 +1849,7 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                 method='leastsq', basis='dft', cache=None,
                 filter_dims = 1, skip_wgt=0.1, max_contiguous_edge_flags=5,
                 zero_residual_flags=True):
-    """
+    r"""
     A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
     y_model = A @ c
     where A is a design matrix encoding our choice for a basis functions
@@ -2318,7 +2316,7 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
         fundamental period of Fourier modes to fit too.
         this sets the resolution in Fourier space. A standard DFT has a resolution
         of 1/N_{FP} = 1/N between fourier modes so that the DFT operator is
-        D_{mn} = e^{-2 \pi i m n / N_{FP}}. fg_deconv_fundamental_period
+        D_{mn} = e^{-2 \\pi i m n / N_{FP}}. fg_deconv_fundamental_period
         is N_{FP}.
     cache: dict, optional
         optional cache holding pre-computed matrices

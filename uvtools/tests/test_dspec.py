@@ -1,13 +1,19 @@
-from .. import dspec
-import numpy as np, random
-import pytest
-from pyuvdata import UVData
-from uvtools.data import DATA_PATH
 import os
-import scipy.signal.windows as windows
+import random
 import warnings
+
+import numpy as np
+import pytest
+import scipy.signal.windows as windows
+from pyuvdata import UVData
+
+from uvtools.data import DATA_PATH
+
+from .. import dspec
+
 random.seed(0)
 import copy
+
 
 def test_wedge_width():
     # Test boundaries of delay bins

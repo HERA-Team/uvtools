@@ -1,9 +1,12 @@
-import pytest
-import numpy as np
-from .. import utils
 import glob
 import os
 import sys
+
+import numpy as np
+import pytest
+
+from .. import utils
+
 
 def test_search_data():
     # setup data

@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uvtools"
+description = "Tools useful for the handling, visualization, and analysis of interferometric data."
+authors = [
+    {name="HERA Team"},
+]
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "numpy",
+    "six",
+    "scipy",
+    "aipy",
+]
+dynamic = [
+    "version",
+]
+
+
+[project.optional-dependencies]
+aipy = ["aipy>=3.0rc2"]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "aipy",
+    "pre-commit"
+]
+[tool.setuptools_scm]
+write_to = "uvtools/_version.py"
+parentdir_prefix_version = "uvtools-"
+fallback_version = "0.0.0"
+
+[tool.setuptools]
+packages = ["uvtools"]

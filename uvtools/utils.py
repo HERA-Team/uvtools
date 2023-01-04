@@ -1,8 +1,10 @@
-from numpy.fft import fft, fftshift, ifftshift
-import numpy as np
 import glob
 
+import numpy as np
+from numpy.fft import fft, fftshift, ifftshift
+
 from . import dspec
+
 
 # for checking UVData pair metadata in plot.plot_diff_x functions
 class MetadataError(ValueError):
@@ -67,8 +69,8 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
     unique_files = set()
     for _file in allfiles:
         for pol in pols:
-            if ".{pol}.".format(pol=pol) in _file:
-                unique_files.update(set([_file.replace(".{pol}.".format(pol=pol), ".{pol}.")]))
+            if f".{pol}." in _file:
+                unique_files.update({_file.replace(f".{pol}.", ".{pol}.")})
                 break
     unique_files = sorted(unique_files)
     # check for unique files with all pols
@@ -119,11 +121,11 @@ def FFT(data, axis=-1, taper=None, **kwargs):
         The axis to perform the FFT over. Default is the last axis of the array.
 
     taper : str, optional
-        Choice of taper (windowing function) to apply to the data. Default is 
+        Choice of taper (windowing function) to apply to the data. Default is
         to use no taper.
 
     **kwargs
-        Keyword arguments for generating the taper. Passed directly to 
+        Keyword arguments for generating the taper. Passed directly to
         ``uvtools.dspec.gen_window``.
 
     Returns
@@ -181,13 +183,13 @@ def fourier_freqs(times):
 def check_uvd_pair_metadata(uvd1, uvd2):
     """Check that the relevant metadata agrees for `uvd1` and `uvd2`.
 
-    This check ensures that both ``UVData`` objects have the same number 
-    of blts and frequencies. It also checks to make sure that the time 
-    and frequency arrays agree to within the mean integration time and 
-    channel width, respectively. Finally, the check ensures that both 
-    ``UVData`` objects have the same baseline vectors, currently set 
-    to the default tolerance for ``np.isclose``. Note that this check 
-    does not ensure that both ``UVData`` objects have the same 
+    This check ensures that both ``UVData`` objects have the same number
+    of blts and frequencies. It also checks to make sure that the time
+    and frequency arrays agree to within the mean integration time and
+    channel width, respectively. Finally, the check ensures that both
+    ``UVData`` objects have the same baseline vectors, currently set
+    to the default tolerance for ``np.isclose``. Note that this check
+    does not ensure that both ``UVData`` objects have the same
     polarization arrays.
 
     Parameters
