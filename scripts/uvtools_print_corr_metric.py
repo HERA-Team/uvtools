@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- mode: python; coding: utf-8 -*-
 # Copyright (c) 2021 HERA collaboration
 # Licensed under the MIT License
 
@@ -10,11 +9,12 @@ import argparse
 import h5py
 import hdf5plugin
 import numpy as np
-from pyuvdata import UVData
 import pyuvdata.utils as uvutils
+from pyuvdata import UVData
 
 try:
     from hera_mc import cm_hookup, mc
+
     node_info = True
 except ImportError:
     node_info = False
@@ -87,21 +87,29 @@ if node_info:
     ant_node_strs = []
     ant_1_node_strs = np.zeros(uvd_sum.ant_1_array.shape, dtype=int)
     ant_2_node_strs = np.zeros(uvd_sum.ant_2_array.shape, dtype=int)
-    with mc.MCSessionWrapper(session=None) as session: 
+    with mc.MCSessionWrapper(session=None) as session:
         hookup = cm_hookup.Hookup(session)
-        ant_dict = hookup.get_hookup('H')
+        ant_dict = hookup.get_hookup("H")
         for ant in ants_data_unique:
-            ant_name = uvd_sum.antenna_names[np.nonzero(uvd_sum.antenna_numbers == ant)[0][0]]
-            key = ant_name + ':A'
-            pol = 'E'
+            ant_name = uvd_sum.antenna_names[
+                np.nonzero(uvd_sum.antenna_numbers == ant)[0][0]
+            ]
+            key = ant_name + ":A"
+            pol = "E"
             # node is a string
-            node = ant_dict[key].get_part_from_type('node')['E<ground'][1:]
+            node = ant_dict[key].get_part_from_type("node")["E<ground"][1:]
             # snapLoc is a 2-tuple, the first element is a string for snap location (0-3),
             # the second is the node as an integer
-            snapLoc = (ant_dict[key].hookup[f'{pol}<ground'][-1].downstream_input_port[-1], ant)
+            snapLoc = (
+                ant_dict[key].hookup[f"{pol}<ground"][-1].downstream_input_port[-1],
+                ant,
+            )
             # snapInput is a 2-tuple, the first element is a string for snap input (0-10+),
             # the second is the node as an integer
-            snapInput = (ant_dict[key].hookup[f'{pol}<ground'][-2].downstream_input_port[1:], ant)
+            snapInput = (
+                ant_dict[key].hookup[f"{pol}<ground"][-2].downstream_input_port[1:],
+                ant,
+            )
 
             ant_node_str = node + snapLoc[0] + snapInput[0].zfill(2)
             ant_node_strs.append(ant_node_str)
@@ -129,7 +137,7 @@ if node_info:
     # lexsort uses the listed arrays from last to first
     # (so the primary sort is on the last one)
     bl_index_array = np.lexsort((ant_2_node_strs, ant_1_node_strs, uvd_sum.time_array))
-        
+
     uvd_sum.reorder_blts(bl_index_array)
     uvd_diff.reorder_blts(bl_index_array)
 else:
@@ -162,24 +170,34 @@ else:
 if args.threshold is None:
     for ant_ind, ant in enumerate(ants_data_sorted):
         this_row = np.nonzero(ant1_vals == ant)[0]
-        assert np.allclose(ant2_vals[this_row], ants_data_sorted[ant_ind:]), "something went wrong with sorting!"
+        assert np.allclose(
+            ant2_vals[this_row], ants_data_sorted[ant_ind:]
+        ), "something went wrong with sorting!"
 
         corrs = corr_metric[this_row]
         if node_info:
             node = ant_node_strs_sorted[ant_ind][:2]
-            print(f"{node}  " + f"{ant:4n}" + "     "*ant_ind, " ".join([f"{corr:.2f}" for corr in corrs]))
+            print(
+                f"{node}  " + f"{ant:4n}" + "     " * ant_ind,
+                " ".join([f"{corr:.2f}" for corr in corrs]),
+            )
         else:
-            print(f"{ant:4n}" + "     "*ant_ind, " ".join([f"{corr:.2f}" for corr in corrs]))
+            print(
+                f"{ant:4n}" + "     " * ant_ind,
+                " ".join([f"{corr:.2f}" for corr in corrs]),
+            )
 else:
     for ant_ind, ant in enumerate(ants_data_sorted):
         this_row = np.nonzero(ant1_vals == ant)[0]
-        assert np.allclose(ant2_vals[this_row], ants_data_sorted[ant_ind:]), "something went wrong with sorting!"
+        assert np.allclose(
+            ant2_vals[this_row], ants_data_sorted[ant_ind:]
+        ), "something went wrong with sorting!"
 
         corrs = corr_metric[this_row]
-        corrs = ["  x  " if corr > args.threshold else "  .  " for corr in corrs ]
-        
+        corrs = ["  x  " if corr > args.threshold else "  .  " for corr in corrs]
+
         if node_info:
             node = ant_node_strs_sorted[ant_ind][:2]
-            print(f"{node}  " + f"{ant:4n} " + "     "*ant_ind, "".join(corrs))
+            print(f"{node}  " + f"{ant:4n} " + "     " * ant_ind, "".join(corrs))
         else:
-            print(f"{ant:4n} " + "     "*ant_ind, "".join(corrs))
+            print(f"{ant:4n} " + "     " * ant_ind, "".join(corrs))

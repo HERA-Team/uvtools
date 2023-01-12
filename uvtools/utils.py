@@ -1,14 +1,19 @@
-from numpy.fft import fft, fftshift, ifftshift
-import numpy as np
 import glob
 
+import numpy as np
+from numpy.fft import fft, fftshift, ifftshift
+
 from . import dspec
+
 
 # for checking UVData pair metadata in plot.plot_diff_x functions
 class MetadataError(ValueError):
     pass
 
-def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flatten=False):
+
+def search_data(
+    templates, pols, matched_pols=False, reverse_nesting=False, flatten=False
+):
     """
     Glob-parse data templates to search for data files.
 
@@ -67,8 +72,8 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
     unique_files = set()
     for _file in allfiles:
         for pol in pols:
-            if ".{pol}.".format(pol=pol) in _file:
-                unique_files.update(set([_file.replace(".{pol}.".format(pol=pol), ".{pol}.")]))
+            if f".{pol}." in _file:
+                unique_files.update({_file.replace(f".{pol}.", ".{pol}.")})
                 break
     unique_files = sorted(unique_files)
     # check for unique files with all pols
@@ -84,7 +89,9 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
                 _templates.append(_file)
 
         # achieve goal by calling search_data with new _templates that are polarization matched
-        datafiles, datapols = search_data(_templates, pols, matched_pols=False, reverse_nesting=False)
+        datafiles, datapols = search_data(
+            _templates, pols, matched_pols=False, reverse_nesting=False
+        )
     # reverse nesting if desired
     if reverse_nesting:
         datafiles = []
@@ -106,6 +113,7 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
 
     return datafiles, datapols
 
+
 def FFT(data, axis=-1, taper=None, **kwargs):
     """Convenient function for performing a FFT along an axis.
 
@@ -119,11 +127,11 @@ def FFT(data, axis=-1, taper=None, **kwargs):
         The axis to perform the FFT over. Default is the last axis of the array.
 
     taper : str, optional
-        Choice of taper (windowing function) to apply to the data. Default is 
+        Choice of taper (windowing function) to apply to the data. Default is
         to use no taper.
 
     **kwargs
-        Keyword arguments for generating the taper. Passed directly to 
+        Keyword arguments for generating the taper. Passed directly to
         ``uvtools.dspec.gen_window``.
 
     Returns
@@ -150,6 +158,7 @@ def FFT(data, axis=-1, taper=None, **kwargs):
     # instabilities and conjugates the transformed data relative to what is
     # expected. So we perform no shifting prior to transforming.
     return fftshift(fft(window * data, axis=axis), axis)
+
 
 def fourier_freqs(times):
     """A function for generating Fourier frequencies given 'times'.
@@ -178,16 +187,17 @@ def fourier_freqs(times):
     # return the frequency array
     return np.linspace(-f_nyq, f_nyq, N, endpoint=False)
 
+
 def check_uvd_pair_metadata(uvd1, uvd2):
     """Check that the relevant metadata agrees for `uvd1` and `uvd2`.
 
-    This check ensures that both ``UVData`` objects have the same number 
-    of blts and frequencies. It also checks to make sure that the time 
-    and frequency arrays agree to within the mean integration time and 
-    channel width, respectively. Finally, the check ensures that both 
-    ``UVData`` objects have the same baseline vectors, currently set 
-    to the default tolerance for ``np.isclose``. Note that this check 
-    does not ensure that both ``UVData`` objects have the same 
+    This check ensures that both ``UVData`` objects have the same number
+    of blts and frequencies. It also checks to make sure that the time
+    and frequency arrays agree to within the mean integration time and
+    channel width, respectively. Finally, the check ensures that both
+    ``UVData`` objects have the same baseline vectors, currently set
+    to the default tolerance for ``np.isclose``. Note that this check
+    does not ensure that both ``UVData`` objects have the same
     polarization arrays.
 
     Parameters
@@ -204,14 +214,12 @@ def check_uvd_pair_metadata(uvd1, uvd2):
         raise MetadataError("The number of frequencies disagree.")
 
     # helper function; mean separation in array values for two arrays x1, x2
-    dx = lambda x1, x2 : 0.5 * (np.mean(np.diff(x1)) + np.mean(np.diff(x2)))
+    dx = lambda x1, x2: 0.5 * (np.mean(np.diff(x1)) + np.mean(np.diff(x2)))
 
     t1vals = np.unique(uvd1.time_array)
     t2vals = np.unique(uvd2.time_array)
     if uvd1.Ntimes > 1 and uvd2.Ntimes > 1:
-        if not np.all(
-            np.isclose(t1vals, t2vals, rtol=0, atol=dx(t1vals, t2vals))
-        ):
+        if not np.all(np.isclose(t1vals, t2vals, rtol=0, atol=dx(t1vals, t2vals))):
             raise MetadataError(
                 "Time values disagree more than the mean integration time."
             )
@@ -227,12 +235,11 @@ def check_uvd_pair_metadata(uvd1, uvd2):
     bls1 = uvd1.uvw_array
     bls2 = uvd2.uvw_array
     if not np.all(np.isclose(bls1, bls2)):
-        raise MetadataError(
-            "Baseline arrays do not agree or are not correctly phased."
-        )
+        raise MetadataError("Baseline arrays do not agree or are not correctly phased.")
 
     if not uvd1.vis_units == uvd2.vis_units:
         raise MetadataError("The visibility units do not agree.")
+
 
 def diff(vis1, vis2, mode):
     """Calculate a specified type of difference between two visibilities.
@@ -261,7 +268,9 @@ def diff(vis1, vis2, mode):
     elif mode == "complex":
         return np.abs(vis1 - vis2)
     else:
-        raise ValueError("You have not specified an accepted differencing " \
-                         "mode. The accepted modes are 'abs', 'phs', and " \
-                         "'complex'. See the ``utils.diff`` docstring for " \
-                         "details on what each mode does.")
+        raise ValueError(
+            "You have not specified an accepted differencing "
+            "mode. The accepted modes are 'abs', 'phs', and "
+            "'complex'. See the ``utils.diff`` docstring for "
+            "details on what each mode does."
+        )

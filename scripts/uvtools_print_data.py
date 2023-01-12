@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- mode: python; coding: utf-8 -*-
 # Copyright (c) 2021 HERA collaboration
 # Licensed under the MIT License
 
@@ -12,8 +11,8 @@ Prints visibilities as a function of time for a given baseline and channel numbe
 import argparse
 
 import numpy as np
-from pyuvdata import UVData
 import pyuvdata.utils as uvutils
+from pyuvdata import UVData
 
 # setup argparse
 a = argparse.ArgumentParser(
@@ -60,4 +59,4 @@ uvd.read(
 )
 
 data = np.squeeze(uvd.data_array)
-print(' '.join([str(vis) for vis in data]))
+print(" ".join([str(vis) for vis in data]))
