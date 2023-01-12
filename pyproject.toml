@@ -19,6 +19,7 @@ dependencies = [
     "six",
     "scipy",
     "aipy",
+    "pyuvdata"
 ]
 dynamic = [
     "version",
