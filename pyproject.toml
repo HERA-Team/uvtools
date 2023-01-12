@@ -19,7 +19,8 @@ dependencies = [
     "six",
     "scipy",
     "aipy",
-    "pyuvdata"
+    "pyuvdata",
+    "astropy>5.1"
 ]
 dynamic = [
     "version",

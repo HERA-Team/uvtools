@@ -113,7 +113,7 @@ def test_delay_filter_leastsq():
     NTIMES = 10
     TOL = 1e-7
     data = np.ones((NTIMES, NCHAN), dtype=complex)
-    flags = np.zeros((NTIMES, NCHAN), dtype=np.bool)
+    flags = np.zeros((NTIMES, NCHAN), dtype=bool)
     sigma = 0.1 # Noise level (not important here)
 
     # Fourier coeffs for input data, ordered from (-nmax, nmax)
@@ -543,7 +543,7 @@ def test_vis_filter():
     freq_snr1, freq_snr2 = get_snr(d, fftax=1, avgax=0, modes=[2, 20])
     time_snr1, time_snr2 = get_snr(d, fftax=0, avgax=1, modes=[2, 20])
     # simulate some flags
-    f = np.zeros_like(d, dtype=np.bool)
+    f = np.zeros_like(d, dtype=bool)
     d[:, 20:22] += 1e3
     f[:, 20:22] = True
     d[20, :] += 1e3
@@ -709,7 +709,7 @@ def test_fourier_filter():
     time_snr1, time_snr2 = get_snr(d, fftax=0, avgax=1, modes=[2, 20])
 
     # simulate some flags
-    f = np.zeros_like(d, dtype=np.bool)
+    f = np.zeros_like(d, dtype=bool)
     d[:, 20:22] += 1e3
     f[:, 20:22] = True
     d[20, :] += 1e3
@@ -954,7 +954,7 @@ def test_vis_clean():
     d += 50 * np.exp(-2j*np.pi*times[:, None]*(frs[20]) - 2j*np.pi*freqs[None, :]*(dlys[20])/1e9)
     d += 10 * ((np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes).astype(complex) \
          + 1j * np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes)).reshape(uvd.Ntimes, uvd.Nfreqs))
-    f = np.zeros_like(d, dtype=np.bool)
+    f = np.zeros_like(d, dtype=bool)
     d[:, 20:22] += 1e3
     f[:, 20:22] = True
     d[20, :] += 1e3
