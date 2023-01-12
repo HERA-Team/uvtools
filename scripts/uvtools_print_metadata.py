@@ -29,4 +29,4 @@ uvd = UVData()
 uvd.read(args.file, read_data=False)
 
 ants = np.union1d(uvd.ant_1_array, uvd.ant_2_array)
-print(' '.join([str(a) for a in ants]))
+print(" ".join([str(a) for a in ants]))

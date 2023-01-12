@@ -10,7 +10,7 @@ from .. import utils
 
 def test_search_data():
     # setup data
-    pols = ['xx', 'yy']
+    pols = ["xx", "yy"]
     files = ["zen.foo.{pol}.uv", "zen.bar.{pol}.uv"]
     allfiles = []
 
@@ -26,30 +26,30 @@ def test_search_data():
 
     # search data
     dfs, dps = utils.search_data(templates, pols)
-    assert len(dfs) ==  2
-    assert len(dfs[0]) ==  len(dfs[1])
-    assert len(dfs[1]) ==  2
-    assert len(dps) ==  2
-    assert len(dps[0]) ==  len(dps[1])
-    assert len(dps[0]) ==  2
-    assert dps[0], ['xx' ==  'xx']
-    assert np.all(['.xx.' in df for df in dfs[0]])
+    assert len(dfs) == 2
+    assert len(dfs[0]) == len(dfs[1])
+    assert len(dfs[1]) == 2
+    assert len(dps) == 2
+    assert len(dps[0]) == len(dps[1])
+    assert len(dps[0]) == 2
+    assert dps[0], ["xx" == "xx"]
+    assert np.all([".xx." in df for df in dfs[0]])
 
     # matched pols
     dfs, dps = utils.search_data(templates, pols, matched_pols=True)
-    assert len(dfs) ==  2
-    assert len(dfs[0]) ==  len(dfs[1])
-    assert len(dfs[0]) ==  2
-    assert np.all(['.xx.' in df for df in dfs[0]])
-    dfs, dps = utils.search_data(files, pols + ['pI'], matched_pols=True)
-    assert len(dfs) ==  0
+    assert len(dfs) == 2
+    assert len(dfs[0]) == len(dfs[1])
+    assert len(dfs[0]) == 2
+    assert np.all([".xx." in df for df in dfs[0]])
+    dfs, dps = utils.search_data(files, pols + ["pI"], matched_pols=True)
+    assert len(dfs) == 0
 
     # reverse nesting
     dfs, dps = utils.search_data(templates, pols, reverse_nesting=True)
-    assert len(dfs) ==  2
-    assert len(dfs[0]) ==  len(dfs[1])
-    assert len(dfs[1]) ==  2
-    assert np.all(['.bar.' in df for df in dfs[0]])
+    assert len(dfs) == 2
+    assert len(dfs[0]) == len(dfs[1])
+    assert len(dfs[1]) == 2
+    assert np.all([".bar." in df for df in dfs[0]])
 
     # flatten
     dfs, dps = utils.search_data(templates, pols, flatten=True)

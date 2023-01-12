@@ -9,7 +9,7 @@ from scipy.stats import binned_statistic_2d
 from . import utils
 
 
-def data_mode(data, mode='abs'):
+def data_mode(data, mode="abs"):
     """
     Apply filter to data according to a chosen plotting mode.
 
@@ -32,24 +32,25 @@ def data_mode(data, mode='abs'):
     data : array_like
         Data transformed according to the value of `mode`.
     """
-    if mode.startswith('phs'):
+    if mode.startswith("phs"):
         data = np.angle(data)
-    elif mode.startswith('abs'):
+    elif mode.startswith("abs"):
         data = np.absolute(data)
-    elif mode.startswith('real'):
+    elif mode.startswith("real"):
         data = data.real
-    elif mode.startswith('imag'):
+    elif mode.startswith("imag"):
         data = data.imag
-    elif mode.startswith('log'):
+    elif mode.startswith("log"):
         data = np.absolute(data)
         data = np.log10(data)
     else:
-        raise ValueError('Unrecognized plot mode.')
+        raise ValueError("Unrecognized plot mode.")
     return data
 
 
-def waterfall(d, mode='log', vmin=None, vmax=None, drng=None, mx=None,
-              recenter=False, **kwargs):
+def waterfall(
+    d, mode="log", vmin=None, vmax=None, drng=None, mx=None, recenter=False, **kwargs
+):
     """
     Generate a 2D waterfall plot.
 
@@ -113,7 +114,8 @@ def waterfall(d, mode='log', vmin=None, vmax=None, drng=None, mx=None,
         d = d.filled(0)
     if recenter:
         import aipy
-        d = aipy.img.recenter(d, np.array(d.shape)/2)
+
+        d = aipy.img.recenter(d, np.array(d.shape) / 2)
 
     # Apply requested transform to data
     d = data_mode(d, mode=mode)
@@ -126,13 +128,14 @@ def waterfall(d, mode='log', vmin=None, vmax=None, drng=None, mx=None,
     mn = mx - drng
 
     # Choose aspect ratio
-    if 'aspect' not in kwargs.keys():
-        kwargs['aspect'] = 'auto'
-    return plt.imshow(d, vmax=mx, vmin=mn, interpolation='nearest', **kwargs)
+    if "aspect" not in kwargs.keys():
+        kwargs["aspect"] = "auto"
+    return plt.imshow(d, vmax=mx, vmin=mn, interpolation="nearest", **kwargs)
 
 
-def plot_antpos(antpos, ants=None, ex_ants=[], hl_ants=[],
-                hl_text='Highlighted Antennas'):
+def plot_antpos(
+    antpos, ants=None, ex_ants=[], hl_ants=[], hl_text="Highlighted Antennas"
+):
     """
     Plot antenna x,y positions from a dictionary of antenna positions.
 
@@ -164,40 +167,85 @@ def plot_antpos(antpos, ants=None, ex_ants=[], hl_ants=[],
         ants = antpos.keys()
     xpos = np.array([antpos[ant][0] for ant in ants])
     ypos = np.array([antpos[ant][1] for ant in ants])
-    scat = plt.scatter(xpos, ypos, c='w', s=0)
+    scat = plt.scatter(xpos, ypos, c="w", s=0)
     for ant in ants:
         pos = antpos[ant]
         bad = ant in ex_ants
-        plt.gca().add_artist(plt.Circle(tuple(pos[0:2]), radius=7,
-                                        fill=(~bad), color=['grey','r'][bad]))
+        plt.gca().add_artist(
+            plt.Circle(tuple(pos[0:2]), radius=7, fill=(~bad), color=["grey", "r"][bad])
+        )
         if ant in hl_ants:
-            plt.gca().add_artist(plt.Circle(tuple(antpos[ant][0:2]), radius=7, fill=True, lw=0, color='b'))
-            plt.gca().add_artist(plt.Circle(tuple(antpos[ant][0:2]), radius=6, fill=True, color='grey'))
-        plt.text(pos[0],pos[1],str(ant), va='center', ha='center', color='w', size=14)
+            plt.gca().add_artist(
+                plt.Circle(
+                    tuple(antpos[ant][0:2]), radius=7, fill=True, lw=0, color="b"
+                )
+            )
+            plt.gca().add_artist(
+                plt.Circle(tuple(antpos[ant][0:2]), radius=6, fill=True, color="grey")
+            )
+        plt.text(pos[0], pos[1], str(ant), va="center", ha="center", color="w", size=14)
 
     legend_objs = []
     legend_labels = []
-    legend_objs.append(matplotlib.lines.Line2D([0], [0], marker='o', color='w', markeredgecolor='grey', markerfacecolor='grey', markersize=13))
-    legend_labels.append(f'{len(ants) - len(ex_ants)} Unflagged Antennas')
-    legend_objs.append(matplotlib.lines.Line2D([0], [0], marker='o', color='w', markeredgecolor='r', markerfacecolor='r', markersize=13))
-    legend_labels.append(f'{len(ex_ants)} Flagged Antennas')
-    legend_objs.append(matplotlib.lines.Line2D([0], [0], marker='o', color='w', markeredgewidth=2, markeredgecolor='b', markersize=15))
+    legend_objs.append(
+        matplotlib.lines.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            markeredgecolor="grey",
+            markerfacecolor="grey",
+            markersize=13,
+        )
+    )
+    legend_labels.append(f"{len(ants) - len(ex_ants)} Unflagged Antennas")
+    legend_objs.append(
+        matplotlib.lines.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            markeredgecolor="r",
+            markerfacecolor="r",
+            markersize=13,
+        )
+    )
+    legend_labels.append(f"{len(ex_ants)} Flagged Antennas")
+    legend_objs.append(
+        matplotlib.lines.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            markeredgewidth=2,
+            markeredgecolor="b",
+            markersize=15,
+        )
+    )
     legend_labels.append(hl_text)
-    plt.legend(legend_objs, legend_labels, ncol=1, fontsize='large', framealpha=1)
-
+    plt.legend(legend_objs, legend_labels, ncol=1, fontsize="large", framealpha=1)
 
     plt.xlabel("Antenna East-West Position (meters)", size=14)
     plt.ylabel("Antenna North-South Position (meters)", size=14)
-    plt.axis('equal')
-    plt.ylim([np.min(ypos)-10, np.max(ypos)+10])
+    plt.axis("equal")
+    plt.ylim([np.min(ypos) - 10, np.max(ypos) + 10])
     plt.tight_layout()
     return scat
 
 
-def plot_antclass(antpos, antclass, ax=None, ants=None, radius=7.0,
-                  ang_dict={'Jee': (225, 405), 'Jnn': (45, 225)},
-                  colors=['darkgreen', 'goldenrod', 'maroon'],
-                  labelsize=12, labelcolor='w', legend=True, title=None):
+def plot_antclass(
+    antpos,
+    antclass,
+    ax=None,
+    ants=None,
+    radius=7.0,
+    ang_dict={"Jee": (225, 405), "Jnn": (45, 225)},
+    colors=["darkgreen", "goldenrod", "maroon"],
+    labelsize=12,
+    labelcolor="w",
+    legend=True,
+    title=None,
+):
     """
     Plot antenna x,y positions from a dictionary of antenna positions.
     Parameters
@@ -230,41 +278,69 @@ def plot_antclass(antpos, antclass, ax=None, ants=None, radius=7.0,
 
     # produce scatter plot of wedges
     pols = sorted(list({ant[1] for ant in antclass.ants}))[::-1]
-    ants = {ant for ant in antclass.ants if ants is None or (ant[0] in set(ants)) or (ant in set(ants))}
+    ants = {
+        ant
+        for ant in antclass.ants
+        if ants is None or (ant[0] in set(ants)) or (ant in set(ants))
+    }
     xpos = np.array([antpos[ant[0]][0] for ant in ants])
     ypos = np.array([antpos[ant[0]][1] for ant in ants])
-    scatter = ax.scatter(xpos, ypos, c='w', s=0)
+    scatter = ax.scatter(xpos, ypos, c="w", s=0)
     for ant in ants:
         pos = antpos[ant[0]]
         color = colors[antclass.quality_classes.index(antclass[ant])]
-        ax.add_artist(matplotlib.patches.Wedge(tuple(pos[0:2]), radius, *ang_dict[ant[1]], color=color))
+        ax.add_artist(
+            matplotlib.patches.Wedge(
+                tuple(pos[0:2]), radius, *ang_dict[ant[1]], color=color
+            )
+        )
 
     # add legend, if desired
     if legend:
         legend_objs = []
         legend_labels = []
         for cls, color in zip(antclass.quality_classes, colors):
-            legend_objs.append(matplotlib.lines.Line2D([0], [0], marker='o', color='w', markeredgecolor=color,
-                                                       markerfacecolor=color, markersize=15))
-            pol_status = [f'{len([ant for ant in antclass.get_all(cls) if ant[1] == pol])} {cls} {pol} antpols' for pol in pols]
-            legend_labels.append((' \u2571\n').join(pol_status))
+            legend_objs.append(
+                matplotlib.lines.Line2D(
+                    [0],
+                    [0],
+                    marker="o",
+                    color="w",
+                    markeredgecolor=color,
+                    markerfacecolor=color,
+                    markersize=15,
+                )
+            )
+            pol_status = [
+                f"{len([ant for ant in antclass.get_all(cls) if ant[1] == pol])} {cls} {pol} antpols"
+                for pol in pols
+            ]
+            legend_labels.append((" \u2571\n").join(pol_status))
         ax.legend(legend_objs, legend_labels, ncol=1, fontsize=12)
 
     # label axes and set axlims
     ax.set_xlabel("East-West Position (meters)", size=12)
     ax.set_ylabel("North-South Position (meters)", size=12)
     ax.set_title(title, fontsize=18)
-    ax.axis('equal')
+    ax.axis("equal")
     ax.set_xlim([np.min(xpos) - radius * 2, np.max(xpos) + radius * 2])
     ax.set_ylim([np.min(ypos) - radius * 2, np.max(ypos) + radius * 2])
     plt.tight_layout()
 
     # label antennas
     for ant in {ant[0] for ant in ants}:
-        ax.text(antpos[ant][0], antpos[ant][1], str(ant), va='center', ha='center', color=labelcolor, size=labelsize)
+        ax.text(
+            antpos[ant][0],
+            antpos[ant][1],
+            str(ant),
+            va="center",
+            ha="center",
+            color=labelcolor,
+            size=labelsize,
+        )
 
 
-def plot_phase_ratios(data, cmap='twilight'):
+def plot_phase_ratios(data, cmap="twilight"):
     """
     Plot grid of waterfalls, each showing the phase of the product (V_1 V_2^*)
     for bls 1 and 2.
@@ -284,36 +360,52 @@ def plot_phase_ratios(data, cmap='twilight'):
     pol = data[bls[0]].keys()[0]
 
     # Calculate no. rows and columns
-    nratios = (nbls * (nbls-1))/2
-    r = int(divmod(nratios,3)[0] + np.ceil(divmod(nratios,3)[1]/3.))
+    nratios = (nbls * (nbls - 1)) / 2
+    r = int(divmod(nratios, 3)[0] + np.ceil(divmod(nratios, 3)[1] / 3.0))
     c = 3
 
     # Construct list of blpairs
     ncross = []
     for k in range(nbls):
-        for i in range(k+1,nbls):
+        for i in range(k + 1, nbls):
             ncross.append((bls[k], bls[i]))
 
     # Plot waterfall
-    fig = plt.figure(figsize=(16,12))
-    for i,k in enumerate(ncross):
-        ax = plt.subplot(r,c,i+1)
-        plt.title(str(k), color='magenta')
+    fig = plt.figure(figsize=(16, 12))
+    for i, k in enumerate(ncross):
+        ax = plt.subplot(r, c, i + 1)
+        plt.title(str(k), color="magenta")
         g = 1.0
-        waterfall(data[k[0]][pol]*np.conj(data[k[-1]][pol])*g,
-                  mode='phs', cmap=cmap, mx=np.pi, drng=2*np.pi)
+        waterfall(
+            data[k[0]][pol] * np.conj(data[k[-1]][pol]) * g,
+            mode="phs",
+            cmap=cmap,
+            mx=np.pi,
+            drng=2 * np.pi,
+        )
         plt.grid(0)
-        if divmod(i,c)[-1] != 0:
+        if divmod(i, c)[-1] != 0:
             ax.yaxis.set_visible(False)
-        if divmod(i,c)[0] != r-1:
+        if divmod(i, c)[0] != r - 1:
             ax.xaxis.set_visible(False)
     cax = fig.add_axes([0.2, 0.06, 0.6, 0.01])
-    plt.colorbar(cax=cax, orientation='horizontal')
+    plt.colorbar(cax=cax, orientation="horizontal")
 
 
-def omni_view(reds, vis, pol, integration=10, chan=500, norm=False,
-              cursor=True, save=None, colors=None, symbols=None, ex_ants=[],
-              title=''):
+def omni_view(
+    reds,
+    vis,
+    pol,
+    integration=10,
+    chan=500,
+    norm=False,
+    cursor=True,
+    save=None,
+    colors=None,
+    symbols=None,
+    ex_ants=[],
+    title="",
+):
     """
     Scatter plot of the real vs imaginary parts of all visibilities in a set
     of redundant groups.
@@ -367,8 +459,18 @@ def omni_view(reds, vis, pol, integration=10, chan=500, norm=False,
 
     # Set default values for colors and symbols
     if not colors:
-        colors = ["#006BA4", "#FF7F0E", "#2CA02C", "#D61D28", "#9467BD",
-                  "#8C564B", "#E377C2", "#7F7F7F", "#BCBD22", "#17BECF"]
+        colors = [
+            "#006BA4",
+            "#FF7F0E",
+            "#2CA02C",
+            "#D61D28",
+            "#9467BD",
+            "#8C564B",
+            "#E377C2",
+            "#7F7F7F",
+            "#BCBD22",
+            "#17BECF",
+        ]
     if not symbols:
         symbols = ["o", "v", "^", "<", ">", "*"]
     points = []
@@ -382,15 +484,16 @@ def omni_view(reds, vis, pol, integration=10, chan=500, norm=False,
 
     # Loop over redundant groups
     for i, gp in enumerate(reds):
-        c = colors[i%len(colors)]
-        s = symbols[i/len(colors)]
+        c = colors[i % len(colors)]
+        s = symbols[i / len(colors)]
         for r in gp:
-            if np.any([ant in r for ant in ex_ants]): continue
+            if np.any([ant in r for ant in ex_ants]):
+                continue
             try:
-                points.append(vis[r][pol][integration,chan])
+                points.append(vis[r][pol][integration, chan])
                 bl.append(r)
-            except(KeyError):
-                points.append(np.conj(vis[r[::-1]][pol][integration,chan]))
+            except (KeyError):
+                points.append(np.conj(vis[r[::-1]][pol][integration, chan]))
                 bl.append(r[::-1])
             sym.append(s)
             col.append(c)
@@ -402,13 +505,22 @@ def omni_view(reds, vis, pol, integration=10, chan=500, norm=False,
     # Loop over points
     for i, pt in enumerate(points):
         if norm:
-            ax.scatter(pt.real/np.abs(pt), pt.imag/np.abs(pt), c=col[i],
-                       marker=sym[i], s=50, label=f'{bl[i]}')
+            ax.scatter(
+                pt.real / np.abs(pt),
+                pt.imag / np.abs(pt),
+                c=col[i],
+                marker=sym[i],
+                s=50,
+                label=f"{bl[i]}",
+            )
         else:
-            ax.scatter(pt.real, pt.imag, c=col[i], marker=sym[i], s=50,
-                       label=f'{bl[i]}')
-            if np.abs(pt.real) > max_x: max_x = np.abs(pt.real)
-            if np.abs(pt.imag) > max_y: max_y = np.abs(pt.imag)
+            ax.scatter(
+                pt.real, pt.imag, c=col[i], marker=sym[i], s=50, label=f"{bl[i]}"
+            )
+            if np.abs(pt.real) > max_x:
+                max_x = np.abs(pt.real)
+            if np.abs(pt.imag) > max_y:
+                max_y = np.abs(pt.imag)
     plt.suptitle(title)
 
     # Choose scale according to whether normalized
@@ -418,17 +530,18 @@ def omni_view(reds, vis, pol, integration=10, chan=500, norm=False,
     else:
         plt.xlim(-1.1 * max_x, 1.1 * max_x)
         plt.ylim(-1.1 * max_y, 1.1 * max_y)
-    plt.ylabel('imag(V)')
-    plt.xlabel('real(V)')
+    plt.ylabel("imag(V)")
+    plt.xlabel("real(V)")
 
     if cursor:
         from mpldatacursor import datacursor
-        datacursor(formatter='{label}'.format)
+
+        datacursor(formatter="{label}".format)
     if save:
         plt.savefig(save)
 
 
-def omni_view_gif(filenames, name='omni_movie.gif'):
+def omni_view_gif(filenames, name="omni_movie.gif"):
     """
     Create a gif from a list of images. Uses the `imageio` library.
 
@@ -448,6 +561,7 @@ def omni_view_gif(filenames, name='omni_movie.gif'):
         images.append(imageio.imread(filename))
     imageio.mimsave(name, images)
 
+
 def labeled_waterfall(
     data,
     antpairpol=None,
@@ -460,7 +574,7 @@ def labeled_waterfall(
     mode="log",
     set_title=True,
     ax=None,
-    figsize=(10,7),
+    figsize=(10, 7),
     dpi=100,
     aspect="auto",
     fontsize=None,
@@ -588,7 +702,7 @@ def labeled_waterfall(
     # Validate parameters.
     if time_or_lst not in ("time", "lst"):
         raise ValueError("time_or_lst must be 'time' or 'lst'.")
-    if np.array(data).dtype != np.dtype('O'):
+    if np.array(data).dtype != np.dtype("O"):
         data = np.atleast_2d(data)
         if not np.iscomplexobj(data):
             raise TypeError("array-like data must consist of complex numbers.")
@@ -601,7 +715,7 @@ def labeled_waterfall(
             )
         if times is None:
             time_or_lst = "lst"
-            times = lsts * units.rad.to("cycle") # For Fourier transform purposes
+            times = lsts * units.rad.to("cycle")  # For Fourier transform purposes
         elif lsts is None:
             time_or_lst = "time"
     else:
@@ -632,7 +746,7 @@ def labeled_waterfall(
         "time": "day",
         "freq": "MHz",
         "fringe-rate": "mHz",
-        "delay": "ns"
+        "delay": "ns",
     }
     plot_units.update(provided_plot_units)
 
@@ -730,14 +844,14 @@ def labeled_waterfall(
             if mode == "log":
                 vmax = vmin + dynamic_range
             else:
-                vmax = vmin * 10 ** dynamic_range
+                vmax = vmin * 10**dynamic_range
         else:
             if vmax is None:
                 vmax = data.max()
             if mode == "log":
                 vmin = vmax - dynamic_range
             else:
-                vmin = vmax / 10 ** dynamic_range
+                vmin = vmax / 10**dynamic_range
     else:
         vmin = vmin if vmin is not None else data.min()
         vmax = vmax if vmax is not None else data.max()
@@ -786,9 +900,10 @@ def labeled_waterfall(
         elif antpairpol is not None:
             ax.set_title(antpairpol, fontsize=fontsize)
         else:
-            pass # Not enough information to make a title.
+            pass  # Not enough information to make a title.
 
     return fig, ax
+
 
 def fourier_transform_waterfalls(
     data,
@@ -801,7 +916,7 @@ def fourier_transform_waterfalls(
     data_units="Jy",
     mode="log",
     set_title=True,
-    figsize=(14,10),
+    figsize=(14, 10),
     dpi=100,
     aspect="auto",
     fontsize=None,
@@ -931,13 +1046,13 @@ def fourier_transform_waterfalls(
 
     # Figure setup
     fig = plt.figure(figsize=figsize, dpi=dpi)
-    axes = fig.subplots(2,2)
+    axes = fig.subplots(2, 2)
     transform_axes = (None, 0, 1, -1)
     axes_dims = (
         ("freq", "time"),
         ("freq", "fringe-rate"),
         ("delay", "time"),
-        ("delay", "fringe-rate")
+        ("delay", "fringe-rate"),
     )
 
     # Make the plots.
@@ -947,8 +1062,7 @@ def fourier_transform_waterfalls(
         possible_drng_keys = (x_dim, y_dim, (x_dim, y_dim), (y_dim, x_dim))
         transform_axis = transform_axes[i]
         limit_dynamic_range = list(
-            key in dynamic_range.keys()
-            for key in possible_drng_keys
+            key in dynamic_range.keys() for key in possible_drng_keys
         )
         if any(limit_dynamic_range):
             drng = dynamic_range[possible_drng_keys[limit_dynamic_range.index(True)]]
@@ -996,15 +1110,14 @@ def fourier_transform_waterfalls(
             axes = fig.get_axes()
             uppermost_y = max(ax.get_position().y1 for ax in axes)
             top_row = [
-                ax for ax in axes
-                if np.isclose(ax.get_position().y1, uppermost_y)
+                ax for ax in axes if np.isclose(ax.get_position().y1, uppermost_y)
             ]
             axes_widths = [
-                ax.get_position().x1 - ax.get_position().x0
-                for ax in top_row
+                ax.get_position().x1 - ax.get_position().x0 for ax in top_row
             ]
             colorbars = [
-                ax for ax, width in zip(top_row, axes_widths)
+                ax
+                for ax, width in zip(top_row, axes_widths)
                 if not np.isclose(width, max(axes_widths))
             ]
             plots = [ax for ax in top_row if ax not in colorbars]
@@ -1016,21 +1129,23 @@ def fourier_transform_waterfalls(
 
             # Position the title at the apparent "top center" of the figure.
             fig.text(
-                *title_position,
-                set_title,
-                ha="center",
-                va="bottom",
-                fontsize=fontsize
+                *title_position, set_title, ha="center", va="bottom", fontsize=fontsize
             )
-
 
     return fig
 
 
-def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
-                        check_metadata=True, freq_taper=None,
-                        freq_taper_kwargs=None, time_taper=None,
-                        time_taper_kwargs=None):
+def plot_diff_waterfall(
+    uvd1,
+    uvd2,
+    antpairpol,
+    plot_type="all",
+    check_metadata=True,
+    freq_taper=None,
+    freq_taper_kwargs=None,
+    time_taper=None,
+    time_taper_kwargs=None,
+):
     """Produce waterfall plot(s) of differenced visibilities.
 
     Parameters
@@ -1091,28 +1206,31 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
     vis2 = uvd2.get_data(antpairpol)
 
     # get important metadata
-    times = np.unique(uvd1.time_array) # days
-    lsts = np.unique(uvd1.lst_array) # radians
-    freqs = uvd1.freq_array[0] # choose 0th spectral window; Hz
+    times = np.unique(uvd1.time_array)  # days
+    lsts = np.unique(uvd1.lst_array)  # radians
+    freqs = uvd1.freq_array[0]  # choose 0th spectral window; Hz
 
     # import astropy.units for conversion from days to seconds
     import astropy.units as u
-    frs = utils.fourier_freqs(times * u.day.to('s')) # Hz
-    dlys = utils.fourier_freqs(freqs) # s
+
+    frs = utils.fourier_freqs(times * u.day.to("s"))  # Hz
+    dlys = utils.fourier_freqs(freqs)  # s
 
     # make dictionary of plotting parameters; keys chosen for ease-of-use
-    plot_params = {"time" : lsts,
-                   "freq" : freqs / 1e6, # MHz
-                   "fr" : frs * 1e3, # mHz
-                   "dly" : dlys * 1e9, # ns
-                   }
+    plot_params = {
+        "time": lsts,
+        "freq": freqs / 1e6,  # MHz
+        "fr": frs * 1e3,  # mHz
+        "dly": dlys * 1e9,  # ns
+    }
 
     # make some axis labels; use LST instead of time b/c time is clunky
-    labels = {"time" : "LST [radians]",
-              "freq" : "Frequency [MHz]",
-              "fr" : "Fringe Rate [mHz]",
-              "dly" : "Delay [ns]",
-              }
+    labels = {
+        "time": "LST [radians]",
+        "freq": "Frequency [MHz]",
+        "fr": "Fringe Rate [mHz]",
+        "dly": "Delay [ns]",
+    }
 
     # convert taper kwargs to empty dictionaries if not specified
     freq_taper_kwargs = freq_taper_kwargs or {}
@@ -1120,12 +1238,14 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
 
     # map plot types to transforms needed
     plot_types = {
-        "time_vs_freq" : lambda data : data, # do nothing
-        "time_vs_dly" : lambda data : utils.FFT(data, 1, freq_taper, **freq_taper_kwargs),
-        "fr_vs_freq" : lambda data : utils.FFT(data, 0, time_taper, **time_taper_kwargs),
-        "fr_vs_dly" : lambda data : utils.FFT(
+        "time_vs_freq": lambda data: data,  # do nothing
+        "time_vs_dly": lambda data: utils.FFT(data, 1, freq_taper, **freq_taper_kwargs),
+        "fr_vs_freq": lambda data: utils.FFT(data, 0, time_taper, **time_taper_kwargs),
+        "fr_vs_dly": lambda data: utils.FFT(
             utils.FFT(data, 0, time_taper, **time_taper_kwargs),
-            1, freq_taper, **freq_taper_kwargs
+            1,
+            freq_taper,
+            **freq_taper_kwargs,
         ),
     }
 
@@ -1134,40 +1254,50 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
         plot_type = tuple(plot_types.keys()) if plot_type == "all" else (plot_type,)
 
     # check that chosen plot type(s) OK
-    assert all([plot in plot_types.keys() for plot in plot_type]), \
-            "Please ensure the plot type chosen is supported. The supported " \
-            "types are : {types}".format(types=list(plot_types.keys()))
+    assert all([plot in plot_types.keys() for plot in plot_type]), (
+        "Please ensure the plot type chosen is supported. The supported "
+        "types are : {types}".format(types=list(plot_types.keys()))
+    )
 
     # now make a dictionary of the transformed visibilities
-    visibilities = {plot : {label : xform(vis)
-                            for label, vis in zip(("vis1", "vis2"), (vis1, vis2))}
-                            for plot, xform in plot_types.items()
-                            if plot in plot_type} # but only use desired transforms
-
+    visibilities = {
+        plot: {label: xform(vis) for label, vis in zip(("vis1", "vis2"), (vis1, vis2))}
+        for plot, xform in plot_types.items()
+        if plot in plot_type
+    }  # but only use desired transforms
 
     # import matplotlib, setup the figure
     import matplotlib.pyplot as plt
-    figsize = (4 * 3, 3 * len(plot_type)) # (4,3) figsize for each plot
+
+    figsize = (4 * 3, 3 * len(plot_type))  # (4,3) figsize for each plot
     fig = plt.figure(figsize=figsize)
     axes = fig.subplots(len(plot_type), 3)
-    axes = [axes,] if len(axes.shape) == 1 else axes # avoid bug for single row
+    axes = (
+        [
+            axes,
+        ]
+        if len(axes.shape) == 1
+        else axes
+    )  # avoid bug for single row
     axes[0][0].set_title("Amplitude Difference", fontsize=12)
     axes[0][1].set_title("Phase Difference", fontsize=12)
     axes[0][2].set_title("Amplitude of Complex Difference", fontsize=12)
 
     # helper function for getting the extent of axes
-    extent = lambda xvals, yvals : (xvals[0], xvals[-1], yvals[-1], yvals[0])
+    extent = lambda xvals, yvals: (xvals[0], xvals[-1], yvals[-1], yvals[0])
 
     # loop over items in visibilities and plot them
     for i, item in enumerate(visibilities.items()):
         # extract visibilities, get diffs
         visA, visB = item[1].values()
-        diffs = (utils.diff(visA, visB, 'abs'),
-                 utils.diff(visA, visB, 'phs'),
-                 utils.diff(visA, visB, 'complex'))
+        diffs = (
+            utils.diff(visA, visB, "abs"),
+            utils.diff(visA, visB, "phs"),
+            utils.diff(visA, visB, "complex"),
+        )
 
         # extract parameters
-        ykey, xkey = item[0].split("_vs_") # keys for choosing parameters
+        ykey, xkey = item[0].split("_vs_")  # keys for choosing parameters
         xvals, yvals = plot_params[xkey], plot_params[ykey]
 
         # get labels
@@ -1181,11 +1311,13 @@ def plot_diff_waterfall(uvd1, uvd2, antpairpol, plot_type="all",
 
             # plot waterfall and add a colorbar
             fig.sca(ax)
-            cax = waterfall(diff, mode="real", cmap='viridis',
-                            extent=extent(xvals, yvals))
+            cax = waterfall(
+                diff, mode="real", cmap="viridis", extent=extent(xvals, yvals)
+            )
             fig.colorbar(cax)
 
     return fig
+
 
 def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, bins=50):
     """Summary plot for difference between visibilities.
@@ -1237,6 +1369,7 @@ def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, bins=50):
 
     # import astropy constants to convert freq to wavelength
     from astropy.constants import c
+
     wavelengths = c.value / freqs
 
     # get uvw vectors; shape = (Nfreq, Nblts, 3)
@@ -1246,24 +1379,24 @@ def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, bins=50):
     uvw_vecs = np.swapaxes(uvw_vecs, 0, 1)
 
     # get the u and v arrays, flattened
-    uvals, vvals = uvw_vecs[:,:,0].flatten(), uvw_vecs[:,:,1].flatten()
+    uvals, vvals = uvw_vecs[:, :, 0].flatten(), uvw_vecs[:, :, 1].flatten()
 
     # get the regridded u and v arrays' bin edges
-    u_regrid = np.linspace(uvals.min(), uvals.max(), bins+1)
-    v_regrid = np.linspace(vvals.min(), vvals.max(), bins+1)
+    u_regrid = np.linspace(uvals.min(), uvals.max(), bins + 1)
+    v_regrid = np.linspace(vvals.min(), vvals.max(), bins + 1)
 
     # make an alias for regridding an array and taking the complex mean
     # this also takes the transpose so that axis0 is along the v-axis
-    bin_2d = lambda arr : binned_statistic_2d(
-                            uvals, vvals, arr, statistic='mean',
-                            bins=[u_regrid, v_regrid])[0].T
+    bin_2d = lambda arr: binned_statistic_2d(
+        uvals, vvals, arr, statistic="mean", bins=[u_regrid, v_regrid]
+    )[0].T
 
     # regrid the visibilities
     # need to do real/imag separately or information is lost
-    vis1 = uvd1.data_array[:,0,:,pol].flatten()
-    vis2 = uvd2.data_array[:,0,:,pol].flatten()
-    vis1 = bin_2d(vis1.real) + 1j*bin_2d(vis1.imag)
-    vis2 = bin_2d(vis2.real) + 1j*bin_2d(vis2.imag)
+    vis1 = uvd1.data_array[:, 0, :, pol].flatten()
+    vis2 = uvd2.data_array[:, 0, :, pol].flatten()
+    vis1 = bin_2d(vis1.real) + 1j * bin_2d(vis1.imag)
+    vis2 = bin_2d(vis2.real) + 1j * bin_2d(vis2.imag)
 
     # calculate differences of amplitudes and phases as masked arrays
     absdiff_ma = utils.diff(vis1, vis2, "abs")
@@ -1271,13 +1404,13 @@ def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, bins=50):
     cabsdiff_ma = utils.diff(vis1, vis2, "complex")
 
     # make the arrays into proper masked arrays
-    mask = lambda arr : np.ma.MaskedArray(arr, np.isnan(arr))
+    mask = lambda arr: np.ma.MaskedArray(arr, np.isnan(arr))
     absdiff_ma = mask(absdiff_ma)
     phsdiff_ma = mask(phsdiff_ma)
     cabsdiff_ma = mask(cabsdiff_ma)
 
     # remove nans so that the data can actually be normalized
-    unnan = lambda arr : arr[np.where(np.logical_not(np.isnan(arr)))]
+    unnan = lambda arr: arr[np.where(np.logical_not(np.isnan(arr)))]
     absdiff = unnan(absdiff_ma)
     phsdiff = unnan(phsdiff_ma)
     cabsdiff = unnan(cabsdiff_ma)
@@ -1291,31 +1424,39 @@ def plot_diff_uv(uvd1, uvd2, pol=None, check_metadata=True, bins=50):
     cabsnorm = plt.cm.colors.LogNorm(vmin=cabsdiff.min(), vmax=cabsdiff.max())
 
     # setup the figure
-    fig = plt.figure(figsize=(15,4.5))
-    axes = fig.subplots(1,3)
+    fig = plt.figure(figsize=(15, 4.5))
+    axes = fig.subplots(1, 3)
 
     # add labels
     for ax, label in zip(axes, ("Amplitude", "Phase", "Amplitude of Complex")):
-        ax.set_xlabel(r'$u$', fontsize=12)
-        ax.set_ylabel(r'$v$', fontsize=12)
+        ax.set_xlabel(r"$u$", fontsize=12)
+        ax.set_ylabel(r"$v$", fontsize=12)
         ax.set_title(" ".join([label, "Difference"]), fontsize=12)
 
     extent = (uvals.min(), uvals.max(), vvals.max(), vvals.min())
-    plot_iterable = zip(axes,
-                        (absdiff_ma, phsdiff_ma, cabsdiff_ma),
-                        (absnorm, phsnorm, cabsnorm))
+    plot_iterable = zip(
+        axes, (absdiff_ma, phsdiff_ma, cabsdiff_ma), (absnorm, phsnorm, cabsnorm)
+    )
     for ax, diff, norm in plot_iterable:
-        cax = ax.imshow(diff, norm=norm, aspect="auto",
-                        cmap='viridis', extent=extent)
+        cax = ax.imshow(diff, norm=norm, aspect="auto", cmap="viridis", extent=extent)
         fig.sca(ax)
         fig.colorbar(cax)
 
     return fig
 
-def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
-                 check_metadata=True, dimension=None,
-                 taper=None, taper_kwargs=None,
-                 average_mode=None, **kwargs):
+
+def plot_diff_1d(
+    uvd1,
+    uvd2,
+    antpairpol,
+    plot_type="both",
+    check_metadata=True,
+    dimension=None,
+    taper=None,
+    taper_kwargs=None,
+    average_mode=None,
+    **kwargs,
+):
     """Produce plots of visibility differences along a single axis.
 
     Parameters
@@ -1404,15 +1545,15 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
             "then set ``plot_type`` to 'both'."
         )
 
-    dimensions_to_duals = {"time" : "fr", "freq" : "dly"}
+    dimensions_to_duals = {"time": "fr", "freq": "dly"}
 
     if dimension is None:
         dimension = "time" if uvd1.Ntimes > uvd1.Nfreqs else "freq"
         if uvd1.Ntimes == uvd1.Nfreqs:
             warnings.warn(
-                "The UVData objects passed have the same number of " \
-                "times as they do frequencies. You did not specify " \
-                "which dimension to use, so the difference plots " \
+                "The UVData objects passed have the same number of "
+                "times as they do frequencies. You did not specify "
+                "which dimension to use, so the difference plots "
                 "will be made along the time axis."
             )
 
@@ -1445,43 +1586,48 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
 
     # use same approach as in plot_diff_waterfall
     # get important metadata
-    times = np.unique(uvd1.time_array) # days
-    lsts = np.unique(uvd1.lst_array) # radians
-    freqs = np.unique(uvd1.freq_array) # Hz
+    times = np.unique(uvd1.time_array)  # days
+    lsts = np.unique(uvd1.lst_array)  # radians
+    freqs = np.unique(uvd1.freq_array)  # Hz
 
     # import astropy for unit conversions
     import astropy.units as u
-    frs = utils.fourier_freqs(times * u.day.to('s')) # Hz
-    dlys = utils.fourier_freqs(freqs) # s
+
+    frs = utils.fourier_freqs(times * u.day.to("s"))  # Hz
+    dlys = utils.fourier_freqs(freqs)  # s
 
     # make dictionary of plotting parameters
-    plot_params = {"time" : lsts, # radians
-                   "freq" : freqs / 1e6, # MHz
-                   "fr" : frs * 1e3, # mHz
-                   "dly" : dlys * 1e9 # ns
-                   }
+    plot_params = {
+        "time": lsts,  # radians
+        "freq": freqs / 1e6,  # MHz
+        "fr": frs * 1e3,  # mHz
+        "dly": dlys * 1e9,  # ns
+    }
 
     # now do the same for abscissa labels
-    labels = {"time" : "LST [radians]",
-              "freq" : "Frequency [MHz]",
-              "fr" : "Fringe Rate [mHz]",
-              "dly" : "Delay [ns]"
-              }
+    labels = {
+        "time": "LST [radians]",
+        "freq": "Frequency [MHz]",
+        "fr": "Fringe Rate [mHz]",
+        "dly": "Delay [ns]",
+    }
 
     # and now for ordinate labels
-    vis_labels = {"time" : r"$V(t)$ [{vis_units}]",
-                  "freq" : r"$V(\nu)$ [{vis_units}]",
-                  "fr" : r"$\tilde{V}(f)$ [{vis_units}$\cdot$s]",
-                  "dly" : r"$\tilde{V}(\tau)$ [{vis_units}$\cdot$Hz]"
-                  }
+    vis_labels = {
+        "time": r"$V(t)$ [{vis_units}]",
+        "freq": r"$V(\nu)$ [{vis_units}]",
+        "fr": r"$\tilde{V}(f)$ [{vis_units}$\cdot$s]",
+        "dly": r"$\tilde{V}(\tau)$ [{vis_units}$\cdot$Hz]",
+    }
 
     # make sure the taper kwargs are a dictionary
     taper_kwargs = taper_kwargs or {}
 
     # make some mappings for plot types
-    plot_types = {dimension : lambda data : data, # no fft
-                  dual : lambda data : utils.FFT(data, 0, taper, **taper_kwargs)
-                  }
+    plot_types = {
+        dimension: lambda data: data,  # no fft
+        dual: lambda data: utils.FFT(data, 0, taper, **taper_kwargs),
+    }
 
     # update the plot_type parameter to something useful
     if plot_type == "normal":
@@ -1493,7 +1639,7 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
 
     # make a dictionary of visibilities to plot
     visibilities = {
-        plot : [xform(vis) for vis in (vis1, vis2)]
+        plot: [xform(vis) for vis in (vis1, vis2)]
         for plot, xform in plot_types.items()
         if plot in plot_type
     }
@@ -1501,10 +1647,17 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
     # XXX make a helper function for this
     # now setup the figure
     import matplotlib.pyplot as plt
+
     figsize = (4 * 3, 3 * len(plot_type))
     fig = plt.figure(figsize=figsize)
     axes = fig.subplots(len(plot_type), 3)
-    axes = [axes,] if axes.ndim == 1 else axes
+    axes = (
+        [
+            axes,
+        ]
+        if axes.ndim == 1
+        else axes
+    )
     axes[0][0].set_title("Amplitude Difference", fontsize=12)
     axes[0][1].set_title("Phase Difference", fontsize=12)
     axes[0][2].set_title("Amplitude of Complex Difference", fontsize=12)
@@ -1514,9 +1667,9 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
         # get the differences
         visA, visB = item[1]
         diffs = (
-            utils.diff(visA, visB, 'abs'),
-            utils.diff(visA, visB, 'phs'),
-            utils.diff(visA, visB, 'complex')
+            utils.diff(visA, visB, "abs"),
+            utils.diff(visA, visB, "phs"),
+            utils.diff(visA, visB, "complex"),
         )
 
         xdim = item[0]
@@ -1529,6 +1682,6 @@ def plot_diff_1d(uvd1, uvd2, antpairpol, plot_type="both",
             ax.set_xlabel(xlabel, fontsize=12)
             ax.set_ylabel(ylabel, fontsize=12)
 
-            ax.plot(plot_params[xdim], diff, marker='o', color='k', lw=0)
+            ax.plot(plot_params[xdim], diff, marker="o", color="k", lw=0)
 
     return fig

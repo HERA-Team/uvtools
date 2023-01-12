@@ -10,7 +10,10 @@ from . import dspec
 class MetadataError(ValueError):
     pass
 
-def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flatten=False):
+
+def search_data(
+    templates, pols, matched_pols=False, reverse_nesting=False, flatten=False
+):
     """
     Glob-parse data templates to search for data files.
 
@@ -86,7 +89,9 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
                 _templates.append(_file)
 
         # achieve goal by calling search_data with new _templates that are polarization matched
-        datafiles, datapols = search_data(_templates, pols, matched_pols=False, reverse_nesting=False)
+        datafiles, datapols = search_data(
+            _templates, pols, matched_pols=False, reverse_nesting=False
+        )
     # reverse nesting if desired
     if reverse_nesting:
         datafiles = []
@@ -107,6 +112,7 @@ def search_data(templates, pols, matched_pols=False, reverse_nesting=False, flat
         datapols = [item for sublist in datapols for item in sublist]
 
     return datafiles, datapols
+
 
 def FFT(data, axis=-1, taper=None, **kwargs):
     """Convenient function for performing a FFT along an axis.
@@ -153,6 +159,7 @@ def FFT(data, axis=-1, taper=None, **kwargs):
     # expected. So we perform no shifting prior to transforming.
     return fftshift(fft(window * data, axis=axis), axis)
 
+
 def fourier_freqs(times):
     """A function for generating Fourier frequencies given 'times'.
 
@@ -180,6 +187,7 @@ def fourier_freqs(times):
     # return the frequency array
     return np.linspace(-f_nyq, f_nyq, N, endpoint=False)
 
+
 def check_uvd_pair_metadata(uvd1, uvd2):
     """Check that the relevant metadata agrees for `uvd1` and `uvd2`.
 
@@ -206,14 +214,12 @@ def check_uvd_pair_metadata(uvd1, uvd2):
         raise MetadataError("The number of frequencies disagree.")
 
     # helper function; mean separation in array values for two arrays x1, x2
-    dx = lambda x1, x2 : 0.5 * (np.mean(np.diff(x1)) + np.mean(np.diff(x2)))
+    dx = lambda x1, x2: 0.5 * (np.mean(np.diff(x1)) + np.mean(np.diff(x2)))
 
     t1vals = np.unique(uvd1.time_array)
     t2vals = np.unique(uvd2.time_array)
     if uvd1.Ntimes > 1 and uvd2.Ntimes > 1:
-        if not np.all(
-            np.isclose(t1vals, t2vals, rtol=0, atol=dx(t1vals, t2vals))
-        ):
+        if not np.all(np.isclose(t1vals, t2vals, rtol=0, atol=dx(t1vals, t2vals))):
             raise MetadataError(
                 "Time values disagree more than the mean integration time."
             )
@@ -229,12 +235,11 @@ def check_uvd_pair_metadata(uvd1, uvd2):
     bls1 = uvd1.uvw_array
     bls2 = uvd2.uvw_array
     if not np.all(np.isclose(bls1, bls2)):
-        raise MetadataError(
-            "Baseline arrays do not agree or are not correctly phased."
-        )
+        raise MetadataError("Baseline arrays do not agree or are not correctly phased.")
 
     if not uvd1.vis_units == uvd2.vis_units:
         raise MetadataError("The visibility units do not agree.")
+
 
 def diff(vis1, vis2, mode):
     """Calculate a specified type of difference between two visibilities.
@@ -263,7 +268,9 @@ def diff(vis1, vis2, mode):
     elif mode == "complex":
         return np.abs(vis1 - vis2)
     else:
-        raise ValueError("You have not specified an accepted differencing " \
-                         "mode. The accepted modes are 'abs', 'phs', and " \
-                         "'complex'. See the ``utils.diff`` docstring for " \
-                         "details on what each mode does.")
+        raise ValueError(
+            "You have not specified an accepted differencing "
+            "mode. The accepted modes are 'abs', 'phs', and "
+            "'complex'. See the ``utils.diff`` docstring for "
+            "details on what each mode does."
+        )

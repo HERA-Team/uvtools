@@ -59,4 +59,4 @@ uvd.read(
 )
 
 data = np.squeeze(uvd.data_array)
-print(' '.join([str(vis) for vis in data]))
+print(" ".join([str(vis) for vis in data]))
