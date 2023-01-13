@@ -29,7 +29,7 @@ To test the package, execute the following command::
 
 ## Making a Release
 
-To make a release of `aipy` (both on Github and PyPI), head to the most current
+To make a release of `uvtools` (both on Github and PyPI), head to the most current
 [Draft Release](https://github.com/HERA-Team/uvtools/releases) and note the *suggested*
 release version. Contact the maintainers with your intention to make a release either
 to that version (or, if appropriate, to a different version), and publish the release

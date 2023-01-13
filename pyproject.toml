@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "setuptools-scm[toml]>=6.2", "numpy"]
+requires = ["setuptools", "setuptools-scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -18,7 +18,6 @@ dependencies = [
     "numpy",
     "six",
     "scipy",
-    "aipy",
     "pyuvdata",
     "astropy>5.1"
 ]
@@ -28,11 +27,11 @@ dynamic = [
 
 
 [project.optional-dependencies]
-aipy = ["aipy>=3.0rc2"]
+aipy = ["aipy>=3.0.5"]
 dev = [
     "pytest",
     "pytest-cov",
-    "aipy",
+    "aipy>=3.0.5",
     "pre-commit"
 ]
 [tool.setuptools_scm]
