@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- mode: python; coding: utf-8 -*-
 # Copyright (c) 2021 HERA collaboration
 # Licensed under the MIT License
 

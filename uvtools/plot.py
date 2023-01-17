@@ -1,11 +1,13 @@
-import numpy as np
 import warnings
-from astropy import units
-from scipy.stats import binned_statistic_2d
+
 import matplotlib
 import matplotlib.pyplot as plt
+import numpy as np
+from astropy import units
+from scipy.stats import binned_statistic_2d
 
 from . import utils
+
 
 def data_mode(data, mode='abs'):
     """
@@ -166,7 +168,7 @@ def plot_antpos(antpos, ants=None, ex_ants=[], hl_ants=[],
     for ant in ants:
         pos = antpos[ant]
         bad = ant in ex_ants
-        plt.gca().add_artist(plt.Circle(tuple(pos[0:2]), radius=7, 
+        plt.gca().add_artist(plt.Circle(tuple(pos[0:2]), radius=7,
                                         fill=(~bad), color=['grey','r'][bad]))
         if ant in hl_ants:
             plt.gca().add_artist(plt.Circle(tuple(antpos[ant][0:2]), radius=7, fill=True, lw=0, color='b'))
@@ -192,7 +194,7 @@ def plot_antpos(antpos, ants=None, ex_ants=[], hl_ants=[],
     return scat
 
 
-def plot_antclass(antpos, antclass, ax=None, ants=None, radius=7.0, 
+def plot_antclass(antpos, antclass, ax=None, ants=None, radius=7.0,
                   ang_dict={'Jee': (225, 405), 'Jnn': (45, 225)},
                   colors=['darkgreen', 'goldenrod', 'maroon'],
                   labelsize=12, labelcolor='w', legend=True, title=None):
@@ -225,10 +227,10 @@ def plot_antclass(antpos, antclass, ax=None, ants=None, radius=7.0,
     """
     if ax is None:
         ax = plt.gca()
-    
+
     # produce scatter plot of wedges
-    pols = sorted(list(set(ant[1] for ant in antclass.ants)))[::-1]
-    ants = set([ant for ant in antclass.ants if ants is None or (ant[0] in set(ants)) or (ant in set(ants))])
+    pols = sorted(list({ant[1] for ant in antclass.ants}))[::-1]
+    ants = {ant for ant in antclass.ants if ants is None or (ant[0] in set(ants)) or (ant in set(ants))}
     xpos = np.array([antpos[ant[0]][0] for ant in ants])
     ypos = np.array([antpos[ant[0]][1] for ant in ants])
     scatter = ax.scatter(xpos, ypos, c='w', s=0)
@@ -242,10 +244,10 @@ def plot_antclass(antpos, antclass, ax=None, ants=None, radius=7.0,
         legend_objs = []
         legend_labels = []
         for cls, color in zip(antclass.quality_classes, colors):
-            legend_objs.append(matplotlib.lines.Line2D([0], [0], marker='o', color='w', markeredgecolor=color, 
+            legend_objs.append(matplotlib.lines.Line2D([0], [0], marker='o', color='w', markeredgecolor=color,
                                                        markerfacecolor=color, markersize=15))
             pol_status = [f'{len([ant for ant in antclass.get_all(cls) if ant[1] == pol])} {cls} {pol} antpols' for pol in pols]
-            legend_labels.append((u' \u2571\n').join(pol_status))
+            legend_labels.append((' \u2571\n').join(pol_status))
         ax.legend(legend_objs, legend_labels, ncol=1, fontsize=12)
 
     # label axes and set axlims
@@ -258,7 +260,7 @@ def plot_antclass(antpos, antclass, ax=None, ants=None, radius=7.0,
     plt.tight_layout()
 
     # label antennas
-    for ant in set([ant[0] for ant in ants]):
+    for ant in {ant[0] for ant in ants}:
         ax.text(antpos[ant][0], antpos[ant][1], str(ant), va='center', ha='center', color=labelcolor, size=labelsize)
 
 
@@ -401,10 +403,10 @@ def omni_view(reds, vis, pol, integration=10, chan=500, norm=False,
     for i, pt in enumerate(points):
         if norm:
             ax.scatter(pt.real/np.abs(pt), pt.imag/np.abs(pt), c=col[i],
-                       marker=sym[i], s=50, label='{}'.format(bl[i]))
+                       marker=sym[i], s=50, label=f'{bl[i]}')
         else:
             ax.scatter(pt.real, pt.imag, c=col[i], marker=sym[i], s=50,
-                       label='{}'.format(bl[i]))
+                       label=f'{bl[i]}')
             if np.abs(pt.real) > max_x: max_x = np.abs(pt.real)
             if np.abs(pt.imag) > max_y: max_y = np.abs(pt.imag)
     plt.suptitle(title)
@@ -605,6 +607,7 @@ def labeled_waterfall(
     else:
         try:
             from pyuvdata import UVData
+
             # In case UVData is installed and a non-UVData object was passed.
             if type(data) is not UVData:
                 raise ImportError

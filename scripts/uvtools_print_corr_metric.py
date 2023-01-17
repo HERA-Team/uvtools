@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- mode: python; coding: utf-8 -*-
 # Copyright (c) 2021 HERA collaboration
 # Licensed under the MIT License
 
@@ -10,8 +9,8 @@ import argparse
 import h5py
 import hdf5plugin
 import numpy as np
-from pyuvdata import UVData
 import pyuvdata.utils as uvutils
+from pyuvdata import UVData
 
 try:
     from hera_mc import cm_hookup, mc
@@ -87,7 +86,7 @@ if node_info:
     ant_node_strs = []
     ant_1_node_strs = np.zeros(uvd_sum.ant_1_array.shape, dtype=int)
     ant_2_node_strs = np.zeros(uvd_sum.ant_2_array.shape, dtype=int)
-    with mc.MCSessionWrapper(session=None) as session: 
+    with mc.MCSessionWrapper(session=None) as session:
         hookup = cm_hookup.Hookup(session)
         ant_dict = hookup.get_hookup('H')
         for ant in ants_data_unique:
@@ -129,7 +128,7 @@ if node_info:
     # lexsort uses the listed arrays from last to first
     # (so the primary sort is on the last one)
     bl_index_array = np.lexsort((ant_2_node_strs, ant_1_node_strs, uvd_sum.time_array))
-        
+
     uvd_sum.reorder_blts(bl_index_array)
     uvd_diff.reorder_blts(bl_index_array)
 else:
@@ -177,7 +176,7 @@ else:
 
         corrs = corr_metric[this_row]
         corrs = ["  x  " if corr > args.threshold else "  .  " for corr in corrs ]
-        
+
         if node_info:
             node = ant_node_strs_sorted[ant_ind][:2]
             print(f"{node}  " + f"{ant:4n} " + "     "*ant_ind, "".join(corrs))

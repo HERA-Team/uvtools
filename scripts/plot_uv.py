@@ -4,13 +4,16 @@
 Creates waterfall plots for visibility datasets.
 """
 
-from __future__ import print_function, division, absolute_import
 
-import numpy as np, sys, optparse
-import uvtools
-import pyuvdata
+import optparse
+import sys
+
 import hera_cal
+import numpy as np
+import pyuvdata
 from matplotlib import pylab as plt
+
+import uvtools
 
 o = optparse.OptionParser()
 o.set_usage('plot_uv.py [options] *.uv')
@@ -104,7 +107,7 @@ for filecnt, uvfile in enumerate(args):
             try:
                 uvf = hera_cal.io.HERAData(uvfile, filetype=filetype)
                 break
-            except(IOError):
+            except(OSError):
                 continue
     else:
         uvf = hera_cal.io.HERAData(uvfile, filetype=filetype)
