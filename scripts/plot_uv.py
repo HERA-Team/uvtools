@@ -4,13 +4,16 @@
 Creates waterfall plots for visibility datasets.
 """
 
-from __future__ import print_function, division, absolute_import
 
-import numpy as np, sys, optparse
-import uvtools
-import pyuvdata
+import optparse
+import sys
+
 import hera_cal
+import numpy as np
+import pyuvdata
 from matplotlib import pylab as plt
+
+import uvtools
 
 o = optparse.OptionParser()
 o.set_usage('plot_uv.py [options] *.uv')
@@ -27,7 +30,7 @@ o.add_option('--drng', dest='drng', type='float', default=None,
     help="Dynamic range in color of image, in units matching plotting mode. Default max(data)-min(data).")
 o.add_option('-m', '--mode', dest='mode', default='log',
     help='Plot mode can be log (logrithmic), abs (absolute), phs (phase), real, or imag.')
-o.add_option('-t', '--time', dest='time', default='all', 
+o.add_option('-t', '--time', dest='time', default='all',
     help='Select which time samples to plot. Options are: "all" (default), "<time1 #>_<time2 #>" (a range of times to plot), or "<time1 #>,<time2 #>" (a list of times to plot).')
 o.add_option('-u', '--unmask', dest='unmask', action='store_true',
     help='Plot masked data, too.')
@@ -104,7 +107,7 @@ for filecnt, uvfile in enumerate(args):
             try:
                 uvf = hera_cal.io.HERAData(uvfile, filetype=filetype)
                 break
-            except(IOError):
+            except(OSError):
                 continue
     else:
         uvf = hera_cal.io.HERAData(uvfile, filetype=filetype)
@@ -128,7 +131,7 @@ for filecnt, uvfile in enumerate(args):
     plot_f['freq'] = meta['freqs'].flatten().take(chan)
     plot_f['chan'] = chan
     dat, flg, _ = uvf.read(bls, freq_chans=chan)
-    data.append(dat); flgs.append(flg) 
+    data.append(dat); flgs.append(flg)
 
 # Concatenate the data from all the files
 if len(data) > 1:
@@ -243,7 +246,7 @@ else:
     def click(event):
         print([event.key])
         if event.key == 'm':
-            mode = raw_input('Enter new mode: ')
+            mode = input('Enter new mode: ')
             for k in plots:
                 try:
                     d = uvtools.plot.data_mode(plt_data[k], mode)
@@ -252,10 +255,10 @@ else:
                     print('Unrecognized plot mode')
             plt.draw()
         elif event.key == 'd':
-            max = raw_input('Enter new max: ')
+            max = input('Enter new max: ')
             try: max = float(max)
             except(ValueError): max = None
-            drng = raw_input('Enter new drng: ')
+            drng = input('Enter new drng: ')
             try: drng = float(drng)
             except(ValueError): drng = None
             for k in plots:

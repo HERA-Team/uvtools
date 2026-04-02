@@ -1,16 +1,13 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) 2018 The HERA Collaboration
 # Licensed under the MIT License
 
-from __future__ import print_function, division, absolute_import
 
-import aipy
-import numpy as np
-from six.moves import range
-from scipy.signal import windows
-from warnings import warn
-from scipy.optimize import leastsq, lsq_linear
 import copy
+from warnings import warn
+
+import numpy as np
+from scipy.optimize import leastsq, lsq_linear
+from scipy.signal import windows
 
 #DEFAULT PARAMETERS FOR CLEANs
 CLEAN_DEFAULTS_1D={'tol':1e-9, 'window':'none',
@@ -82,7 +79,7 @@ def wedge_width(bl_len, sdf, nchan, standoff=0., horizon=1.):
     Returns:
         uthresh, lthresh: bin indices for filtered bins started at uthresh (which is filtered)
             and ending at lthresh (which is a negative integer and also not filtered)
-            Designed for area = np.ones(nchan, dtype=np.int); area[uthresh:lthresh] = 0
+            Designed for area = np.ones(nchan, dtype=int); area[uthresh:lthresh] = 0
     '''
     bl_dly = horizon * bl_len + standoff
     return calc_width(bl_dly, sdf, nchan)
@@ -108,6 +105,92 @@ def _get_filter_area(x, filter_center, filter_width):
         av = np.ones(nx)
     return av
 
+
+def place_data_on_uniform_grid(x, data, weights, xtol=1e-3):
+    """If possible, place data on a uniformly spaced grid.
+
+    Given a vector of x-values (x), with data and weights,
+    this function determines whether there are gaps in the
+    provided x-values that are multiples of the minimum
+    distance between x-values or whether any gaps are
+    integer multiples of a fundamental grid spacing.
+    If there are gaps that are integer multiples of a
+    fundamental spacing, this function restores these
+    x-values and inserts zero-valued
+    data and zero-valued weights at their location,
+    returning equally spaced data and weights that are
+    effectively flagged at the missing x-values.
+    This supports filtering data that was regularly sampled but has
+    missing samples due to (for example) correlator dropouts since
+    several of our filtering methods (DPSS fits and CLEAN) require data
+    to be sampled on an equally spaced grid.
+
+    Parameters
+    ----------
+    x: array-like,
+        array of x-values.
+    data: array-like,
+        array of y-values.
+        Should be the same length as x.
+    weights: array-like,
+        array of weights.
+        Should be the same length as x.
+    xtol: float, optional.
+        fractional error tolerance to determine if x-values are
+        on an incomplete grid.
+
+    Returns
+    -------
+        xout: array-like
+              If the separations on x are multiples of a single underlying minimum unit
+              returns x with all multiples of the fundamental unit filled in.
+              If x is already uniformly spaced, returns x unchanged. If separations are not
+              multiples of fundamental unit, also returns x unchanged.
+        yout: array-like
+              If the separations on x are multiples of a single underlying minimum unit
+              returns y with all multiples of the fundamental unit filled in with zeros.
+              If x is already uniformly spaced, returns y unchanged. If separations are not
+              multiples of fundamental unit, also returns y unchanged.
+        wout: array-like
+              If the separations on x are multiples of a single underlying minimum unit
+              returns w with all multiples of the fundamental unit filled in with zeros.
+              If x is already uniformly spaced, returns w unchanged. If separations are not
+              multiples of fundamental unit, also returns w unchanged.
+        inserted: array-like
+              boolean array indicating which x-values were inserted.
+    """
+    xdiff = np.diff(x)
+    dx = np.abs(np.diff(x)).min() * np.sign(np.diff(x)[0])
+    # first, check whether x, y, w already on a grid.
+    # if they are, just return them.
+    if np.allclose(xdiff, dx, rtol=0, atol=dx * xtol):
+        xout = x
+        dout = data
+        wout = weights
+        inserted = np.zeros(len(x), dtype=bool)
+        return xout, dout, wout, inserted
+    # next, check that the array is not on a grid and if it isn't, return x, y, w
+    if not np.allclose(xdiff / dx, np.round(xdiff / dx), rtol=0.0, atol=np.abs(xtol * dx)):
+        xout = x
+        dout = data
+        wout = weights
+        inserted = np.zeros(len(x), dtype=bool)
+        warn("Data cannot be placed on equally spaced grid! No values inserted.", RuntimeWarning)
+        return xout, dout, wout, inserted
+    # if the array is on a grid, then construct filled in grid.
+    grid_size =int(np.round((x[-1] - x[0]) / dx)) + 1
+    xout = np.linspace(x[0], x[-1], grid_size)
+    dout = np.zeros(grid_size, dtype=np.complex128)
+    wout = np.zeros(grid_size, dtype=float)
+    inserted = np.ones(grid_size, dtype=bool)
+    # fill in original data and weights.
+    for x_index, xt in enumerate(x):
+        output_index = np.argmin(np.abs(xout - xt))
+        dout[output_index] = data[x_index]
+        wout[output_index] = weights[x_index]
+        inserted[output_index] = False
+
+    return xout, dout, wout, inserted
 
 
 def _fourier_filter_hash(filter_centers, filter_half_widths,
@@ -158,7 +241,7 @@ def calc_width(filter_size, real_delta, nsamples):
     Returns:
         uthresh, lthresh: bin indices for filtered bins started at uthresh (which is filtered)
             and ending at lthresh (which is a negative integer and also not filtered).
-            Designed for area = np.ones(nsamples, dtype=np.int); area[uthresh:lthresh] = 0
+            Designed for area = np.ones(nsamples, dtype=int); area[uthresh:lthresh] = 0
     '''
     if isinstance(filter_size, (list, tuple, np.ndarray)):
         _, l = calc_width(np.abs(filter_size[0]), real_delta, nsamples)
@@ -431,9 +514,14 @@ def fourier_filter(x, data, wgts, filter_centers, filter_half_widths, mode,
                    _process_filter_kwargs(filter_kwargs, defaults)
                    if 'dft' in mode:
                         fp = np.asarray(filter_kwargs['fundamental_period']).flatten()
-                        for m in range(len(fp)):
-                            if np.isnan(fp[m]):
-                                fp[m] = 2. * (x[m].max() - x[m].min())
+                        if filter2d:
+                            for m in range(len(fp)):
+                                if np.isnan(fp[m]):
+                                    fp[m] = 2. * (x[m].max() - x[m].min())
+                        else:
+                            if np.isnan(fp[0]):
+                                fp = [2. * (x.max() - x.min())]
+
                         if len(fp) == 1:
                             filter_kwargs['fundamental_period'] = fp[0]
                         else:
@@ -686,7 +774,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
     if not isinstance(x, (np.ndarray,list, tuple)):
         raise ValueError("x must be a numpy array, list, or tuple")
     # Check that inputs are tiples or lists
-    if not isinstance(filter_dimensions, (list,tuple,int, np.int)):
+    if not isinstance(filter_dimensions, (list,tuple,int)):
         raise ValueError("filter_dimensions must be a list or tuple")
     # if filter_dimensions are supplied as a single integer, convert to list (core code assumes lists).
     if isinstance(filter_dimensions, int):
@@ -696,7 +784,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
         raise ValueError("length of filter_dimensions cannot exceed 2")
     # make sure filter_dimensions are 0 or 1.
     for dim in filter_dimensions:
-        if not dim in [0, 1] or not isinstance(dim, (int, np.int)):
+        if not dim in [0, 1] or not isinstance(dim, int):
             raise ValueError("filter dimension must be integer 0, or 1")
 
     # convert filter dimensions to a list of integers (incase the dimensions were supplied as floats)
@@ -720,7 +808,7 @@ def dayenu_filter(x, data, wgts, filter_dimensions, filter_centers, filter_half_
         # If any of these inputs is a float or numpy array, convert to a list.
         if isinstance(avar, np.ndarray):
             check_vars[anum] = list(avar)
-        elif isinstance(avar, np.float):
+        elif isinstance(avar, float):
             check_vars[anum] = [avar]
 
     filter_centers,filter_half_widths,filter_factors = check_vars
@@ -1036,9 +1124,9 @@ def vis_filter(data, wgts, max_frate=None, dt=None, bl_len=None, sdf=None, stand
             fc = 0.
             fw = max_frate
         # 2D clean
-        if isinstance(edgecut_hi, (int, np.int)):
+        if isinstance(edgecut_hi, int):
             edgecut_hi = (edgecut_hi, edgecut_hi)
-        if isinstance(edgecut_low, (int, np.int)):
+        if isinstance(edgecut_low, int):
             edgecut_low = (edgecut_low, edgecut_low)
         if isinstance(window, str):
             window = (window, window)
@@ -1081,10 +1169,10 @@ def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, normalization=
         if normalization not in ["mean", "rms"]:
             raise ValueError("normalization must be one of ['rms', 'mean']")
     # parse multiple input window or special windows
-    w = np.zeros(N, dtype=np.float)
+    w = np.zeros(N, dtype=float)
     Ncut = edgecut_low + edgecut_hi
     if Ncut >= N:
-        raise ValueError("Ncut >= N for edgecut_low {} and edgecut_hi {}".format(edgecut_low, edgecut_hi))
+        raise ValueError(f"Ncut >= N for edgecut_low {edgecut_low} and edgecut_hi {edgecut_hi}")
     if edgecut_hi > 0:
         edgecut_hi = -edgecut_hi
     else:
@@ -1119,7 +1207,7 @@ def gen_window(window, N, alpha=0.5, edgecut_low=0, edgecut_hi=0, normalization=
             # return any single-arg window from windows
             w[edgecut_low:edgecut_hi] = getattr(windows, window)(N - Ncut)
         except AttributeError:
-            raise ValueError("Didn't recognize window {}".format(window))
+            raise ValueError(f"Didn't recognize window {window}")
     if normalization == 'rms':
         w /= np.sqrt(np.mean(np.abs(w)**2.))
     if normalization == 'mean':
@@ -1430,9 +1518,9 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False,
 
     nmodes = nmax - nmin + 1
     # Array to store in-painted data
-    inp_data = np.zeros(data.shape, dtype=np.complex)
-    cn_array = np.zeros((data.shape[0], nmodes), dtype=np.complex)
-    mdl_array = np.zeros(data.shape, dtype=np.complex)
+    inp_data = np.zeros(data.shape, dtype=complex)
+    cn_array = np.zeros((data.shape[0], nmodes), dtype=complex)
+    mdl_array = np.zeros(data.shape, dtype=complex)
 
     # Loop over array
     cn_out = None
@@ -1450,7 +1538,7 @@ def delay_filter_leastsq(data, flags, sigma, nmax, add_noise=False,
 def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
                 basis_options, suppression_factors=None, hash_decimal=10,
                 method='leastsq', basis='dft', cache=None):
-    """
+    r"""
     A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
     y_model = A @ c
     where A is a design matrix encoding our choice for a basis functions
@@ -1565,11 +1653,20 @@ def _fit_basis_1d(x, y, w, filter_centers, filter_half_widths,
     info['suppression_factors'] = suppression_factors
     info['basis_options'] = basis_options
     info['amat'] = amat
+    info['skipped'] = False
     wmat = np.diag(w)
     if method == 'leastsq':
         a = np.atleast_2d(w).T * amat
-        res = lsq_linear(a, w * y)
-        cn_out = res.x
+        try:
+            res = lsq_linear(a, w * y)
+            cn_out = res.x
+        # np.linalg.LinAlgError catches "SVD did not converge."
+        # which can happen if the solution is under-constrained.
+        # also handle nans and infs in the data here too.
+        except (np.linalg.LinAlgError, ValueError, TypeError) as err:
+            warn(f"{err} -- recording skipped integration in info and setting to zero.")
+            cn_out = 0.0
+            info['skipped'] = True
     elif method == 'matrix':
         fm_key = _fourier_filter_hash(filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                                       filter_factors=suppression_vector, x=x, w=w, hash_decimal=hash_decimal,
@@ -1635,6 +1732,7 @@ def _clean_filter(x, data, wgts, filter_centers, filter_half_widths,
         d_res: CLEAN residual -- difference of data and d_mdl, nulled at flagged channels
         info: dictionary (1D case) or list of dictionaries (2D case) with CLEAN metadata
     '''
+    import aipy
     if not clean2d:
         #pad = [0, pad]
         _x = [np.zeros(data.shape[0]), np.fft.fftfreq(len(x), x[1]-x[0])]
@@ -1751,7 +1849,7 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                 method='leastsq', basis='dft', cache=None,
                 filter_dims = 1, skip_wgt=0.1, max_contiguous_edge_flags=5,
                 zero_residual_flags=True):
-    """
+    r"""
     A 1d linear-least-squares fitting function for computing models and residuals for fitting of the form
     y_model = A @ c
     where A is a design matrix encoding our choice for a basis functions
@@ -1851,7 +1949,7 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                                - 'basis_options': the basis options used for dpss/dft mode. See dft_operator and dpss_operator for
                                                   more details.
     """
-    if isinstance(filter_dims, (int, np.integer)):
+    if isinstance(filter_dims, int):
         filter_dims = [filter_dims]
     if cache is None:
         cache={}
@@ -1884,7 +1982,10 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                                             suppression_factors=suppression_factors[1],
                                             basis_options=basis_options[1], method=method,
                                             basis=basis, cache=cache)
-            info['status']['axis_1'][i] = 'success'
+            if info_t['skipped']:
+                info['status']['axis_1'][i] = 'skipped'
+            else:
+                info['status']['axis_1'][i] = 'success'
         else:
             info['status']['axis_1'][i] = 'skipped'
     #and if filter2d, filter the 0 dimension. Note that we feed in the 'model'
@@ -1911,7 +2012,10 @@ def _fit_basis_2d(x, data, wgts, filter_centers, filter_half_widths,
                                                                  suppression_factors=suppression_factors[0],
                                                                  basis_options=basis_options[0], method=method,
                                                                  basis=basis, cache=cache)
-                info['status']['axis_0'][i] = 'success'
+                if info_t['skipped']:
+                    info['status']['axis_0'][i] = 'skipped'
+                else:
+                    info['status']['axis_0'][i] = 'success'
             else:
                 info['status']['axis_0'][i] = 'skipped'
         if np.any([info['status']['axis_0'][i] == 'success' for i in info['status']['axis_0']]):
@@ -1993,7 +2097,8 @@ def fit_solution_matrix(weights, design_matrix, cache=None, hash_decimal=10, fit
 
 
 def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cutoff=None,
-        edge_suppression=None, nterms=None, avg_suppression=None, xc=None, hash_decimal=10):
+        edge_suppression=None, nterms=None, avg_suppression=None, xc=None, hash_decimal=10,
+        xtol=1e-3):
     """
     Calculates DPSS operator with multiple delay windows to fit data. Frequencies
     must be equally spaced (unlike Fourier operator). Users can specify how the
@@ -2028,6 +2133,9 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         all tones inside of the filter width instead of a single tone.
     xc: float optional
     hash_decimal: number of decimals to round for floating point dict keys.
+    xtol: fraction of average diff that the diff between all x-values must be within
+          the average diff to be considered
+          equally spaced. Default is 1e-3
 
     Returns
     ----------
@@ -2056,8 +2164,12 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
                                  w=None, hash_decimal=hash_decimal,
                                  label='dpss_operator', crit_val=tuple(crit_provided_value[0]))
     if not opkey in cache:
-        #check that xs are equally spaced.
-        if not np.all(np.isclose(np.diff(x), np.mean(np.diff(x)))):
+        # try placing x on a uniform grid.
+        # x is a version of x with the in-between grid values filled in and inserted is a boolean vector
+        # set to True wherever a value for x was inserted and False otherwise.
+        x, _, _, inserted = place_data_on_uniform_grid(x, np.zeros(len(x)), np.ones(len(x)))
+        # if this is not successful, then throw a value error..
+        if not np.allclose(np.diff(x), np.median(np.diff(x)), rtol=0., atol=np.abs(xtol * np.median(np.diff(x)))):
             #for now, don't support DPSS iterpolation unless x is equally spaced.
             #In principal, I should be able to compute off-grid DPSS points using
             #the fourier integral of the DPSWF
@@ -2071,12 +2183,13 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         if nterms is None:
             nterms = []
             for fn,fw in enumerate(filter_half_widths):
-                dpss_vectors = windows.dpss(nf, nf * df * fw, nf)
                 if not eigenval_cutoff is None:
-                    smat = np.sinc(2 * fw * (xg-yg)) * 2 * df * fw
-                    eigvals = np.sum((smat @ dpss_vectors.T) * dpss_vectors.T, axis=0)
+                    # Estimate the number of eigenvalues > eigenval_cutoff - Slepian 1978 + Karnik 2020
+                    Nw = 2 * nf * df * fw + 2 / np.pi ** 2 * np.log(4 * nf) * np.log(4 / (eigenval_cutoff[fn] * (1 - eigenval_cutoff[fn])))
+                    dpss_vectors, eigvals = windows.dpss(nf, nf * df * fw, int(min(Nw, nf)), return_ratios=True)
                     nterms.append(np.max(np.where(eigvals>=eigenval_cutoff[fn])))
                 if not edge_suppression is None:
+                    dpss_vectors = windows.dpss(nf, nf * df * fw, nf)
                     z0=fw * df
                     edge_tone=np.exp(-2j*np.pi*np.arange(nf)*z0)
                     fit_components = dpss_vectors * (dpss_vectors @ edge_tone)
@@ -2084,7 +2197,8 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
                     rms_residuals = np.asarray([ np.sqrt(np.mean(np.abs(edge_tone - np.sum(fit_components[:k],axis=0))**2.)) for k in range(nf)])
                     nterms.append(np.max(np.where(rms_residuals>=edge_suppression[fn])))
                 if not avg_suppression is None:
-                    sinc_vector=np.sinc(2 * fw * df * (np.arange(nf)-nf/2.))
+                    dpss_vectors = windows.dpss(nf, nf * df * fw, nf)
+                    sinc_vector = np.sinc(2 * fw * df * (np.arange(nf)-nf/2.))
                     sinc_vector = sinc_vector / np.sqrt(np.mean(sinc_vector**2.))
                     fit_components = dpss_vectors * (dpss_vectors @ sinc_vector)
                     #this is a vector of RMS residuals of vector with equal contributions from all tones within -fw and fw.
@@ -2094,7 +2208,15 @@ def dpss_operator(x, filter_centers, filter_half_widths, cache=None, eigenval_cu
         amat = []
         for fc, fw, nt in zip(filter_centers,filter_half_widths, nterms):
             amat.append(np.exp(2j * np.pi * (yg[:,:nt]-xc) * fc ) * windows.dpss(nf, nf * df * fw, nt).T )
-        cache[opkey] = ( np.hstack(amat), nterms )
+        if len(amat) > 1:
+            amat = np.hstack(amat)
+        else:
+            amat = amat[0]
+        # we used the regularly spaced inserted grid to generate our fitting basis vectors
+        # but we dont need them for the actual fit.
+        # so here we keep only the non-inserted rows of the design matrix.
+        amat = amat[~inserted, :]
+        cache[opkey] = (amat, nterms)
     return cache[opkey]
 
 
@@ -2194,7 +2316,7 @@ def delay_interpolation_matrix(nchan, ndelay, wgts, fundamental_period=None, cac
         fundamental period of Fourier modes to fit too.
         this sets the resolution in Fourier space. A standard DFT has a resolution
         of 1/N_{FP} = 1/N between fourier modes so that the DFT operator is
-        D_{mn} = e^{-2 \pi i m n / N_{FP}}. fg_deconv_fundamental_period
+        D_{mn} = e^{-2 \\pi i m n / N_{FP}}. fg_deconv_fundamental_period
         is N_{FP}.
     cache: dict, optional
         optional cache holding pre-computed matrices
@@ -2267,11 +2389,11 @@ def dayenu_mat_inv(x, filter_centers, filter_half_widths,
     """
     if cache is None:
         cache = {}
-    if isinstance(filter_factors,(float,int, np.int, np.float)):
+    if isinstance(filter_factors,(float,int)):
         filter_factors = [filter_factors]
-    if isinstance(filter_centers, (float, int, np.int, np.float)):
+    if isinstance(filter_centers, (float, int)):
         filter_centers = [filter_centers]
-    if isinstance(filter_half_widths, (float, int, np.int, np.float)):
+    if isinstance(filter_half_widths, (float, int)):
         filter_half_widths = [filter_half_widths]
 
     nchan = len(x)

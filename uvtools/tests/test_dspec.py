@@ -1,209 +1,216 @@
-import unittest
-import uvtools.dspec as dspec
-import numpy as np, random
-import nose.tools as nt
-from pyuvdata import UVData
-from uvtools.data import DATA_PATH
 import os
-import scipy.signal.windows as windows
+import random
 import warnings
+
+import numpy as np
+import pytest
+import scipy.signal.windows as windows
+from pyuvdata import UVData
+
+from uvtools.data import DATA_PATH
+
+from .. import dspec
+
 random.seed(0)
+import copy
 
-class TestMethods(unittest.TestCase):
 
-    def test_wedge_width(self):
-        # Test boundaries of delay bins
-        self.assertEqual(dspec.wedge_width(0, .01, 10), (1,10))
-        self.assertEqual(dspec.wedge_width(5., .01, 10), (1,10))
-        self.assertEqual(dspec.wedge_width( 9., .01, 10), (2,-1))
-        self.assertEqual(dspec.wedge_width(10., .01, 10), (2,-1))
-        self.assertEqual(dspec.wedge_width(15., .01, 10), (3,-2))
-        # test nchan
-        self.assertEqual(dspec.wedge_width(10., .01, 20), (3,-2))
-        self.assertEqual(dspec.wedge_width(10., .01, 40), (5,-4))
-        # test sdf
-        self.assertEqual(dspec.wedge_width(10., .02, 10), (3,-2))
-        self.assertEqual(dspec.wedge_width(10., .04, 10), (5,-4))
-        # test standoff
-        self.assertEqual(dspec.wedge_width(100., .001, 100, standoff=4.), (11,-10))
-        self.assertEqual(dspec.wedge_width(100., .001, 100, standoff=5.), (11,-10))
-        self.assertEqual(dspec.wedge_width(100., .001, 100, standoff=10.), (12,-11))
-        self.assertEqual(dspec.wedge_width(100., .001, 100, standoff=15.), (13,-12))
-        # test horizon
-        self.assertEqual(dspec.wedge_width(100., .001, 100, horizon=.1), (2,-1))
-        self.assertEqual(dspec.wedge_width(100., .001, 100, horizon=.5), (6,-5))
-        self.assertEqual(dspec.wedge_width(100., .001, 100, horizon=1.5), (16,-15))
-        self.assertEqual(dspec.wedge_width(100., .001, 100, horizon=2.), (21,-20))
+def test_wedge_width():
+    # Test boundaries of delay bins
+    assert dspec.wedge_width(0, .01, 10) == (1,10)
+    assert dspec.wedge_width(5., .01, 10) == (1,10)
+    assert dspec.wedge_width( 9., .01, 10) == (2,-1)
+    assert dspec.wedge_width(10., .01, 10) == (2,-1)
+    assert dspec.wedge_width(15., .01, 10) == (3,-2)
+    # test nchan
+    assert dspec.wedge_width(10., .01, 20) == (3,-2)
+    assert dspec.wedge_width(10., .01, 40) == (5,-4)
+    # test sdf
+    assert dspec.wedge_width(10., .02, 10) == (3,-2)
+    assert dspec.wedge_width(10., .04, 10) == (5,-4)
+    # test standoff
+    assert dspec.wedge_width(100., .001, 100, standoff=4.) == (11,-10)
+    assert dspec.wedge_width(100., .001, 100, standoff=5.) == (11,-10)
+    assert dspec.wedge_width(100., .001, 100, standoff=10.) == (12,-11)
+    assert dspec.wedge_width(100., .001, 100, standoff=15.) == (13,-12)
+    # test horizon
+    assert dspec.wedge_width(100., .001, 100, horizon=.1) == (2,-1)
+    assert dspec.wedge_width(100., .001, 100, horizon=.5) == (6,-5)
+    assert dspec.wedge_width(100., .001, 100, horizon=1.5) == (16,-15)
+    assert dspec.wedge_width(100., .001, 100, horizon=2.) == (21,-20)
 
-    def test_delay_filter_dims(self):
-        self.assertRaises(ValueError, dspec.delay_filter, np.zeros((1,2,3)), np.zeros((1,2,3)), 0, .001)
+def test_delay_filter_dims():
+    pytest.raises(ValueError, dspec.delay_filter, np.zeros((1,2,3)), np.zeros((1,2,3)), 0, .001)
 
-    def test_delay_filter_1D(self):
-        NCHAN = 128
-        TOL = 1e-6
-        data = np.ones(NCHAN, dtype=np.complex)
-        wgts = .5*np.ones(NCHAN, dtype=np.complex)
-        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
-        np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
-        np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
-        wgts[::16] = 0
-        # This test should have been failing since _w = 0.46 but skip_wgt=0.5 by default for delay_filter.
-        # The reason it was not failing originally was because no 1d check for skip_wgt existed in high_pass_fourier_filter.
-        # This check does exist in fourier_filter (as it should) and now the test, in its original form, fails.
-        # I've changed the skip_wgt to 0.1 (down from 0.5) so that it passes.
-        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL, skip_wgt=0.1)
-        np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
-        np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
-        data = np.random.normal(size=NCHAN)
-        wgts = np.ones_like(data)
-        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=1e-9)
-        self.assertAlmostEqual(np.average(data), np.average(dmdl), 3)
-        self.assertAlmostEqual(np.average(dres), 0, 3)
+def test_delay_filter_1D():
+    NCHAN = 128
+    TOL = 1e-6
+    data = np.ones(NCHAN, dtype=complex)
+    wgts = .5*np.ones(NCHAN, dtype=complex)
+    dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
+    np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
+    np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
+    wgts[::16] = 0
+    # This test should have been failing since _w = 0.46 but skip_wgt=0.5 by default for delay_filter.
+    # The reason it was not failing originally was because no 1d check for skip_wgt existed in high_pass_fourier_filter.
+    # This check does exist in fourier_filter (as it should) and now the test, in its original form, fails.
+    # I've changed the skip_wgt to 0.1 (down from 0.5) so that it passes.
+    dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL, skip_wgt=0.1)
+    np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
+    np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
+    data = np.random.normal(size=NCHAN)
+    wgts = np.ones_like(data)
+    dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=1e-9)
+    assert np.allclose(np.average(data), np.average(dmdl), rtol=0, atol=1e-3)
+    assert np.allclose(np.average(dres), 0.0, rtol=0, atol=1e-3)
 
-        #check that skip_wgt is properly passed to clean
-        wgts[:72] = 0.
-        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL, skip_wgt=0.5, mode='clean')
-        nt.assert_true(info['status']['axis_1'][0] == 'skipped')
+    #check that skip_wgt is properly passed to clean
+    wgts[:72] = 0.
+    dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL, skip_wgt=0.5, mode='clean')
+    assert info['status']['axis_1'][0] == 'skipped'
 
-    def test_delay_filter_2D(self):
-        NCHAN = 128
-        NTIMES = 10
-        TOL = 1e-6
-        data = np.ones((NTIMES, NCHAN), dtype=np.complex)
-        wgts = np.ones((NTIMES, NCHAN), dtype=np.complex)
-        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
-        np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
-        np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
-        wgts[:,::16] = 0;
-        wgts*=.9 #tests to make sure wgts**2 normalization works
-        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
-        np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
-        np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
-        data = np.array(np.random.normal(size=(NTIMES,NCHAN)),dtype=complex)
-        wgts = np.ones_like(data)
-        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=1e-9)
-        np.testing.assert_allclose(np.average(data,axis=1), np.average(dmdl,axis=1), atol=1e-3)
-        np.testing.assert_allclose(np.average(dres,axis=1), 0, atol=1e-3)
-        #check that skip_wgt is properly passed to clean
-        wgts[0,:72] = 0.
-        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL, skip_wgt=0.5, mode='clean')
-        nt.assert_true(info['status']['axis_1'][0] == 'skipped')
-        nt.assert_true(info['status']['axis_1'][1] == 'success')
+def test_delay_filter_2D():
+    NCHAN = 128
+    NTIMES = 10
+    TOL = 1e-6
+    data = np.ones((NTIMES, NCHAN), dtype=complex)
+    wgts = np.ones((NTIMES, NCHAN), dtype=complex)
+    dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
+    np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
+    np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
+    wgts[:,::16] = 0;
+    wgts*=.9 #tests to make sure wgts**2 normalization works
+    dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL)
+    np.testing.assert_allclose(data, dmdl, atol=NCHAN*TOL)
+    np.testing.assert_allclose(dres, np.zeros_like(dres), atol=NCHAN*TOL)
+    data = np.array(np.random.normal(size=(NTIMES,NCHAN)),dtype=complex)
+    wgts = np.ones_like(data)
+    dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=1e-9)
+    np.testing.assert_allclose(np.average(data,axis=1), np.average(dmdl,axis=1), atol=1e-3)
+    np.testing.assert_allclose(np.average(dres,axis=1), 0, atol=1e-3)
+    #check that skip_wgt is properly passed to clean
+    wgts[0,:72] = 0.
+    dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL, skip_wgt=0.5, mode='clean')
+    assert info['status']['axis_1'][0] == 'skipped'
+    assert info['status']['axis_1'][1] == 'success'
 
-    def test_fourier_model(self):
-        NMAX = 7
-        NFREQS = 100
-        nmodes = 2*NMAX + 1
-        cn = (np.arange(nmodes) + 1.j*np.arange(nmodes)) / float(nmodes)
-        model = dspec.fourier_model(cn, NFREQS)
+def test_fourier_model():
+    NMAX = 7
+    NFREQS = 100
+    nmodes = 2*NMAX + 1
+    cn = (np.arange(nmodes) + 1.j*np.arange(nmodes)) / float(nmodes)
+    model = dspec.fourier_model(cn, NFREQS)
 
-        # Test shape of output model
-        self.assertEqual((NFREQS,), model.shape)
+    # Test shape of output model
+    assert (NFREQS,) == model.shape
 
-        # Test errors
-        nt.assert_raises(ValueError, dspec.fourier_model, 3, NFREQS)
-        nt.assert_raises(ValueError, dspec.fourier_model, np.empty((3, 3)), NFREQS)
+    # Test errors
+    pytest.raises(ValueError, dspec.fourier_model, 3, NFREQS)
+    pytest.raises(ValueError, dspec.fourier_model, np.empty((3, 3)), NFREQS)
 
-    def test_delay_filter_leastsq(self):
-        NCHAN = 128
-        NTIMES = 10
-        TOL = 1e-7
-        data = np.ones((NTIMES, NCHAN), dtype=np.complex)
-        flags = np.zeros((NTIMES, NCHAN), dtype=np.bool)
-        sigma = 0.1 # Noise level (not important here)
+def test_delay_filter_leastsq():
+    NCHAN = 128
+    NTIMES = 10
+    TOL = 1e-7
+    data = np.ones((NTIMES, NCHAN), dtype=complex)
+    flags = np.zeros((NTIMES, NCHAN), dtype=bool)
+    sigma = 0.1 # Noise level (not important here)
 
-        # Fourier coeffs for input data, ordered from (-nmax, nmax)
-        cn = np.array([-0.1-0.1j, -0.1+0.1j, -0.3-0.01j, 0.5+0.01j,
-                       -0.3-0.01j, -0.1+0.1j, 0.1-0.1j])
-        data *= np.atleast_2d( dspec.fourier_model(cn, NCHAN) )
+    # Fourier coeffs for input data, ordered from (-nmax, nmax)
+    cn = np.array([-0.1-0.1j, -0.1+0.1j, -0.3-0.01j, 0.5+0.01j,
+                   -0.3-0.01j, -0.1+0.1j, 0.1-0.1j])
+    data *= np.atleast_2d( dspec.fourier_model(cn, NCHAN) )
 
-        # Estimate smooth Fourier model on unflagged data
-        bf_model, cn_out, data_out = dspec.delay_filter_leastsq(data, flags,
-                                                                sigma, nmax=3,
-                                                                add_noise=False)
-        np.testing.assert_allclose(data, bf_model, atol=NCHAN*TOL)
-        np.testing.assert_allclose(cn, cn_out[0], atol=1e-6)
+    # Estimate smooth Fourier model on unflagged data
+    bf_model, cn_out, data_out = dspec.delay_filter_leastsq(data, flags,
+                                                            sigma, nmax=3,
+                                                            add_noise=False)
+    np.testing.assert_allclose(data, bf_model, atol=NCHAN*TOL)
+    np.testing.assert_allclose(cn, cn_out[0], atol=1e-6)
 
-        # Estimate smooth Fourier model on data with some flags
-        flags[:,10] = True
-        flags[:,65:70] = True
-        bf_model, cn_out, data_out = dspec.delay_filter_leastsq(data, flags,
-                                                                sigma, nmax=3,
-                                                                add_noise=False)
-        np.testing.assert_allclose(data, bf_model, atol=NCHAN*TOL)
-        np.testing.assert_allclose(data, data_out, atol=NCHAN*TOL)
+    # Estimate smooth Fourier model on data with some flags
+    flags[:,10] = True
+    flags[:,65:70] = True
+    bf_model, cn_out, data_out = dspec.delay_filter_leastsq(data, flags,
+                                                            sigma, nmax=3,
+                                                            add_noise=False)
+    np.testing.assert_allclose(data, bf_model, atol=NCHAN*TOL)
+    np.testing.assert_allclose(data, data_out, atol=NCHAN*TOL)
 
-        # Test 1D code directly
-        bf_model, cn_out, data_out = dspec.delay_filter_leastsq_1d(
-            data[0], flags[0], sigma, nmax=3, add_noise=False)
-        np.testing.assert_allclose(data[0], bf_model, atol=NCHAN*TOL)
+    # Test 1D code directly
+    bf_model, cn_out, data_out = dspec.delay_filter_leastsq_1d(
+        data[0], flags[0], sigma, nmax=3, add_noise=False)
+    np.testing.assert_allclose(data[0], bf_model, atol=NCHAN*TOL)
 
-        # Test 1D code with non-linear leastsq
-        bf_model, cn_out, data_out = dspec.delay_filter_leastsq_1d(
-            data[0], flags[0], sigma, nmax=3, add_noise=False, use_linear=False)
-        np.testing.assert_allclose(data[0], bf_model, atol=NCHAN*TOL)
+    # Test 1D code with non-linear leastsq
+    bf_model, cn_out, data_out = dspec.delay_filter_leastsq_1d(
+        data[0], flags[0], sigma, nmax=3, add_noise=False, use_linear=False)
+    np.testing.assert_allclose(data[0], bf_model, atol=NCHAN*TOL)
 
-        # Test that noise injection can be switched on
-        bf_model, cn_out, data_out = dspec.delay_filter_leastsq_1d(
-            data[0], flags[0], sigma, nmax=3, add_noise=True)
-        np.testing.assert_allclose(data[0], bf_model, atol=NCHAN * TOL * sigma)
+    # Test that noise injection can be switched on
+    bf_model, cn_out, data_out = dspec.delay_filter_leastsq_1d(
+        data[0], flags[0], sigma, nmax=3, add_noise=True)
+    np.testing.assert_allclose(data[0], bf_model, atol=NCHAN * TOL * sigma)
 
-        # Test with a noise array
-        sigma_array = sigma * np.ones_like(data[0])
-        bf_model, cn_out, data_out = dspec.delay_filter_leastsq_1d(
-            data[0], flags[0], sigma_array, nmax=3, add_noise=True)
-        np.testing.assert_allclose(data[0], bf_model, atol=NCHAN * TOL * sigma)
+    # Test with a noise array
+    sigma_array = sigma * np.ones_like(data[0])
+    bf_model, cn_out, data_out = dspec.delay_filter_leastsq_1d(
+        data[0], flags[0], sigma_array, nmax=3, add_noise=True)
+    np.testing.assert_allclose(data[0], bf_model, atol=NCHAN * TOL * sigma)
 
-        # Test errors
-        nt.assert_raises(ValueError, dspec.delay_filter_leastsq_1d,
-                         data[0], flags[0], sigma, nmax=3, operator=np.empty((3, 3)))
-        nt.assert_raises(ValueError, dspec.delay_filter_leastsq_1d,
-                         data[0], flags[0], sigma, nmax=3, cn_guess=np.array([3]))
+    # Test errors
+    pytest.raises(ValueError, dspec.delay_filter_leastsq_1d,
+                     data[0], flags[0], sigma, nmax=3, operator=np.empty((3, 3)))
+    pytest.raises(ValueError, dspec.delay_filter_leastsq_1d,
+                     data[0], flags[0], sigma, nmax=3, cn_guess=np.array([3]))
 
-    def test_skip_wgt(self):
-        NCHAN = 128
-        NTIMES = 10
-        TOL = 1e-6
-        data = np.ones((NTIMES, NCHAN), dtype=np.complex)
-        wgts = np.ones((NTIMES, NCHAN), dtype=np.complex)
-        wgts[0, 0:-4] = 0
-        dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL, skip_wgt=.1)
-        np.testing.assert_allclose(data[1:,:], dmdl[1:,:], atol=NCHAN*TOL)
-        np.testing.assert_allclose(dres[1:,:], np.zeros_like(dres)[1:,:], atol=NCHAN*TOL)
-        np.testing.assert_allclose(dmdl[0,:], np.zeros_like(dmdl[0,:]), atol=NCHAN*TOL)
-        np.testing.assert_allclose(dres[0,:], (data * wgts)[0,:], atol=NCHAN*TOL)
-        self.assertEqual(len(info['status']['axis_1']), NTIMES)
-        self.assertTrue(info['status']['axis_1'][i] == 'skipped' for i in list(info['status']['axis_1'])[::-1])
+def test_skip_wgt():
+    NCHAN = 128
+    NTIMES = 10
+    TOL = 1e-6
+    data = np.ones((NTIMES, NCHAN), dtype=complex)
+    wgts = np.ones((NTIMES, NCHAN), dtype=complex)
+    wgts[0, 0:-4] = 0
+    dmdl, dres, info = dspec.delay_filter(data, wgts, 0., .1/NCHAN, tol=TOL, skip_wgt=.1)
+    np.testing.assert_allclose(data[1:,:], dmdl[1:,:], atol=NCHAN*TOL)
+    np.testing.assert_allclose(dres[1:,:], np.zeros_like(dres)[1:,:], atol=NCHAN*TOL)
+    np.testing.assert_allclose(dmdl[0,:], np.zeros_like(dmdl[0,:]), atol=NCHAN*TOL)
+    np.testing.assert_allclose(dres[0,:], (data * wgts)[0,:], atol=NCHAN*TOL)
+    assert len(info['status']['axis_1']) == NTIMES
+    assert np.all([info['status']['axis_1'][i] == 'skipped' for i in list(info['status']['axis_1'])[:1]])
+    assert not np.any([info['status']['axis_1'][i] == 'skipped' for i in list(info['status']['axis_1'])[1:]])
 
-    def test_calc_width(self):
-        # test single filter_size
-        nchan = 100
-        dt = 10.
-        filter_size = 1e-2
-        u, l = dspec.calc_width(filter_size, dt, nchan)
-        frs = np.fft.fftfreq(nchan, dt)  # negative b/c of ifft convention
-        nt.assert_true(np.all(np.abs(frs[u:l]) > filter_size))
+def test_calc_width():
+    # test single filter_size
+    nchan = 100
+    dt = 10.
+    filter_size = 1e-2
+    u, l = dspec.calc_width(filter_size, dt, nchan)
+    frs = np.fft.fftfreq(nchan, dt)  # negative b/c of ifft convention
+    assert np.all(np.abs(frs[u:l]) > filter_size)
 
-        # test multiple entries in filter_size
-        filter_size = (1e-2, 2e-2)
-        u, l = dspec.calc_width(filter_size, dt, nchan)
-        nt.assert_true(np.all((frs[u:l] < -1e-2) | (frs[u:l] > 2e-2)))
+    # test multiple entries in filter_size
+    filter_size = (1e-2, 2e-2)
+    u, l = dspec.calc_width(filter_size, dt, nchan)
+    assert np.all((frs[u:l] < -1e-2) | (frs[u:l] > 2e-2))
 
-    def test_gen_window(self):
-        for w in ['none', 'blackmanharris', 'hann', 'tukey', 'barthann', 'blackmanharris-7term',
-                  'cosinesum-9term', 'cosinesum-11term']:
-            win = dspec.gen_window(w, 100)
-            nt.assert_true(len(win), 100)
-            nt.assert_true(isinstance(win, np.ndarray))
-            nt.assert_true(win.min() >= 0.0)
-            nt.assert_true(win.max() <= 1.0)
-            nt.assert_raises(ValueError, dspec.gen_window, w, 100, normalization='foo')
-            win2 = dspec.gen_window(w, 100,normalization='mean')
-            nt.assert_true(np.all(np.isclose(win, win2*np.mean(win),atol=1e-6)))
-            win3 = dspec.gen_window(w, 100,normalization='rms')
-            nt.assert_true(np.all(np.isclose(win, win3*np.sqrt(np.mean(win**2.)),atol=1e-6)))
+def test_gen_window():
+    for w in ['none', 'blackmanharris', 'hann', 'tukey', 'barthann', 'blackmanharris-7term',
+              'cosinesum-9term', 'cosinesum-11term']:
+        win = dspec.gen_window(w, 100)
+        assert len(win) == 100
+        assert isinstance(win, np.ndarray)
+        assert win.min() >= 0.0
+        assert win.max() <= 1.0
+        pytest.raises(ValueError, dspec.gen_window, w, 100, normalization='foo')
+        win2 = dspec.gen_window(w, 100,normalization='mean')
+        assert np.all(np.isclose(win, win2*np.mean(win),atol=1e-6))
+        win3 = dspec.gen_window(w, 100,normalization='rms')
+        assert np.all(np.isclose(win, win3*np.sqrt(np.mean(win**2.)),atol=1e-6))
 
-        nt.assert_raises(ValueError, dspec.gen_window, 'foo', 200)
+    pytest.raises(ValueError, dspec.gen_window, 'foo', 200)
+    # check Ncut ValueError
+    pytest.raises(ValueError, dspec.gen_window, 'bh', 200, edgecut_hi=101, edgecut_low=100)
 
 
 def test_dft_operator():
@@ -230,9 +237,9 @@ def test_dpss_operator():
     NF = 100
     DF = 100e3
     freqs = np.arange(-NF/2, NF/2)*DF + 150e6
-    freqs_bad = freqs[[0, 12, 14, 18, 22]]
-    nt.assert_raises(ValueError, dspec.dpss_operator, x=freqs_bad, filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5])
-    nt.assert_raises(ValueError, dspec.dpss_operator, x = freqs , filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5], avg_suppression=[1e-12])
+    freqs_bad = np.array([1.100912386458, 1.22317, 2.12341260, 3.234632462, 5.32348356887])
+    pytest.raises(ValueError, dspec.dpss_operator, x=freqs_bad, filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5])
+    pytest.raises(ValueError, dspec.dpss_operator, x=freqs , filter_centers=[0.], filter_half_widths=[1e-6], nterms=[5], avg_suppression=[1e-12])
     #now calculate DPSS operator matrices using different cutoff criteria. The columns
     #should be the same up to the minimum number of columns of the three techniques.
     amat1, ncol1 = dspec.dpss_operator(freqs, [0.], [100e-9], eigenval_cutoff=[1e-9])
@@ -242,7 +249,7 @@ def test_dpss_operator():
     ncolmin = np.min(ncols)
     ncolmax = np.max(ncols)
     amat4, ncol4 = dspec.dpss_operator(freqs, [0.], [100e-9], nterms=[ncolmax])
-    nt.assert_true(ncol4[0]==ncolmax)
+    assert ncol4[0]==ncolmax
     #check that all columns of matrices obtained with different methods
     #of cutoff are identical.
     for m in range(ncolmin):
@@ -277,16 +284,16 @@ def test_fit_solution_matrix():
     #DFT interpolation is meh, so we keep our standards low.
     #DFT interpolation matrices are poorly conditioned so that's also
     #Downer.
-    nt.assert_true(np.all(np.isclose(interp_dft, data, atol=1e-2)))
+    assert np.all(np.isclose(interp_dft, data, atol=1e-2))
     #DPSS interpolation is clutch. We can make our standards high.
-    nt.assert_true(np.all(np.isclose(interp_dpss, data, atol=1e-6)))
+    assert np.all(np.isclose(interp_dpss, data, atol=1e-6))
     #Check Raising of ValueErrors.
     amat_dft_pc = dspec.dft_operator(fs, [0.], [4. / 50.], fundamental_period=200.)
     with warnings.catch_warnings(record=True) as w:
         dspec.fit_solution_matrix(wmat, amat_dft_pc)
-        nt.assert_true(len(w) > 0)
-    nt.assert_raises(ValueError, dspec.fit_solution_matrix, wmat[:50], amat_dft_pc)
-    nt.assert_raises(ValueError, dspec.fit_solution_matrix, wmat, amat_dft[:-1])
+        assert len(w) > 0
+    pytest.raises(ValueError, dspec.fit_solution_matrix, wmat[:50], amat_dft_pc)
+    pytest.raises(ValueError, dspec.fit_solution_matrix, wmat, amat_dft[:-1])
 
 
 def test_dayenu_filter():
@@ -321,44 +328,47 @@ def test_dayenu_filter():
     filter_centers2 = [0., -1400e-9]
     filter_factors2 = [1e-9, 1e-9]
     #check if throws error when number of filter_half_widths not equal to len filter_centers
-    nt.assert_raises(ValueError, dspec.dayenu_filter, freqs, data_1d, wghts_1d, [1], filter_centers,
+    pytest.raises(ValueError, dspec.dayenu_filter, freqs, data_1d, wghts_1d, [1], filter_centers,
                     filter_half_widths2, filter_factors)
     #check if throws error when number of filter_half_widths not equal to len filter_factors
-    nt.assert_raises(ValueError, dspec.dayenu_filter, freqs, data_1d, wghts_1d, 1, filter_centers,
+    pytest.raises(ValueError, dspec.dayenu_filter, freqs, data_1d, wghts_1d, 1, filter_centers,
                     filter_half_widths, filter_factors2)
     #check if error thrown when wghts have different length then data
-    nt.assert_raises(ValueError, dspec.dayenu_filter, freqs, data_1d, wghts_1d[:-1], 1, filter_centers,
+    pytest.raises(ValueError, dspec.dayenu_filter, freqs, data_1d, wghts_1d[:-1], 1, filter_centers,
                     filter_half_widths, filter_factors)
     #check if error thrown when dimension of data does not equal dimension of weights.
-    nt.assert_raises(ValueError, dspec.dayenu_filter, freqs, data_1d, wghts_2d, 1, filter_centers,
+    pytest.raises(ValueError, dspec.dayenu_filter, freqs, data_1d, wghts_2d, 1, filter_centers,
                     filter_half_widths, filter_factors)
     #check if error thrown if dimension of data does not equal 2 or 1.
-    nt.assert_raises(ValueError, dspec.dayenu_filter, freqs, np.zeros((10,10,10)), wghts_1d, 1, filter_centers,
+    pytest.raises(ValueError, dspec.dayenu_filter, freqs, np.zeros((10,10,10)), wghts_1d, 1, filter_centers,
                     filter_half_widths, filter_factors)
     #check if error thrown if dimension of weights does not equal 2 or 1.
-    nt.assert_raises(ValueError, dspec.dayenu_filter, freqs, wghts_1d, np.zeros((10,10,10)), 1, filter_centers,
+    pytest.raises(ValueError, dspec.dayenu_filter, freqs, wghts_1d, np.zeros((10,10,10)), 1, filter_centers,
                     filter_half_widths, filter_factors)
     # check error where x is not a numpy array
-    nt.assert_raises(ValueError, dspec.dayenu_filter, x='x', data=data_1d, wgts=wghts_1d, filter_dimensions=[1], filter_centers=filter_centers,
+    pytest.raises(ValueError, dspec.dayenu_filter, x='x', data=data_1d, wgts=wghts_1d, filter_dimensions=[1], filter_centers=filter_centers,
                      filter_half_widths=filter_half_widths,
                      filter_factors=filter_factors)
     # check error where filter-dimensions is not an integer or tuple/list
-    nt.assert_raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_1d, wgts=wghts_1d, filter_dimensions='[1]',
+    pytest.raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_1d, wgts=wghts_1d, filter_dimensions='[1]',
                      filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                      filter_factors=filter_factors)
     # check lenght of filter_dims is > 2
-    nt.assert_raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_1d, wgts=wghts_1d, filter_dimensions=[0, 1, 2],
+    pytest.raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_1d, wgts=wghts_1d, filter_dimensions=[0, 1, 2],
                      filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                      filter_factors=filter_factors)
     # check that filter_dimensions are integers.
-    nt.assert_raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_1d, wgts=wghts_1d, filter_dimensions=[0.0],
+    pytest.raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_1d, wgts=wghts_1d, filter_dimensions=[0.0],
                      filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                      filter_factors=filter_factors)
     # check filter dimensions are either 0 or 1.
-    nt.assert_raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_1d, wgts=wghts_1d, filter_dimensions=[2],
+    pytest.raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_1d, wgts=wghts_1d, filter_dimensions=[2],
                      filter_centers=filter_centers, filter_half_widths=filter_half_widths,
                      filter_factors=filter_factors)
-
+    # check error if negative filter_factor provided
+    pytest.raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_1d, wgts=wghts_1d, filter_dimensions=[0],
+                     filter_centers=filter_centers, filter_half_widths=filter_half_widths,
+                     filter_factors=[-1e-9])
     #now filter foregrounds and test that std of residuals are close to std of noise:
     filtered_noise, _ =  dspec.dayenu_filter(np.arange(-nf/2, nf/2)*df, data_1d, wghts_1d, [1], filter_centers, filter_half_widths,
                                          filter_factors)
@@ -378,7 +388,8 @@ def test_dayenu_filter():
     wghts_1d[len(wghts_1d)//4 + 5] = 0.
     filtered_noise, _ =  dspec.dayenu_filter(np.arange(-nf/2, nf/2)*df, data_1d, wghts_1d, [1], filter_centers, filter_half_widths,
                                             filter_factors)
-    nt.assert_true(np.all(filtered_noise[~(wghts_1d.astype(bool))] == 0.))
+    assert np.all(filtered_noise[~(wghts_1d.astype(bool))] == 0.)
+
 
 
     #Next, we test performing a fringe-rate clean. Generate a 50-meter EW baseline with a single
@@ -395,13 +406,17 @@ def test_dayenu_filter():
     data_2d = signal_2d + noise_2d
 
     # check that if we are performing 2d filtering, then x is a length 2 list.
-    nt.assert_raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_2d, wgts=np.ones_like(data_2d), filter_dimensions=[1, 0],
+    pytest.raises(ValueError, dspec.dayenu_filter, x=np.arange(-nf/2, nf/2)*df, data=data_2d, wgts=np.ones_like(data_2d), filter_dimensions=[1, 0],
                      filter_centers=[[0.],[0.]], filter_half_widths=[[1e-3], [100e-9]],
                      filter_factors=[[1e-9], [1e-9]])
     # check that if we are performing 2d filtering, then x is a length 2 list and each x is a numpy array, list, or tuple.
-    nt.assert_raises(ValueError, dspec.dayenu_filter, x=['time is a construct', np.arange(-nf/2, nf/2)*df], data=data_2d, wgts=np.ones_like(data_2d), filter_dimensions=[1, 0],
+    pytest.raises(ValueError, dspec.dayenu_filter, x=['time is a construct', np.arange(-nf/2, nf/2)*df], data=data_2d, wgts=np.ones_like(data_2d), filter_dimensions=[1, 0],
                      filter_centers=[[0.],[0.]], filter_half_widths=[[1e-3], [100e-9]],
                      filter_factors=[[1e-9], [1e-9]])
+    # check value error if length of one of the filter_centers is greater then 2
+    pytest.raises(ValueError, dspec.dayenu_filter, x=[times, np.arange(-nf/2, nf/2)*df], data=data_2d, wgts=np.ones_like(data_2d), filter_dimensions=[1, 0],
+                     filter_centers=[[0.], [0.]], filter_half_widths=[[1e-3], [100e-9]],
+                     filter_factors=[[1e-9], [1e-9], [1e-9]])
 
     #now, only filter fringe-rate domain. The fringe rate for a source
     #overhead should be roughly 0.0036 for this baseline.
@@ -446,13 +461,13 @@ def test_dayenu_filter():
                                                     filter_centers = [[0.002],[0.]],
                                                     filter_half_widths = [[0.001],[100e-9]], filter_factors = [[1e-5],[1e-5]],
                                                     filter_dimensions = [0,1],cache = TEST_CACHE)
-    nt.assert_true(np.all(filtered_data_df_fr[:, nf // 4 + 3] == 0))
-    nt.assert_true(np.all(filtered_data_df_fr[nf // 2 + 5] == 0))
+    assert np.all(filtered_data_df_fr[:, nf // 4 + 3] == 0)
+    assert np.all(filtered_data_df_fr[nf // 2 + 5] == 0)
     np.testing.assert_almost_equal(np.sqrt(np.mean(np.abs(filtered_data_df_fr.flatten())**2.)),
                                     1., decimal = 1)
 
     #test error messages if we do not provide lists of lists.
-    nt.assert_raises(ValueError,dspec.dayenu_filter,[np.arange(-nf/2,nf/2)*dt, np.arange(-nf/2,nf/2)*df],
+    pytest.raises(ValueError,dspec.dayenu_filter,[np.arange(-nf/2,nf/2)*dt, np.arange(-nf/2,nf/2)*df],
                         data_2d, np.ones_like(data_2d),
                         filter_centers = [[0.002],0.],
                         filter_half_widths = [[0.001],[100e-9]],
@@ -462,11 +477,11 @@ def test_dayenu_filter():
     # test skip_wgt:
     _, info = dspec.dayenu_filter(np.arange(-nf/2,nf/2)*df, data_1d, np.zeros_like(wghts_1d), [1], np.array(filter_centers), np.array(filter_half_widths),
                         np.array(filter_factors))
-    nt.assert_true(np.all([info['status']['axis_1'][i] == 'skipped' for i in info['status']['axis_1']]))
+    assert np.all([info['status']['axis_1'][i] == 'skipped' for i in info['status']['axis_1']])
 
     _, info = dspec.dayenu_filter(np.arange(-nf/2,nf/2)*df, data_1d, np.ones_like(wghts_1d), [1], np.array(filter_centers), np.array(filter_half_widths),
                         np.array(filter_factors))
-    nt.assert_true(np.all([info['status']['axis_1'][i] == 'success' for i in info['status']['axis_1']]))
+    assert np.all([info['status']['axis_1'][i] == 'success' for i in info['status']['axis_1']])
 
 
 def test_dayenu_mat_inv():
@@ -515,7 +530,7 @@ def test_vis_filter():
     dfr, ddly = frs[1] - frs[0], dlys[1] - dlys[0]
     d = 200 * np.exp(-2j*np.pi*times[:, None]*(frs[2]+dfr/4) - 2j*np.pi*freqs[None, :]*(dlys[2]+ddly/4)/1e9)
     d += 50 * np.exp(-2j*np.pi*times[:, None]*(frs[20]) - 2j*np.pi*freqs[None, :]*(dlys[20])/1e9)
-    d += 10 * ((np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes).astype(np.complex) \
+    d += 10 * ((np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes).astype(complex) \
          + 1j * np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes)).reshape(uvd.Ntimes, uvd.Nfreqs))
 
     def get_snr(clean, fftax=1, avgax=0, modes=[2, 20]):
@@ -528,38 +543,38 @@ def test_vis_filter():
     freq_snr1, freq_snr2 = get_snr(d, fftax=1, avgax=0, modes=[2, 20])
     time_snr1, time_snr2 = get_snr(d, fftax=0, avgax=1, modes=[2, 20])
     # simulate some flags
-    f = np.zeros_like(d, dtype=np.bool)
+    f = np.zeros_like(d, dtype=bool)
     d[:, 20:22] += 1e3
     f[:, 20:22] = True
     d[20, :] += 1e3
     f[20, :] = True
-    w = (~f).astype(np.float)
+    w = (~f).astype(float)
     bl_len = 70.0 / 2.99e8
 
     # try passing skip_wgt
     mdl, res, info = dspec.delay_filter(d, w, sdf, bl_len,
                                         tol=1e-4, window='none', skip_wgt=1. - 1. / f.shape[1], gain=0.1)
     # with this skip_wgt, all times should be skipped.
-    nt.assert_true(np.all([info['status']['axis_1'][i] == 'skipped' for i in info['status']['axis_1'] ]))
+    assert np.all([info['status']['axis_1'][i] == 'skipped' for i in info['status']['axis_1'] ])
 
     # delay filter basic execution
     mdl, res, info = dspec.delay_filter(d, w, sdf, bl_len,
                                         tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
 
     #check skips .
-    nt.assert_true(info['status']['axis_1'][20] == 'skipped')
-    nt.assert_true(np.all([info['status']['axis_1'][i] == 'success' for i in info['status']['axis_1'] if i != 20]))
+    assert info['status']['axis_1'][20] == 'skipped'
+    assert np.all([info['status']['axis_1'][i] == 'success' for i in info['status']['axis_1'] if i != 20])
 
     cln = mdl + res
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=1, avgax=0)
-    nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=3))
-    nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
+    assert np.isclose(snrs[0], freq_snr1, atol=3)
+    assert np.isclose(snrs[1], freq_snr2, atol=3)
 
     # test vis filter is the same
     mdl2, res2, info2 = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, standoff=0, horizon=1.0, min_dly=0.0,
                                                tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
-    nt.assert_true(np.isclose(mdl - mdl2, 0.0).all())
+    assert np.isclose(mdl - mdl2, 0.0).all()
 
     # fringe filter basic execution
     mdl, res, info = dspec.fringe_filter(d, w, frs[15], dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
@@ -567,32 +582,32 @@ def test_vis_filter():
 
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=0, avgax=1)
-    nt.assert_true(np.isclose(snrs[0], time_snr1, atol=3))
-    nt.assert_true(np.isclose(snrs[1], time_snr2, atol=3))
+    assert np.isclose(snrs[0], time_snr1, atol=3)
+    assert np.isclose(snrs[1], time_snr2, atol=3)
 
     # test vis filter is the same
     mdl2, res2, info2 = dspec.vis_filter(d, w, max_frate=frs[15], dt=dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
     cln2 = mdl2 + res2
-    nt.assert_true(np.isclose(mdl - mdl2, 0.0).all())
+    assert np.isclose(mdl - mdl2, 0.0).all()
 
     # try non-symmetric filter
     mdl, res, info = dspec.fringe_filter(d, w, (frs[-20], frs[10]), dt, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
     cln = mdl + res
 
-    nt.assert_true(np.all([info['status']['axis_1'][i] == 'success' for i in info['status']['axis_1'] if i != 20]))
+    assert np.all([info['status']['axis_1'][i] == 'success' for i in info['status']['axis_1'] if i != 20])
 
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=0, avgax=1)
-    nt.assert_true(np.isclose(snrs[0], time_snr1, atol=3))
-    nt.assert_true(np.isclose(snrs[1], time_snr2, atol=3))
+    assert np.isclose(snrs[0], time_snr1, atol=3)
+    assert np.isclose(snrs[1], time_snr2, atol=3)
 
     # 2d clean
     mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=frs[15], dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1)
     cln = mdl + res
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=1, avgax=0)
-    nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=3))
-    nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
+    assert np.isclose(snrs[0], freq_snr1, atol=3)
+    assert np.isclose(snrs[1], freq_snr2, atol=3)
 
     # non-symmetric 2D clean
     mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, tol=1e-4, window='none', maxiter=100, gain=1e-1)
@@ -600,8 +615,8 @@ def test_vis_filter():
 
     # assert recovered snr of input modes
     snrs = get_snr(cln, fftax=1, avgax=0)
-    nt.assert_true(np.isclose(snrs[0], freq_snr1, atol=3))
-    nt.assert_true(np.isclose(snrs[1], freq_snr2, atol=3))
+    assert np.isclose(snrs[0], freq_snr1, atol=3)
+    assert np.isclose(snrs[1], freq_snr2, atol=3)
 
     # try plus filtmode on 2d clean
     mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[10], frs[10]), dt=dt, tol=1e-4, window=('none', 'none'), edgecut_low=(0, 5), edgecut_hi=(2, 5), maxiter=100, gain=1e-1, filt2d_mode='plus')
@@ -611,17 +626,17 @@ def test_vis_filter():
     # assert clean components fall only in plus area
     clean_comp = np.where(~np.isclose(np.abs(mfft), 0.0))
     for cc in zip(*clean_comp):
-        nt.assert_true(0 in cc)
+        assert 0 in cc
 
     # exceptions
-    nt.assert_raises(ValueError, dspec.vis_filter, d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, filt2d_mode='foo')
+    pytest.raises(ValueError, dspec.vis_filter, d, w, bl_len=bl_len, sdf=sdf, max_frate=(frs[-20], frs[10]), dt=dt, filt2d_mode='foo')
 
     # test add_clean_residual: test res of filtered modes are lower when add_residual is True
     mdl, res, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=frs[15], dt=dt, tol=1e-6, window='none', maxiter=100, gain=1e-1, add_clean_residual=False)
     mdl2, res2, info = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, max_frate=frs[15], dt=dt, tol=1e-6, window='none', maxiter=100, gain=1e-1, add_clean_residual=True)
     rfft = np.fft.ifft2(res)
     rfft2 = np.fft.ifft2(res2)
-    nt.assert_true(np.median(np.abs(rfft2[:15, :23] / rfft[:15, :23])) < 1)
+    assert np.median(np.abs(rfft2[:15, :23] / rfft[:15, :23])) < 1
 
 def test_delay_interpolation_matrix():
     """
@@ -647,15 +662,15 @@ def test_delay_interpolation_matrix():
     #interpolate data and see if it matches true data.
     data_interp = np.dot(dspec.delay_interpolation_matrix(nchan=20, ndelay=5, wgts=wgts, fundamental_period=20, cache=MYCACHE), dw)
     #check that interpolated data agrees with original data.
-    nt.assert_true( np.all(np.isclose(data_interp, data, atol=1e-6)))
+    assert  np.all(np.isclose(data_interp, data, atol=1e-6))
     #test error raising.
-    nt.assert_raises(ValueError, dspec.delay_interpolation_matrix, 10, 2, np.ones(5))
-    nt.assert_raises(ValueError, dspec.delay_interpolation_matrix, 5, 2, np.asarray([0., 0., 0., 0., 0.]))
+    pytest.raises(ValueError, dspec.delay_interpolation_matrix, 10, 2, np.ones(5))
+    pytest.raises(ValueError, dspec.delay_interpolation_matrix, 5, 2, np.asarray([0., 0., 0., 0., 0.]))
     #test diagnostic mode.
     data_interp1 = dspec.delay_interpolation_matrix(nchan=20, ndelay=5, wgts=wgts,
      fundamental_period=20, cache={})
     data_interp1 = np.dot(data_interp1, dw)
-    nt.assert_true(np.all(np.isclose(data_interp, data_interp1, atol=1e-6)))
+    assert np.all(np.isclose(data_interp, data_interp1, atol=1e-6))
      #test warning
     with warnings.catch_warnings(record=True) as w:
         wgtpc = np.ones(100)
@@ -663,7 +678,7 @@ def test_delay_interpolation_matrix():
         wgtpc[randflags]=0.
         amat_pc = dspec.delay_interpolation_matrix(nchan=100, ndelay=25, wgts=wgtpc, fundamental_period=200)
         print(len(w))
-        nt.assert_true(len(w) > 0)
+        assert len(w) > 0
 
 def test_fourier_filter():
     # load file
@@ -694,12 +709,12 @@ def test_fourier_filter():
     time_snr1, time_snr2 = get_snr(d, fftax=0, avgax=1, modes=[2, 20])
 
     # simulate some flags
-    f = np.zeros_like(d, dtype=np.bool)
+    f = np.zeros_like(d, dtype=bool)
     d[:, 20:22] += 1e3
     f[:, 20:22] = True
     d[20, :] += 1e3
     f[20, :] = True
-    w = (~f).astype(np.float)
+    w = (~f).astype(float)
     bl_len = dlys[nf//2+4]
     fr_len = frs[ntimes//2+4]
     # dpss filtering
@@ -715,11 +730,11 @@ def test_fourier_filter():
                                              mode='dpss_leastsq', **dpss_options1)
 
     # check filter dims error is raised
-    nt.assert_raises(ValueError, dspec.fourier_filter,x=freqs, data=d, wgts=w, filter_centers=[0.], filter_dims=2,
+    pytest.raises(ValueError, dspec.fourier_filter,x=freqs, data=d, wgts=w, filter_centers=[0.], filter_dims=2,
                                              filter_half_widths=[bl_len], suppression_factors=[0.],
                                              mode='dpss_leastsq', **dpss_options1)
     #check that length >2 filter dims will fail.
-    nt.assert_raises(ValueError, dspec.fourier_filter,x=freqs, data=d, wgts=w, filter_centers=[0.], filter_dims=[0, 1, 1],
+    pytest.raises(ValueError, dspec.fourier_filter,x=freqs, data=d, wgts=w, filter_centers=[0.], filter_dims=[0, 1, 1],
                                              filter_half_widths=[bl_len], suppression_factors=[0.],
                                              mode='dpss_leastsq', **dpss_options1)
 
@@ -737,14 +752,14 @@ def test_fourier_filter():
                     'edgecut_low':0, 'edgecut_hi':0, 'add_clean_residual':False,
                     'window':'none', 'gain':0.1, 'alphae':0.5}
     #check that a ValueError is returned if we include a bad parameter name.
-    nt.assert_raises(ValueError, dspec.fourier_filter, freqs, d, w, [0.], [bl_len],
+    pytest.raises(ValueError, dspec.fourier_filter, freqs, d, w, [0.], [bl_len],
                      mode='clean', **clean_options_typo)
 
-    nt.assert_true(np.all(np.isclose(mdl3, mdl4, atol=1e-6)))
-    nt.assert_true(np.all(np.isclose(res3, res4, atol=1e-6)))
+    assert np.all(np.isclose(mdl3, mdl4, atol=1e-6))
+    assert np.all(np.isclose(res3, res4, atol=1e-6))
 
-    nt.assert_true(np.all(np.isclose(mdl1, mdl2, atol=1e-6)))
-    nt.assert_true(np.all(np.isclose(res1, res2)))
+    assert np.all(np.isclose(mdl1, mdl2, atol=1e-6))
+    assert np.all(np.isclose(res1, res2))
 
     #check that dayenu can be run without fitting options.
     mdl3, res3, info3 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], suppression_factors=[1e-9],
@@ -753,20 +768,20 @@ def test_fourier_filter():
     mdl4, res4, info4 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len], suppression_factors=[1e-9],
                                              mode='dayenu')
 
-    nt.assert_true(np.all(np.isclose(mdl3, mdl4, atol=1e-6)))
-    nt.assert_true(np.all(np.isclose(res3, res4, atol=1e-6)))
+    assert np.all(np.isclose(mdl3, mdl4, atol=1e-6))
+    assert np.all(np.isclose(res3, res4, atol=1e-6))
 
     #check that clean skips if all data is equal to zero, avoids infinite loop case.
     mdl3, res3, info3 = dspec.fourier_filter(freqs, np.zeros_like(d), w, [0.], [bl_len],
                                              mode='clean', filter_dims=1)
-    nt.assert_true(np.all([info3['status']['axis_1'][i] == 'skipped' for i in info3['status']['axis_1']]))
+    assert np.all([info3['status']['axis_1'][i] == 'skipped' for i in info3['status']['axis_1']])
 
     #check error when unsupported mode provided
-    nt.assert_raises(ValueError, dspec.fourier_filter, x=freqs, data=d, wgts=w, filter_centers=[0.],
+    pytest.raises(ValueError, dspec.fourier_filter, x=freqs, data=d, wgts=w, filter_centers=[0.],
                     filter_half_widths=[bl_len], suppression_factors=[0.],
                     mode='foo', **dpss_options1)
     #check error when wgt dim does not equal data dim.
-    nt.assert_raises(ValueError, dspec.fourier_filter, x=freqs, data=d, wgts=w[0].squeeze(), filter_centers=[0.],
+    pytest.raises(ValueError, dspec.fourier_filter, x=freqs, data=d, wgts=w[0].squeeze(), filter_centers=[0.],
                     filter_half_widths=[bl_len], suppression_factors=[0.],
                     mode='dpss_leastsq', **dpss_options1)
 
@@ -778,11 +793,11 @@ def test_fourier_filter():
     #test that the info is properly switched. fourier_filter processes all data in frequency_mode and takes transposes for time
     #filtering mode.
     for k in info11d:
-        nt.assert_true(len(info11d[k]['axis_0']) == 0)
+        assert len(info11d[k]['axis_0']) == 0
         if k == 'status':
-            nt.assert_true(len(info11d[k]['axis_1']) == 1)
+            assert len(info11d[k]['axis_1']) == 1
 
-    nt.assert_true(np.all(np.isclose(mdl1[0], mdl11d, atol=1e-6)))
+    assert np.all(np.isclose(mdl1[0], mdl11d, atol=1e-6))
     #perform a fringe-rate filter
     mdl5, res5, info5 = dspec.fourier_filter(x=times, data=d, wgts=w, filter_centers=[0.],
                                              filter_half_widths=[fr_len], suppression_factors=[0.], filter_dims=0,
@@ -791,12 +806,30 @@ def test_fourier_filter():
     #test that the info is properly switched. fourier_filter processes all data in frequency_mode and takes transposes for time
     #filtering mode.
     for k in info5:
-        nt.assert_true(len(info5[k]['axis_1']) == 0)
+        assert len(info5[k]['axis_1']) == 0
         if k == 'status':
-            nt.assert_true(len(info5[k]['axis_0']) == d.shape[1])
+            assert len(info5[k]['axis_0']) == d.shape[1]
 
     #check that fringe rate filter model gives similar results to delay filter.
-    nt.assert_true(np.all(np.isclose(mdl1[~f],mdl5[~f], rtol=1e-2)))
+    assert np.all(np.isclose(mdl1[~f],mdl5[~f], rtol=1e-2))
+
+    #perform some sanity checks on handling of nans in dft_leastsq. If nans are present in fundamental period
+    #then the default behavior should be to set fundamental period to 2 * bandwidth.
+    mdl, res, info = dspec.fourier_filter(x=freqs, data=d[0], wgts=w[0], filter_centers=[0.],
+                                             filter_half_widths=[bl_len], suppression_factors=[1e-9],
+                                             mode='dft_leastsq')
+    # check that the filter_period is indeed equal to 1 / (2 * bandwidth)
+    assert np.isclose(info['filter_params']['axis_1']['basis_options']['fundamental_period'],
+                      2 * (freqs.max() - freqs.min()))
+
+    #check that user provided fundamental period agrees with whats in info.
+    mdl, res, info = dspec.fourier_filter(x=freqs, data=d[0], wgts=w[0], filter_centers=[0.],
+                                             filter_half_widths=[bl_len], suppression_factors=[1e-9],
+                                             mode='dft_leastsq', fundamental_period=4. * (freqs.max() - freqs.min()))
+    # check that the filter_period is indeed equal to 1 / (2 * bandwidth)
+    assert np.isclose(info['filter_params']['axis_1']['basis_options']['fundamental_period'],
+                      4. * (freqs.max() - freqs.min()))
+
     #check fringe rate filter with dft mode
     mdl6, res6, info6 = dspec.fourier_filter(x=times, data=d, wgts=w, filter_centers=[0.],
                                              filter_half_widths=[fr_len], suppression_factors=[0.], filter_dims=0,
@@ -806,8 +839,8 @@ def test_fourier_filter():
                                              filter_half_widths=[fr_len], suppression_factors=[0.], filter_dims=0,
                                              mode='dft_leastsq', **dft_options1)
     #check that dft and dpss fringe-rate inpainting give the same results.
-    nt.assert_true(np.all(np.isclose(mdl5, mdl6, rtol=1e-2)))
-    nt.assert_true(np.all(np.isclose(mdl62, mdl6, rtol=1e-2)))
+    assert np.all(np.isclose(mdl5, mdl6, rtol=1e-2))
+    assert np.all(np.isclose(mdl62, mdl6, rtol=1e-2))
 
     #Check Dayenu filter.
     mdl7, res7, info7 = dspec.fourier_filter(x=times, data=d, wgts=w, filter_centers=[0.],
@@ -817,32 +850,33 @@ def test_fourier_filter():
     mdl8, res8, info8 = dspec.fourier_filter(x=times, data=d, wgts=w, filter_centers=[0.],
                                              filter_half_widths=[fr_len], suppression_factors=[1e-8], filter_dims=0,
                                              mode='dayenu_dpss_leastsq', **dpss_options1)
-    nt.assert_true(np.all(np.isclose(mdl7, mdl8, rtol=1e-2)))
-    nt.assert_true(np.all(np.isclose(mdl5, mdl8, rtol=1e-2)))
+    assert np.all(np.isclose(mdl7, mdl8, rtol=1e-2))
+    assert np.all(np.isclose(mdl5, mdl8, rtol=1e-2))
 
     for k in info8:
         if not k == 'info_deconv':
-            nt.assert_true(len(info8[k]['axis_1']) == 0)
+            assert len(info8[k]['axis_1']) == 0
             if k == 'status':
-                nt.assert_true(len(info8[k]['axis_0']) == d.shape[1])
+                assert len(info8[k]['axis_0']) == d.shape[1]
     for k in info8['info_deconv']:
-            nt.assert_true(len(info8['info_deconv'][k]['axis_1']) == 0)
+            assert len(info8['info_deconv'][k]['axis_1']) == 0
             if k == 'status':
-                nt.assert_true(len(info8['info_deconv'][k]['axis_0']) == d.shape[1])
+                assert len(info8['info_deconv'][k]['axis_0']) == d.shape[1]
 
     #perform 2d dayenu filter with dpss and dft deconvolution.
     dpss_options1_2d = {'eigenval_cutoff': [[1e-12], [1e-12]]}
     dft_options1_2d = {'fundamental_period': [np.nan, np.nan]}
+    dft_options2_2d = {'fundamental_period': [4 * (times.max() - times.min()), 4 * (freqs.max() - freqs.min())]}
 
     mdl9, res9, info9 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[1e-8],[1e-8]],
                                              mode='dayenu_dpss_leastsq', filter_dims=[1, 0], **dpss_options1_2d)
 
-    nt.assert_raises(ValueError, dspec.fourier_filter, x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
+    pytest.raises(ValueError, dspec.fourier_filter, x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[1e-8],[1e-8]],
                                              mode='dayenu_dpss_leastsq', filter_dims=[1, 0], **dpss_options1)
 
-    nt.assert_raises(ValueError, dspec.fourier_filter, x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
+    pytest.raises(ValueError, dspec.fourier_filter, x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[1e-8],[1e-8]],
                                              mode='dayenu_dpss_leastsq', filter_dims=[1, 0], **dft_options1)
 
@@ -850,7 +884,7 @@ def test_fourier_filter():
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[1e-8],[1e-8]],
                                              mode='dayenu_dft_leastsq', filter_dims=[1, 0], **dft_options1_2d)
    #check 2d filter dft fundamental period error.
-    nt.assert_raises(ValueError, dspec.fourier_filter,x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
+    pytest.raises(ValueError, dspec.fourier_filter,x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
                                              mode='dft_leastsq', filter_dims=[1, 0], **dpss_options1)
     mdl_dft, res_dft, info_dft = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
@@ -860,7 +894,7 @@ def test_fourier_filter():
     mdl_dft1, res_dft1, info_dft1 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
                                              mode='dft_leastsq', filter_dims=[1, 0])
-    nt.assert_true(np.all(np.isclose(mdl_dft1, mdl_dft, rtol=1e-2)))
+    assert np.all(np.isclose(mdl_dft1, mdl_dft, rtol=1e-2))
 
     #try 2d iterative clean.
     mdl11, res11, info11 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
@@ -875,21 +909,32 @@ def test_fourier_filter():
     mdl13, res13, info13 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=np.zeros_like(w), filter_centers=[[0.],[0.]],
                                              filter_half_widths=[[fr_len],[bl_len]],
                                              mode='clean', filter_dims=[1, 0], **{'filt2d_mode':'plus','tol':1e-5})
-    nt.assert_true(info13['clean_status']['axis_0']['skipped'])
-    nt.assert_true(info13['clean_status']['axis_1']['skipped'])
+    assert info13['clean_status']['axis_0']['skipped']
+    assert info13['clean_status']['axis_1']['skipped']
     #test error when cleaning with invalid filt2d mode.
-    nt.assert_raises(ValueError, dspec.fourier_filter,x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
+    pytest.raises(ValueError, dspec.fourier_filter,x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                                  filter_half_widths=[[fr_len],[bl_len]],
                                                  mode='clean', filter_dims=[1, 0], **{'filt2d_mode':'bargh','tol':1e-5})
     #check equally spaced data value error for clean
     tlog = np.logspace(np.log10(times.min()), np.log10(times.max()), len(times))
     flog = np.logspace(np.log10(freqs.min()), np.log10(freqs.max()), len(freqs))
-    nt.assert_raises(ValueError, dspec.fourier_filter,x=[tlog, flog], data=d, wgts=w, filter_centers=[[0.],[0.]],
+    pytest.raises(ValueError, dspec.fourier_filter,x=[tlog, flog], data=d, wgts=w, filter_centers=[[0.],[0.]],
                                                  filter_half_widths=[[fr_len],[bl_len]],
                                                  mode='clean', filter_dims=[1, 0], **{'filt2d_mode':'plus','tol':1e-5})
-    nt.assert_raises(ValueError, dspec.fourier_filter,x=flog, data=d, wgts=w, filter_centers=[0.],
+    pytest.raises(ValueError, dspec.fourier_filter,x=flog, data=d, wgts=w, filter_centers=[0.],
                                                   filter_half_widths=[bl_len],
                                                   mode='clean', filter_dims=[1], **{'tol':1e-5})
+
+    # check that fundamental period in 2d dft fit is correctly assigned.
+    mdl_dft, res_dft, info_dft = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
+                                             filter_half_widths=[[fr_len],[bl_len]], suppression_factors=[[0.],[0.]],
+                                             mode='dft_leastsq', filter_dims=[1, 0], **dft_options2_2d)
+
+    assert np.isclose(info_dft['filter_params']['axis_1']['basis_options']['fundamental_period'],
+                      dft_options2_2d['fundamental_period'][1])
+    assert np.isclose(info_dft['filter_params']['axis_0']['basis_options']['fundamental_period'],
+                      dft_options2_2d['fundamental_period'][0])
+
 def test_vis_clean():
     # validate that fourier_filter in various clean modes gives close values to vis_clean with equivalent parameters!
     uvd = UVData()
@@ -907,14 +952,14 @@ def test_vis_clean():
     dfr, ddly = frs[1] - frs[0], dlys[1] - dlys[0]
     d = 200 * np.exp(-2j*np.pi*times[:, None]*(frs[2]+dfr/4) - 2j*np.pi*freqs[None, :]*(dlys[2]+ddly/4)/1e9)
     d += 50 * np.exp(-2j*np.pi*times[:, None]*(frs[20]) - 2j*np.pi*freqs[None, :]*(dlys[20])/1e9)
-    d += 10 * ((np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes).astype(np.complex) \
+    d += 10 * ((np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes).astype(complex) \
          + 1j * np.random.normal(0, 1, uvd.Nfreqs * uvd.Ntimes)).reshape(uvd.Ntimes, uvd.Nfreqs))
-    f = np.zeros_like(d, dtype=np.bool)
+    f = np.zeros_like(d, dtype=bool)
     d[:, 20:22] += 1e3
     f[:, 20:22] = True
     d[20, :] += 1e3
     f[20, :] = True
-    w = (~f).astype(np.float)
+    w = (~f).astype(float)
     bl_len = 70.0 / 2.99e8
     # here is a fourier filter implementation of clean
     mdl1, res1, info1 = dspec.fourier_filter(freqs, d, w, [0.], [bl_len],
@@ -925,8 +970,8 @@ def test_vis_clean():
     mdl2, res2, info2 = dspec.wedge_filter(d, w, bl_len, sdf, standoff=0, horizon=1.0, min_dly=0.0,
                                              tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
     # validate models and residuals are close.
-    nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
-    nt.assert_true(np.all(np.isclose(res1, res2)))
+    assert np.all(np.isclose(mdl1, mdl2))
+    assert np.all(np.isclose(res1, res2))
 
     mdl2, res2, info2 = dspec.vis_filter(d, w, bl_len=bl_len, sdf=sdf, standoff=0., horizon=1.0,
                                          min_dly=0.0, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
@@ -934,10 +979,10 @@ def test_vis_clean():
     # cover tuple arguments.
     mdl3, res3, info3 = dspec.vis_clean(d, w, filter_size=bl_len, real_delta=sdf, tol=1e-4, window='none', skip_wgt=0.1, gain=0.1)
     # validate models and residuals are close.
-    nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
-    nt.assert_true(np.all(np.isclose(res1, res2)))
-    nt.assert_true(np.all(np.isclose(res1, res3)))
-    nt.assert_true(np.all(np.isclose(mdl1, mdl3)))
+    assert np.all(np.isclose(mdl1, mdl2))
+    assert np.all(np.isclose(res1, res2))
+    assert np.all(np.isclose(res1, res3))
+    assert np.all(np.isclose(mdl1, mdl3))
 
 
     # Do the same comparison with more complicated windowing and edge cuts.
@@ -947,8 +992,8 @@ def test_vis_clean():
     mdl2, res2, info2 = dspec.delay_filter(d, w, bl_len, sdf,
                                            edgecut_hi=4, edgecut_low=4, tol=1e-4,
                                            skip_wgt=0.1, gain=0.1, window='tukey')
-    nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
-    nt.assert_true(np.all(np.isclose(res1, res2)))
+    assert np.all(np.isclose(mdl1, mdl2))
+    assert np.all(np.isclose(res1, res2))
 
 
     #Do a comparison for time domain clean.
@@ -963,13 +1008,13 @@ def test_vis_clean():
     mdl3, res3, info3 = dspec.vis_clean(d.T, w.T, (frs[15], frs[15]), dt, edgecut_hi=4, edgecut_low=3,
                                             tol=1e-4, window='tukey', skip_wgt=0.1,
                                             gain=0.1)
-    nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
-    nt.assert_true(np.all(np.isclose(res1, res2)))
-    nt.assert_true(np.all(np.isclose(res1, res3.T)))
-    nt.assert_true(np.all(np.isclose(mdl1, mdl3.T)))
+    assert np.all(np.isclose(mdl1, mdl2))
+    assert np.all(np.isclose(res1, res2))
+    assert np.all(np.isclose(res1, res3.T))
+    assert np.all(np.isclose(mdl1, mdl3.T))
 
     #cover value error if 2-tuple filter sizes and not 2dclean.
-    nt.assert_raises(ValueError, dspec.fringe_filter,d , w, frs[15], dt, edgecut_hi=4, edgecut_low=3,
+    pytest.raises(ValueError, dspec.fringe_filter,d , w, frs[15], dt, edgecut_hi=4, edgecut_low=3,
                                             tol=1e-4, window='tukey', skip_wgt=0.1,
                                             gain=0.1, clean2d=True)
     #try 2d iterative clean.
@@ -983,8 +1028,8 @@ def test_vis_clean():
                                              window='tukey', tol=1e-5, clean2d=True,
                                              add_clean_residual=False)
 
-    nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
-    nt.assert_true(np.all(np.isclose(res1, res2)))
+    assert np.all(np.isclose(mdl1, mdl2))
+    assert np.all(np.isclose(res1, res2))
 
     #check plus mode.
     mdl1, res1, info1 = dspec.fourier_filter(x=[times, freqs], data=d, wgts=w, filter_centers=[[0.],[0.]],
@@ -1003,16 +1048,60 @@ def test_vis_clean():
                                              window='tukey', tol=1e-5, clean2d=True, filt2d_mode='plus',
                                              add_clean_residual=False)
     #cover value error for calling 2d visclean with 1d real_delta.
-    nt.assert_raises(ValueError, dspec.high_pass_fourier_filter, data=d, wgts=w, filter_size=[[frs[15] , frs[15]], bl_len],
+    pytest.raises(ValueError, dspec.high_pass_fourier_filter, data=d, wgts=w, filter_size=[[frs[15] , frs[15]], bl_len],
                      real_delta=np.mean(np.diff(times)),
                      window='tukey', tol=1e-5, clean2d=True, filt2d_mode='plus',
                      add_clean_residual=False)
 
-    nt.assert_true(np.all(np.isclose(mdl1, mdl2)))
-    nt.assert_true(np.all(np.isclose(res1, res2)))
-    nt.assert_true(np.all(np.isclose(res3, res1)))
-    nt.assert_true(np.all(np.isclose(mdl3, mdl1)))
+    assert np.all(np.isclose(mdl1, mdl2))
+    assert np.all(np.isclose(res1, res2))
+    assert np.all(np.isclose(res3, res1))
+    assert np.all(np.isclose(mdl3, mdl1))
 
+def test_place_data_on_uniform_grid_data_already_gridded():
+    # first, generate uniformly spaced x values and ensure that we get the same thing back.
+    xt = np.arange(0, 100) * 1.23157
+    yt = np.random.randn(len(xt)) + 1j * np.random.randn(len(xt))
+    wt = np.ones(len(xt))
+    wt[np.random.randint(low=0, high=len(xt), size=20)] = 0.0
+    xout, yout, wout, inserted = dspec.place_data_on_uniform_grid(xt, yt, wt)
+    assert np.allclose(xout, xt)
+    assert np.allclose(yout, yt)
+    assert np.allclose(wout, wt)
+
+@pytest.mark.parametrize("dx", [1.23157, -3.8271])
+def test_place_data_on_uniform_grid_data_on_incomplete_grid(dx):
+    # test when data is not uniformly spaced but the non-uniform spacings
+    # have a lowest common multiple (they are incompletely sampling a grid).
+    xt = np.arange(0, 100) * dx
+    yt = np.random.randn(len(xt)) + 1j * np.random.randn(len(xt))
+    wt = np.ones(len(xt))
+    # remove 10 random grid points and check that
+    # we succisfully reconstruct grid.
+    to_remove = np.random.randint(low=1, high=len(xt)-1, size=10)
+    to_keep = np.array([i for i in range(len(xt)) if i not in to_remove])
+    xtt = xt[to_keep]
+    ytt = yt[to_keep]
+    wtt = wt[to_keep]
+    xout, yout, wout, inserted = dspec.place_data_on_uniform_grid(xtt, ytt, wtt)
+    assert np.allclose(xout, xt)
+    assert np.allclose(yout[to_keep], yt[to_keep])
+    assert np.allclose(yout[to_remove], 0.0)
+    assert np.allclose(wout[to_remove], 0.0)
+    assert np.allclose(wout[to_keep], wt[to_keep])
+
+def test_place_data_on_uniform_grid_not_griddable():
+    # When data cannot be placed on a uniform grid,
+    # just pass it through with a warning.
+    x = np.array([0, 0.1, 0.25, 0.4, 0.5])
+    dng = np.random.randn(len(x))
+    wng = np.ones_like(x)
+    with pytest.warns(RuntimeWarning):
+        xout, dout, wout, inserted = dspec.place_data_on_uniform_grid(x, dng, wng)
+    assert np.allclose(xout, x)
+    assert np.allclose(dout, dng)
+    assert np.allclose(wout, wng)
+    assert np.allclose(inserted, 0.0)
 
 def test__fit_basis_1d():
     #perform dpss interpolation, leastsq
@@ -1031,7 +1120,7 @@ def test__fit_basis_1d():
                                     method='leastsq', basis='dpss')
     mod2, resid2, info2 = dspec._fit_basis_1d(fs, dw, wgts, [0.], [5./50.], basis_options=dpss_opts,
                                     method='matrix', basis='dpss')
-    nt.assert_true(np.all(np.isclose(mod1, mod2, atol=1e-6)))
+    assert np.all(np.isclose(mod1, mod2, atol=1e-6))
     #perform dft interpolation, leastsq and matrix and compare results
     dft_opts={'fundamental_period':200.}
 
@@ -1048,11 +1137,61 @@ def test__fit_basis_1d():
     #Matrices with 2B harmonics are poorly conditioned which is
     #unfortunate since 2B is generally where DFT performance
     #approaches DPSS performance.
-    nt.assert_true(np.all(np.isclose(mod4, mod2, atol=1e-5)))
-    nt.assert_true(np.all(np.isclose(mod3, mod4, atol=1e-2)))
+    assert np.all(np.isclose(mod4, mod2, atol=1e-5))
+    assert np.all(np.isclose(mod3, mod4, atol=1e-2))
 
-    nt.assert_true(np.all(np.isclose((mod2+resid2)*wgts, dw, atol=1e-6)))
+    assert np.all(np.isclose((mod2+resid2)*wgts, dw, atol=1e-6))
 
+def test_fit_basis_1d_with_missing_channels():
+    fs = np.arange(-50,50)
+    #here is some data
+    data = np.exp(2j * np.pi * 3.5/50. * fs) + 5*np.exp(2j * np.pi * 2.1/50. * fs)
+    data += np.exp(-2j * np.pi * 0.7/50. * fs) + 5*np.exp(2j * np.pi * -1.36/50. * fs)
+    #here are some weights with flags
+    wgts = np.ones_like(data)
+    wgts[6] = 0
+    wgts[17] = 0
+    dw = data*wgts
+    # dft fitting options
+    dpss_opts={'eigenval_cutoff':[1e-12, 1e-12]}
+    # now remove ten random channels.
+    to_remove = [2, 10, 11, 23, 54, 71, 87, 88, 89, 97]
+    to_keep = np.array([i for i in range(len(fs)) if i not in to_remove])
 
-if __name__ == '__main__':
-    unittest.main()
+    mod5, resid5, info5 = dspec._fit_basis_1d(fs[to_keep], dw[to_keep], wgts[to_keep], [0., 10/50.], [5./50., 1./50.], basis_options=dpss_opts,
+                                    method='leastsq', basis='dpss')
+
+    dwt = copy.deepcopy(dw)
+    wgtst = copy.deepcopy(wgts)
+
+    dwt[to_remove] = 0.0
+    wgtst[to_remove] = 0.0
+
+    mod6, resid6, info6 = dspec._fit_basis_1d(fs, dwt, wgtst, [0., 10/50.], [5./50., 1./50.], basis_options=dpss_opts,
+                                    method='leastsq', basis='dpss')
+
+    assert np.allclose(mod5, mod6[to_keep])
+    assert np.allclose(resid5, resid6[to_keep])
+
+def test_fit_basis_2d_nanwarning():
+    # test that info propagates skips when there is an SVD convergence error.
+    fs = np.arange(-50,50)
+    ts = np.arange(93)
+    #here is some data
+    data = np.exp(2j * np.pi * 3.5/50. * fs) + 5*np.exp(2j * np.pi * 2.1/50. * fs)
+    data += np.exp(-2j * np.pi * 0.7/50. * fs) + 5*np.exp(2j * np.pi * -1.36/50. * fs)
+    data = np.asarray([data for i in range(93)])
+    #here are some weights with flags
+    wgts = np.ones_like(data)
+    data[68, 12] = np.inf
+    # dft fitting options
+    dpss_opts={'eigenval_cutoff':[1e-12, 1e-12]}
+    with pytest.warns(RuntimeWarning):
+        model, resid, info = dspec._fit_basis_2d(fs, data, wgts, [0., 10/50.], [5./50., 1./50.], basis_options=dpss_opts,
+                                                 method='leastsq', basis='dpss', filter_dims=1)
+        assert list(np.where([info['status']['axis_1'][i] == 'skipped' for i in range(93)])[0]) == [68]
+
+    with pytest.warns(RuntimeWarning):
+        model, resid, info = dspec._fit_basis_2d(ts, data, wgts, [0., 10/50.], [5./50., 1./50.], basis_options=dpss_opts,
+                                                 method='leastsq', basis='dpss', filter_dims=0)
+        assert list(np.where([info['status']['axis_0'][i] == 'skipped' for i in range(100)])[0]) == [12]
