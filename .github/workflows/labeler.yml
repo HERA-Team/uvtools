@@ -1,5 +1,8 @@
 name: Labeler
 
+permissions:
+  contents: write   # required to create/update GitHub Releases
+
 on:
   push:
     branches:
